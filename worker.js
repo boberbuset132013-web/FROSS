@@ -533,6 +533,24 @@ async function frossGetChatQuota(request, auth, chatId, messageId) {
   if (!Number.isFinite(count) || count < 1 || count > 60) return { ok: false, status: 429, error: "В этом чате достигнут лимит в 60 сообщений пользователя." };
   if (status === "closed" && lastUserMessageId !== messageId) return { ok: false, status: 429, error: "Этот чат закрыт: лимит в 60 сообщений пользователя достигнут. Создай новый чат." };
   if (lastUserMessageId !== messageId) return { ok: false, status: 409, error: "Сообщение не совпадает с последним сохранённым сообщением чата. Обнови чат и попробуй снова." };
+  // Не разрешаем повторно использовать уже обработанное сообщение для повторной генерации.
+  const messageUrl = "https://firestore.googleapis.com/v1/projects/" +
+    encodeURIComponent(auth.projectId) + "/databases/(default)/documents/" +
+    docPath + "/messages/" + encodeURIComponent(messageId);
+  let messageResponse;
+  try {
+    messageResponse = await fetch(messageUrl, {
+      headers: { Authorization: "Bearer " + (request.headers.get("Authorization") || "").slice(7) }
+    });
+  } catch {
+    return { ok: false, status: 503, error: "Не удалось проверить сообщение в Firebase. Попробуй ещё раз." };
+  }
+  if (!messageResponse.ok) return { ok: false, status: 409, error: "Сообщение не найдено или уже обработано." };
+  const messageDoc = await messageResponse.json();
+  const messageFields = messageDoc.fields || {};
+  if (messageFields.role?.stringValue !== "user" || messageFields.state?.stringValue !== "pending") {
+    return { ok: false, status: 409, error: "Это сообщение уже обработано. Отправь новое сообщение." };
+  }
   return { ok: true, count, status };
 }
 
