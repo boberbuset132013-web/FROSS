@@ -510,7 +510,7 @@ async function frossVerifyFirebaseToken(request) {
   }
 }
 
-async function frossGetChatQuota(request, auth, chatId, messageId) {
+async function frossGetChatQuota(request, auth, chatId, messageId, expectedMessage) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(chatId || "") || !/^[A-Za-z0-9_-]{1,128}$/.test(messageId || "")) {
     return { ok: false, status: 400, error: "Некорректный идентификатор чата или сообщения." };
   }
@@ -550,6 +550,9 @@ async function frossGetChatQuota(request, auth, chatId, messageId) {
   const messageFields = messageDoc.fields || {};
   if (messageFields.role?.stringValue !== "user" || messageFields.state?.stringValue !== "pending") {
     return { ok: false, status: 409, error: "Это сообщение уже обработано. Отправь новое сообщение." };
+  }
+  if (frossClean(messageFields.content?.stringValue || "").slice(0, FROSS_MAX_QUERY_LENGTH) !== expectedMessage) {
+    return { ok: false, status: 409, error: "Текст запроса не совпадает с сохранённым сообщением." };
   }
   return { ok: true, count, status };
 }
@@ -613,7 +616,7 @@ async function handleFrossApi(request, env) {
   if (!message) return frossJson({ error: "Напиши сообщение для FROSS." }, 400, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Войди через Google, чтобы пользоваться FROSS." }, 401, request);
-  const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""));
+  const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""), message);
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
   const safetyReply = frossSafetyReply(message);
   if (safetyReply) return frossJson({
