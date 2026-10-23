@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/chats/{chatId} {
+      allow get, list: if signedInAs(userId);
+
+      allow create: if signedInAs(userId)
+        && request.resource.data.ownerUid == userId
+        && request.resource.data.userMessageCount == 0
+        && request.resource.data.status == 'open'
+        && request.resource.data.lastUserMessageId == '';
+
+      allow update: if signedInAs(userId) && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['userMessageCount', 'status', 'lastUserMessageId', 'updatedAt'])
+          && request.resource.data.userMessageCount == resource.data.userMessageCount + 1
+          && resource.data.userMessageCount < 60
+          && request.resource.data.lastUserMessageId is string
+          && request.resource.data.lastUserMessageId.size() > 0
+          && request.resource.data.status ==
+            (request.resource.data.userMessageCount >= 60 ? 'closed' : 'open')
+        )
+        ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['title', 'updatedAt'])
+          && request.resource.data.userMessageCount == resource.data.userMessageCount
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.lastUserMessageId == resource.data.lastUserMessageId
+        )
+      );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if signedInAs(userId);
+
+        allow create: if signedInAs(userId)
+          && request.resource.data.content is string
+          && request.resource.data.content.size() <= 4000
+          && request.resource.data.createdAt is timestamp
+          && (
+            (
+              request.resource.data.role == 'user'
+              && request.resource.data.state == 'pending'
+              && getAfter(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
+                .data.userMessageCount ==
+                get(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
+                .data.userMessageCount + 1
+              && getAfter(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
+                .data.lastUserMessageId == messageId
+            )
+            ||
+            (
+              request.resource.data.role == 'assistant'
+              && getAfter(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
+                .data.userMessageCount ==
+                get(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
+                .data.userMessageCount
+            )
+          );
+
+        allow update: if signedInAs(userId)
+          && resource.data.role == 'user'
+          && resource.data.state == 'pending'
+          && request.resource.data.state == 'answered'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']);
+
+        allow delete: if false;
+      }
+    }
+  }
+}
