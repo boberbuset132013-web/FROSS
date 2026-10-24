@@ -560,6 +560,56 @@ async function handleFrossIdentity(request, env) {
   }, 200, request);
 }
 
+function frossIsPublicTrainingUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
+    const host = url.hostname.toLowerCase();
+    if (!host.includes(".") || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (/^\[?(::1|fc[0-9a-f]*:|fe80:)/i.test(host) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function frossReadPublicPageExcerpt(value) {
+  if (!frossIsPublicTrainingUrl(value)) return "";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const response = await fetch(value, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { "Accept": "text/html,text/plain;q=0.9", "User-Agent": "FROSS-StudyBot/0.4" }
+    });
+    if (!response.ok || (response.status >= 300 && response.status < 400)) return "";
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) return "";
+    const html = (await response.text()).slice(0, 900000);
+    const article = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)
+      || html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)
+      || html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+    let text = frossClean(article ? article[1] : html)
+      .replace(/&#(\d+);/g, (_, number) => {
+        const code = Number(number);
+        return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " ";
+      })
+      .replace(/&#x([0-9a-f]+);/gi, (_, number) => {
+        const code = parseInt(number, 16);
+        return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " ";
+      });
+    text = frossClean(text);
+    return text.length >= 160 ? text.slice(0, 3200) : "";
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleFrossTrain(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
@@ -574,13 +624,18 @@ async function handleFrossTrain(request, env) {
   if (topic.length < 2) return frossJson({ error: "Введи тему, которую нужно изучить." }, 400, request);
 
   const search = await frossRunSearch(topic, "reasoning");
-  const notes = search.results.slice(0, 8).map(item => ({
-    topic,
-    title: frossClean(item.title || "Источник без названия").slice(0, 260),
-    url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "",
-    snippet: frossClean(item.snippet || "").slice(0, 1300),
-    source: frossClean(item.source || "web search").slice(0, 80),
-    score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
+  const candidates = search.results.slice(0, 8);
+  const notes = await Promise.all(candidates.map(async item => {
+    const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
+    const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
+    return {
+      topic,
+      title: frossClean(item.title || "Источник без названия").slice(0, 260),
+      url,
+      snippet: (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200),
+      source: frossClean(pageExcerpt ? "article text" : item.source || "web search excerpt").slice(0, 80),
+      score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
+    };
   })).filter(note => note.title && (note.snippet || note.url));
 
   if (!notes.length) return frossJson({
@@ -595,7 +650,7 @@ async function handleFrossTrain(request, env) {
     notes,
     count: notes.length,
     providerErrors: search.errors,
-    notice: "Это учебные заметки из поисковых заголовков и фрагментов, не проверенная энциклопедия. Перед сохранением проверь источники; сохранённые заметки можно удалить."
+    notice: "FROSS попробовал прочитать публичные страницы и, если сайт не разрешил загрузку, сохранил поисковые фрагменты. Это заметки, а не дообучение модели; проверь источники и удали неточные записи."
   }, 200, request);
 }
 
@@ -636,7 +691,7 @@ async function handleFrossApi(request, env) {
     topic: frossClean(note?.topic || "").slice(0, 180),
     title: frossClean(note?.title || "").slice(0, 260),
     url: typeof note?.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
-    snippet: frossClean(note?.snippet || "").slice(0, 1300),
+    snippet: frossClean(note?.snippet || "").slice(0, 3200),
     source: frossClean(note?.source || "").slice(0, 80),
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
