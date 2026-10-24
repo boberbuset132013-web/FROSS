@@ -12,6 +12,7 @@ on:
       - "FROSS_CHARACTER.md"
       - "wrangler.jsonc"
       - "fross_brain_v05.py"
+      - "fross_neural_brain.py"
       - "services/**"
       - "render.yaml"
       - ".github/workflows/fross-brain-tests.yml"
@@ -27,10 +28,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install NumPy for neural brain
+        run: python -m pip install --disable-pip-version-check "numpy>=1.26,<3"
       - name: Compile Python brain and service adapters
-        run: python -m py_compile fross_brain_v05.py services/python-brain/server.py services/cpp-brain/server.py
+        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py services/python-brain/server.py services/cpp-brain/server.py
       - name: Run Python brain unit tests
         run: python fross_brain_v05.py
+      - name: Train and test neural intent classifier
+        run: python fross_neural_brain.py test --output /tmp/fross-neural-model.npz
       - name: Compile C++ brain
         run: g++ -std=c++17 -O2 -Wall -Wextra -pedantic services/cpp-brain/main.cpp -o /tmp/fross-cpp-brain
       - name: Check C++ greeting
