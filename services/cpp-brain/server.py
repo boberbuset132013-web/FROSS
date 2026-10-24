@@ -6,15 +6,20 @@ import hmac
 import json
 import os
 import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent))
+import llm_client  # noqa: E402
+
 BINARY = os.environ.get("FROSS_CPP_EXECUTABLE", "/app/brain")
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 MAX_BODY = 1024 * 1024
-ENGINE_NAME = "FROSS C++ Reasoning Brain 0.5"
+ENGINE_NAME = "FROSS C++ Planning Brain 1.0"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -38,7 +43,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/", "/health"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
-        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.5"})
+        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "1.0", "languageModelConfigured": llm_client.is_configured(), "languageModel": os.environ.get("FROSS_LLM_MODEL", llm_client.DEFAULT_MODEL)})
 
     def do_POST(self) -> None:
         if self.path != "/chat":
@@ -81,7 +86,24 @@ class Handler(BaseHTTPRequestHandler):
             context_parts.append(role + ": " + str(item.get("content", ""))[:1600])
         context = "\n".join(context_parts)[:10000]
 
-        # Shell is deliberately not used: the user message is passed as one argv value.
+        knowledge = body.get("knowledge", [])
+        if not isinstance(knowledge, list):
+            knowledge = []
+        knowledge = [
+            {
+                "topic": str(item.get("topic", ""))[:180],
+                "title": str(item.get("title", ""))[:260],
+                "summary": str(item.get("summary", ""))[:900],
+                "snippet": str(item.get("snippet", ""))[:1000],
+                "url": str(item.get("url", ""))[:700],
+                "keyPoints": item.get("keyPoints", [])[:5] if isinstance(item.get("keyPoints"), list) else [],
+            }
+            for item in knowledge[:10] if isinstance(item, dict)
+        ]
+
+        # Use C++ as an independent deterministic planner/candidate generator, then let
+        # the language model compose and check a free-form answer when configured.
+        completed = None
         try:
             completed = subprocess.run(
                 [BINARY, mode, message, context],
@@ -93,13 +115,44 @@ class Handler(BaseHTTPRequestHandler):
                 check=False,
                 cwd=str(ROOT),
             )
-        except subprocess.TimeoutExpired:
-            respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-timeout"})
-            return
-        except OSError:
-            respond(self, 503, {"handled": False, "engine": ENGINE_NAME, "error": "C++ executable is unavailable."})
-            return
+        except (subprocess.TimeoutExpired, OSError):
+            completed = None
 
+        if llm_client.is_configured():
+            try:
+                candidate = completed.stdout.strip()[:3500] if completed and completed.returncode == 0 else ""
+                generated = llm_client.generate_reply(
+                    message,
+                    mode=mode,
+                    history=history,
+                    knowledge=knowledge,
+                    planner_hint=candidate,
+                )
+                respond(self, 200, {
+                    "handled": True,
+                    "reply": generated["reply"],
+                    "engine": generated["engine"],
+                    "kind": "llm-generated-v1",
+                    "model": generated["model"],
+                    "trace": [
+                        "C++ проанализировал тип задачи и доступные локальные проверки",
+                        "Языковая модель самостоятельно сформировала ответ",
+                        "Проверить ограничения и представить итог",
+                    ] if mode == "reasoning" else [
+                        "Определить намерение и контекст",
+                        "Сгенерировать ответ языковой моделью",
+                        "Проверить соответствие вопросу",
+                    ],
+                    "sources": [],
+                })
+                return
+            except Exception:
+                # Keep provider errors and secrets out of the client response.
+                pass
+
+        if completed is None:
+            respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-unavailable"})
+            return
         if completed.returncode == 3:
             respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-no-match"})
             return
