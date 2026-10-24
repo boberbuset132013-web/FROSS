@@ -208,48 +208,48 @@ function generateCodeReply(message) {
   if (lang === "python") {
     if (task === "calculator") {
       description = "Небольшой калькулятор с проверкой деления на ноль.";
-      code = "def calculate(a, operator, b):\n    if operator == \\"+\\":\n        return a + b\n    if operator == \\"-\\":\n        return a - b\n    if operator == \\"*\\":\n        return a * b\n    if operator == \\"/\\":\n        if b == 0:\n            raise ValueError(\\"На ноль делить нельзя\\")\n        return a / b\n    raise ValueError(\\"Неизвестная операция\\")\n\nprint(calculate(8, \\"+\\", 4))";
+      code = "def calculate(a, operator, b):\n    if operator == \"+\":\n        return a + b\n    if operator == \"-\":\n        return a - b\n    if operator == \"*\":\n        return a * b\n    if operator == \"/\":\n        if b == 0:\n            raise ValueError(\"На ноль делить нельзя\")\n        return a / b\n    raise ValueError(\"Неизвестная операция\")\n\nprint(calculate(8, \"+\", 4))";
     } else if (task === "fibonacci") {
       description = "Функция возвращает первые n чисел последовательности Фибоначчи.";
       code = "def fibonacci(n):\n    result = []\n    a, b = 0, 1\n    for _ in range(max(0, n)):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))";
     } else if (task === "factorial") {
       description = "Вычисляет факториал неотрицательного целого числа.";
-      code = "def factorial(n):\n    if n < 0:\n        raise ValueError(\\"n должно быть неотрицательным\\")\n    result = 1\n    for value in range(2, n + 1):\n        result *= value\n    return result\n\nprint(factorial(5))  # 120";
+      code = "def factorial(n):\n    if n < 0:\n        raise ValueError(\"n должно быть неотрицательным\")\n    result = 1\n    for value in range(2, n + 1):\n        result *= value\n    return result\n\nprint(factorial(5))  # 120";
     } else if (task === "prime") {
       description = "Проверяет, является ли целое число простым.";
       code = "def is_prime(n):\n    if n < 2:\n        return False\n    divisor = 2\n    while divisor * divisor <= n:\n        if n % divisor == 0:\n            return False\n        divisor += 1\n    return True\n\nprint(is_prime(17))  # True";
     } else if (task === "even") {
       description = "Проверяет чётность числа.";
-      code = "number = int(input(\\"Введите целое число: \\"))\nif number % 2 == 0:\n    print(\\"Чётное\\")\nelse:\n    print(\\"Нечётное\\")";
+      code = "number = int(input(\"Введите целое число: \"))\nif number % 2 == 0:\n    print(\"Чётное\")\nelse:\n    print(\"Нечётное\")";
     } else {
       description = "Минимальная программа на Python.";
-      code = "def main():\n    print(\\"Привет, мир!\\")\n\nif __name__ == \\"__main__\\":\n    main()";
+      code = "def main():\n    print(\"Привет, мир!\")\n\nif __name__ == \"__main__\":\n    main()";
     }
   } else if (lang === "cpp") {
     if (task === "calculator") {
       description = "Простой калькулятор для двух чисел с проверкой деления на ноль.";
-      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    double a, b;\n    char op;\n    cout << \\"Введите выражение (например 8 + 4): \\";\n    cin >> a >> op >> b;\n    if (op == '+') cout << a + b;\n    else if (op == '-') cout << a - b;\n    else if (op == '*') cout << a * b;\n    else if (op == '/' && b != 0) cout << a / b;\n    else cout << \\"Ошибка операции или деление на ноль\\";\n    cout << endl;\n    return 0;\n}";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    double a, b;\n    char op;\n    cout << \"Введите выражение (например 8 + 4): \";\n    cin >> a >> op >> b;\n    if (op == '+') cout << a + b;\n    else if (op == '-') cout << a - b;\n    else if (op == '*') cout << a * b;\n    else if (op == '/' && b != 0) cout << a / b;\n    else cout << \"Ошибка операции или деление на ноль\";\n    cout << endl;\n    return 0;\n}";
     } else if (task === "fibonacci") {
       description = "Выводит первые 10 чисел Фибоначчи.";
       code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    long long a = 0, b = 1;\n    for (int i = 0; i < 10; ++i) {\n        cout << a << (i == 9 ? '\\n' : ' ');\n        long long next = a + b;\n        a = b;\n        b = next;\n    }\n    return 0;\n}";
     } else if (task === "factorial") {
       description = "Считает факториал числа с проверкой входных данных.";
-      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    unsigned long long result = 1;\n    cout << \\"Введите n (0..20): \\";\n    cin >> n;\n    if (n < 0 || n > 20) {\n        cout << \\"Недопустимое значение\\" << endl;\n        return 1;\n    }\n    for (int i = 2; i <= n; ++i) result *= i;\n    cout << result << endl;\n    return 0;\n}";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    unsigned long long result = 1;\n    cout << \"Введите n (0..20): \";\n    cin >> n;\n    if (n < 0 || n > 20) {\n        cout << \"Недопустимое значение\" << endl;\n        return 1;\n    }\n    for (int i = 2; i <= n; ++i) result *= i;\n    cout << result << endl;\n    return 0;\n}";
     } else if (task === "prime") {
       description = "Проверяет, является ли число простым.";
-      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    bool prime = n >= 2;\n    for (int d = 2; d * d <= n && prime; ++d)\n        if (n % d == 0) prime = false;\n    cout << (prime ? \\"Простое\\" : \\"Не простое\\") << endl;\n    return 0;\n}";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    bool prime = n >= 2;\n    for (int d = 2; d * d <= n && prime; ++d)\n        if (n % d == 0) prime = false;\n    cout << (prime ? \"Простое\" : \"Не простое\") << endl;\n    return 0;\n}";
     } else {
       description = "Минимальная программа на C++.";
-      code = "#include <iostream>\n\nint main() {\n    std::cout << \\"Привет, мир!\\\\n\\";\n    return 0;\n}";
+      code = "#include <iostream>\n\nint main() {\n    std::cout << \"Привет, мир!\\\\n\";\n    return 0;\n}";
     }
   } else if (lang === "javascript") {
     description = task === "calculator" ? "Простой калькулятор двух чисел." : "Минимальная программа на JavaScript.";
     code = task === "calculator"
-      ? "function calculate(a, operator, b) {\n  if (operator === \\"+\\") return a + b;\n  if (operator === \\"-\\") return a - b;\n  if (operator === \\"*\\") return a * b;\n  if (operator === \\"/\\") {\n    if (b === 0) throw new Error(\\"Деление на ноль\\");\n    return a / b;\n  }\n  throw new Error(\\"Неизвестная операция\\");\n}\n\nconsole.log(calculate(8, \\"+\\", 4));"
-      : "function main() {\n  console.log(\\"Привет, мир!\\");\n}\n\nmain();";
+      ? "function calculate(a, operator, b) {\n  if (operator === \"+\") return a + b;\n  if (operator === \"-\") return a - b;\n  if (operator === \"*\") return a * b;\n  if (operator === \"/\") {\n    if (b === 0) throw new Error(\"Деление на ноль\");\n    return a / b;\n  }\n  throw new Error(\"Неизвестная операция\");\n}\n\nconsole.log(calculate(8, \"+\", 4));"
+      : "function main() {\n  console.log(\"Привет, мир!\");\n}\n\nmain();";
   } else {
     description = "Минимальная HTML-страница.";
-    code = "<!doctype html>\n<html lang=\\"ru\\">\n<head>\n  <meta charset=\\"utf-8\\">\n  <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">\n  <title>Моя страница</title>\n</head>\n<body>\n  <h1>Привет, мир!</h1>\n</body>\n</html>";
+    code = "<!doctype html>\n<html lang=\"ru\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Моя страница</title>\n</head>\n<body>\n  <h1>Привет, мир!</h1>\n</body>\n</html>";
   }
   const compileNote = lang === "cpp" ? "\n\nСохрани как main.cpp и собери компилятором C++17, например: g++ main.cpp -std=c++17 -o app." : "";
   return description + "\n\n" + fence + lang + "\n" + code + "\n" + fence + compileNote;
