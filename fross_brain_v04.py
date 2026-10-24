@@ -310,7 +310,7 @@ def think(message: str, history: list[dict[str, Any]] | None = None,
 
     knowledge = knowledge or []
     query_words = {w for w in re.findall(r"[a-zа-яё0-9+#]{2,}", normalize(correct_text(message)))
-                   if w not in {"что", "как", "где", "когда", "для", "это", "the", "and", "with", "про"}}
+                   if w not in {"что", "как", "где", "когда", "для", "это", "такое", "который", "которая", "которые", "того", "его", "она", "они", "оно", "он", "и", "в", "на", "по", "об", "про", "мне", "меня", "пожалуйста", "расскажи", "объясни", "тему", "темы", "работает", "работают", "работал", "работала", "подробнее", "информация", "информацию", "нужно", "хочу", "узнать", "the", "and", "with", "from", "this", "that"}}
     memory_ranked: list[tuple[float, dict[str, Any]]] = []
     for note in knowledge:
         topic = normalize(correct_text(str(note.get("topic", ""))))
