@@ -259,33 +259,53 @@ const FROSS_STOP_WORDS_LOCAL = new Set(["что", "как", "где", "когд�
 
 function findKnowledgeReply(query, knowledge, mode = "normal") {
   if (!Array.isArray(knowledge) || !knowledge.length) return null;
-  const queryWords = [...new Set(normalize(frossCorrectText(query)).match(/[a-zа-яё0-9+#]{2,}/g) || [])]
-    .filter(word => !FROSS_STOP_WORDS_LOCAL.has(word));
+  const terms = value => new Set(
+    (normalize(frossCorrectText(String(value || ""))).match(/[a-zа-яё0-9+#]{2,}/g) || [])
+      .filter(word => !FROSS_STOP_WORDS_LOCAL.has(word) && word.length > 2)
+  );
+  const queryWords = [...terms(query)];
   if (!queryWords.length) return null;
+  const coverage = (querySet, field) => {
+    const words = terms(field);
+    return querySet.filter(word => words.has(word)).length / querySet.length;
+  };
   const ranked = knowledge.map(note => {
-    const topicText = normalize(frossCorrectText(String(note.topic || "")));
-    const titleText = normalize(frossCorrectText(String(note.title || "")));
-    const text = normalize(frossCorrectText(String(note.snippet || note.content || "")));
-    const merged = topicText + " " + titleText + " " + text;
-    const topicHits = queryWords.filter(word => topicText.includes(word)).length;
-    const hits = queryWords.filter(word => merged.includes(word)).length;
-    const coverage = hits / queryWords.length;
-    const topicCoverage = topicHits / queryWords.length;
-    const score = Math.min(1, coverage * 0.65 + topicCoverage * 0.45 + Math.max(0, Number(note.score) || 0) * 0.1);
+    const topicCoverage = coverage(queryWords, note.topic || "");
+    const titleCoverage = coverage(queryWords, note.title || "");
+    const keywordCoverage = coverage(queryWords, Array.isArray(note.keywords) ? note.keywords.join(" ") : "");
+    const summaryCoverage = coverage(queryWords, [note.summary || "", ...(Array.isArray(note.keyPoints) ? note.keyPoints : [])].join(" "));
+    const bodyCoverage = coverage(queryWords, note.snippet || note.content || "");
+    const score = Math.min(1, topicCoverage * 0.34 + titleCoverage * 0.22 + keywordCoverage * 0.30 +
+      summaryCoverage * 0.18 + bodyCoverage * 0.12 + Math.max(0, Number(note.score) || 0) * 0.06);
     return { note, score };
   }).sort((a, b) => b.score - a.score);
-  const matches = ranked.filter(item => item.score >= 0.48).slice(0, mode === "reasoning" ? 4 : 2);
+  const matches = ranked.filter(item => item.score >= 0.40).slice(0, mode === "reasoning" ? 4 : 3);
   if (!matches.length) return null;
   const lines = [mode === "reasoning"
-    ? "Сначала проверил личную базу знаний FROSS и нашёл подходящие сохранённые заметки."
-    : "Нашёл подходящие заметки в личной базе знаний FROSS:"];
+    ? "Сначала проверил личную базу знаний FROSS и выбрал самые подходящие материалы."
+    : "Нашёл подходящие материалы в личной базе знаний FROSS:"];
   for (const [index, item] of matches.entries()) {
     const note = item.note;
-    lines.push((index + 1) + ". **" + String(note.title || note.topic || "Заметка") + "**\n" + String(note.snippet || note.content || "").slice(0, 850));
+    const title = String(note.title || note.topic || "Заметка");
+    lines.push((index + 1) + ". **" + title + "**");
+    if (note.summary) lines.push("**Кратко:** " + String(note.summary).slice(0, 650));
+    const points = Array.isArray(note.keyPoints) ? note.keyPoints.filter(Boolean).slice(0, mode === "reasoning" ? 4 : 2) : [];
+    if (points.length) lines.push("**Главное:**\n" + points.map(point => "• " + String(point).slice(0, 260)).join("\n"));
+    else if (note.snippet || note.content) lines.push(String(note.snippet || note.content).slice(0, 700));
+    if (Array.isArray(note.keywords) && note.keywords.length) {
+      lines.push("**Термины:** " + note.keywords.slice(0, 12).join(", "));
+    }
     if (note.url && /^https?:\/\//i.test(note.url)) lines.push("Источник: [" + String(note.url) + "](" + note.url + ")");
   }
-  if (mode === "reasoning") lines.push("**Ограничение:** это сохранённые фрагменты из источников, а не дообучение нейросети. При устаревшей заметке открой источник и проверь актуальность.");
-  return { reply: lines.join("\n"), kind: "saved-memory-v05", sources: matches.map(item => item.note), trace: mode === "reasoning" ? ["Нормализовать запрос", "Сопоставить с личной памятью", "Оценить совпадения", "Сформировать ответ из сохранённых заметок", "Указать источники", "Проверить ограничения", "Ответить"] : ["Проверить личную память", "Найти совпадения", "Ответить из сохранённых заметок", "Указать источники"] };
+  if (mode === "reasoning") lines.push("**Ограничение:** материалы извлечены из открытых источников, а краткое изложение построено выбором предложений, а не генерацией обученной нейросетью. Проверяй важные утверждения по источникам.");
+  return {
+    reply: lines.join("\n"),
+    kind: "saved-memory-v06",
+    sources: matches.map(item => item.note),
+    trace: mode === "reasoning"
+      ? ["Нормализовать запрос", "Сравнить тему, заголовки, ключевые слова и резюме", "Оценить релевантность материалов", "Выбрать лучшие заметки", "Сформировать ответ из сохранённых тезисов", "Указать источники", "Проверить ограничения"]
+      : ["Проверить личную базу знаний", "Найти совпадения по ключевым словам и резюме", "Выбрать релевантные заметки", "Указать источники"]
+  };
 }
 
 function quickReply({ message, isCreator = false, mode = "normal" }) {
