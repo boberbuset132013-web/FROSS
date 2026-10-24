@@ -1,0 +1,34 @@
+name: FROSS Local Brain checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fross-brain.js"
+      - "worker.js"
+      - "fross_brain_v04.py"
+      - ".github/workflows/fross-brain-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  test-local-brain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python engine
+        run: python -m py_compile fross_brain_v04.py
+      - name: Run Python engine tests
+        run: python fross_brain_v04.py
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript brain syntax
+        run: node --input-type=module --check < fross-brain.js
+      - name: Check Worker syntax
+        run: node --input-type=module --check < worker.js
