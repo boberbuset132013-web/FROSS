@@ -16,7 +16,7 @@ if not (ROOT / "fross_brain_v05.py").exists():
 sys.path.insert(0, str(ROOT))
 import fross_brain_v05 as brain  # noqa: E402
 
-MAX_BODY = 256 * 1024
+MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Python Brain 0.5"
 
