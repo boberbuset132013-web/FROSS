@@ -1,4 +1,4 @@
-import { frossQuickResponse, frossThink, frossCorrectText } from "./fross-brain.js";
+import { frossCorrectText } from "./fross-brain.js";
 
 // ================= КОНФИГУРАЦИЯ =================
 const BOT_UPDATE_FORWARD_URL = "";
@@ -1448,7 +1448,7 @@ async function handleFrossApi(request, env) {
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-    diagnostics: { engine: "FROSS Local Brain 0.6", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+    diagnostics: { engine: "FROSS safety filter", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
@@ -1470,14 +1470,13 @@ async function handleFrossApi(request, env) {
   // then combine the two sources instead of stopping at the first memory hit.
   // The language model handles ordinary replies, including greetings and explanations.
   // Deterministic rules remain for explicit safety checks and exact algorithmic validation only.
-  const quickReply = null;
   const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
   // Route ordinary questions to the trained FROSS Transformer. Web lookup is opt-in:
   // use it when the user explicitly asks for recent facts, web pages, or sources.
   const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
-  const shouldSearch = !quickReply && !conversationalCandidate && frossShouldSearchExplicit(correctedQuery);
+  const shouldSearch = !conversationalCandidate && frossShouldSearchExplicit(correctedQuery);
   let results = [];
   let providerErrors = [];
   if (shouldSearch) {
@@ -1492,7 +1491,7 @@ async function handleFrossApi(request, env) {
   // Keep the default result outside the conditional: the final diagnostics also read it
   // on web-search paths where the external brain is intentionally skipped.
   let remote = { configured: false, handled: false, error: "" };
-  if (!quickReply) {
+  {
     const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
     const modelKnowledge = [
       ...allKnowledge.slice(0, shouldSearch ? 18 : 24),
