@@ -5,6 +5,33 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    // Private learned notes: each signed-in user can only access their own memory.
+    // The learning API independently checks the configured, verified creator identity.
+    match /users/{userId}/knowledge/{noteId} {
+      allow get, list: if signedInAs(userId);
+
+      allow create, update: if signedInAs(userId)
+        && request.resource.data.keys().hasOnly([
+          'topic', 'title', 'url', 'snippet', 'source', 'score', 'savedAt'
+        ])
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() >= 2
+        && request.resource.data.topic.size() <= 180
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 260
+        && request.resource.data.url is string
+        && request.resource.data.url.size() <= 700
+        && (request.resource.data.url == '' || request.resource.data.url.matches('https?://.*'))
+        && request.resource.data.snippet is string
+        && request.resource.data.snippet.size() <= 1300
+        && request.resource.data.source is string
+        && request.resource.data.source.size() <= 80
+        && request.resource.data.score is number
+        && request.resource.data.savedAt is timestamp;
+
+      allow delete: if signedInAs(userId);
+    }
+
     match /users/{userId}/chats/{chatId} {
       allow get, list: if signedInAs(userId);
 
