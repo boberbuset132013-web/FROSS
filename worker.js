@@ -1357,7 +1357,12 @@ async function handleFrossApi(request, env) {
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
   const sharedGithubKnowledge = quickReply ? [] : await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
-  const shouldSearch = !quickReply && frossShouldSearch(correctedQuery);
+
+  // First check whether local rules and saved knowledge can answer confidently.
+  // If FROSS reports no match, automatically search the web instead of stopping at memory.
+  const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
+  const localKnowledgeMiss = localMemory.kind === "no-match-v05";
+  const shouldSearch = !quickReply && (frossShouldSearch(correctedQuery) || localKnowledgeMiss);
   let results = [];
   let providerErrors = [];
   if (shouldSearch) {
@@ -1365,7 +1370,6 @@ async function handleFrossApi(request, env) {
     results = search.results;
     providerErrors = search.errors;
   }
-  const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
   if (localMemory.kind === "saved-memory-v06" && !shouldSearch) {
     return frossJson({
       name: FROSS_PROFILE.name,
