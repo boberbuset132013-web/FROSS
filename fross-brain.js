@@ -102,7 +102,7 @@ function parseMath(text) {
 function quickReply({ message, isCreator = false, mode = "normal" }) {
   const raw = normalize(message);
   const q = raw.replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
-  const noBotName = q.replace(/\b(fross|фросс|ботик|бот)\b/g, " ").replace(/\s+/g, " ").trim();
+  const noBotName = q.replace(/(fross|фросс|ботик|бот)/g, " ").replace(/\s+/g, " ").trim();
 
   if (/^(эй\s+)?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер)$/.test(noBotName)) {
     return isCreator
@@ -151,8 +151,8 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
   }
 
   if (/(пример кода|напиши код|сгенерируй код|напиши программу|сделай программу|код на|программа на)/.test(q)) {
-    const python = /\b(python|питон)\b/.test(q);
-    const js = /\b(javascript|java script|js|джаваскрипт)\b/.test(q);
+    const python = /(python|питон)/.test(q);
+    const js = /(javascript|java script|\bjs\b|джаваскрипт)/.test(q);
     const html = /\bhtml\b/.test(q);
     const hello = /(hello world|привет мир|выведи привет|напечатай привет)/.test(q);
     const calculator = /(калькулятор|сложи два числа|арифметическ)/.test(q);
