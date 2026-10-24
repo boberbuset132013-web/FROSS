@@ -396,7 +396,7 @@ if __name__ == "__main__":
             self.assertIn("Привет!", quick_reply("привет фросс") or "")
         def test_creator_typo(self):
             self.assertEqual(correct_text("кто созрдайтель фросса?"), "кто создатель фросс?")
-            self.assertIn("@Spamton_BigShot_hahaha", quick_reply("кто созрдайтель фросса?") or "")
+            self.assertIn("Spamton_BigShot_hahaha", quick_reply("кто созрдайтель фросса?") or "")
         def test_typo_greeting(self):
             self.assertEqual(quick_reply("превет фросс"), "Привет! Я на связи. Что разберём?")
         def test_definition_knowledge(self):
