@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 BINARY = os.environ.get("FROSS_CPP_EXECUTABLE", "/app/brain")
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 MAX_BODY = 256 * 1024
-ENGINE_NAME = "FROSS C++ Reasoning Brain 0.4"
+ENGINE_NAME = "FROSS C++ Reasoning Brain 0.5"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -28,7 +28,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Cpp-Brain/0.4"
+    server_version = "FROSS-Cpp-Brain/0.5"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Prompts and tokens must never be written to the service logs.
@@ -38,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/", "/health"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
-        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.4"})
+        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.5"})
 
     def do_POST(self) -> None:
         if self.path != "/chat":
@@ -123,7 +123,7 @@ class Handler(BaseHTTPRequestHandler):
             "handled": True,
             "reply": answer[:16000],
             "engine": ENGINE_NAME,
-            "kind": "cpp-algorithm-v04",
+            "kind": "cpp-algorithm-v05",
             "trace": trace,
             "sources": [],
         })
