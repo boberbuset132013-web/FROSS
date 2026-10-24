@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Python Transformer Brain 1.0"
 MAX_REPLY_CHARS = 25000
+# Serialize inference so concurrent visitors do not multiply activation memory on a small server.
+GENERATION_LOCK = threading.Lock()
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -54,6 +57,7 @@ class Handler(BaseHTTPRequestHandler):
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
+            "device": TRANSFORMER_STATUS.get("device", "cpu"),
         })
 
     def do_POST(self) -> None:
@@ -129,15 +133,16 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            reply = transformer.generate_reply(
-                TRANSFORMER_MODEL,
-                TRANSFORMER_TOKENIZER,
-                message,
-                history=history,
-                knowledge=knowledge,
-                mode=mode,
-                max_new_tokens=360 if mode == "reasoning" else 180,
-            ).strip()
+            with GENERATION_LOCK:
+                reply = transformer.generate_reply(
+                    TRANSFORMER_MODEL,
+                    TRANSFORMER_TOKENIZER,
+                    message,
+                    history=history,
+                    knowledge=knowledge,
+                    mode=mode,
+                    max_new_tokens=360 if mode == "reasoning" else 180,
+                ).strip()
         except Exception as exc:
             # Return only the exception class, never the prompt or internal traceback.
             respond(self, 200, {
