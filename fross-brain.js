@@ -385,10 +385,13 @@ export function frossQuickResponse(options) {
 export function frossThink({ message, history = [], results = [], knowledge = [], mode = "normal", isCreator = false } = {}) {
   const correctedMessage = frossCorrectText(message);
   const direct = quickReply({ message: correctedMessage, isCreator, mode });
-  if (direct) return { reply: direct, kind: "local-rule-v05", sources: [], trace: correctedMessage !== normalize(message) ? ["Нормализовал текст", "Исправил вероятные опечатки по словарю", "Распознал тип задачи", "Ответил локальным правилом"] : ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
-
   const memoryReply = findKnowledgeReply(correctedMessage, knowledge, mode);
+  const simpleIntent = normalize(correctedMessage).replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
+  const conversationalIntent = /^(эй )?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер|спасибо|благодарю|спс|пасиб|пока|до свидания|увидимся|как дела|что нового|ты здесь|ты тут|ты на связи|ау|кто ты|ты кто|как тебя зовут|что ты такое)$/.test(simpleIntent);
+  if (direct && conversationalIntent) return { reply: direct, kind: "local-rule-v05", sources: [], trace: ["Распознать короткое разговорное сообщение", "Ответить локальным правилом"] };
+  // Learned material takes priority over generic dictionary templates when the query matches it.
   if (memoryReply && !results.length) return memoryReply;
+  if (direct) return { reply: direct, kind: "local-rule-v05", sources: [], trace: correctedMessage !== normalize(message) ? ["Нормализовал текст", "Исправил вероятные опечатки по словарю", "Распознал тип задачи", "Ответил локальным правилом"] : ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
 
   if (results.length) {
     const queryWords = [...new Set(normalize(correctedMessage).match(/[a-zа-яё0-9]{2,}/g) || [])]
