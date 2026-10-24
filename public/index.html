@@ -9,6 +9,7 @@
 @media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{position:fixed;inset:0 auto 0 0;width:min(290px,86vw);z-index:5;transform:translateX(-105%);transition:transform .25s;box-shadow:18px 0 40px #0005}.sidebar.open{transform:translateX(0)}.mobile-overlay.show{display:block;position:fixed;inset:0;background:#0008;z-index:4}.topbar{height:59px;padding:0 15px}.mobile-menu{display:grid;place-items:center;border:1px solid var(--line);background:#1b1d25;width:35px;height:35px;border-radius:10px;color:#ddd}.top-left{display:flex;align-items:center;gap:10px}.top-status{display:none}.welcome{padding:25px 18px}.welcome h1{font-size:30px}.prompt-grid{grid-template-columns:1fr}.message-list{padding:23px 15px}.composer-wrap{padding:7px 12px 12px}.auth-card{padding:27px 22px}.model-pill{font-size:10px;padding:4px 8px}.settings-label{display:none}.message{grid-template-columns:30px minmax(0,1fr);gap:9px}.message .avatar{width:29px;height:29px;border-radius:10px}}
 
 :root{--font-scale:1}
+.settings-modal.hidden,.jump-bottom.hidden{display:none!important}
 .messages-scroll{min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#5b5579 #15161d}
 .messages-scroll::-webkit-scrollbar,.chat-list::-webkit-scrollbar{width:10px}
 .messages-scroll::-webkit-scrollbar-track,.chat-list::-webkit-scrollbar-track{background:#15161d;border-radius:10px}
