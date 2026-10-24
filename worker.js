@@ -1241,16 +1241,45 @@ async function handleFrossAutoStudy(request, env, ctx) {
   if (!await frossIsCreator(auth, env, request)) {
     return frossJson({ error: "Запуск автоизучения доступен только создателю." }, 403, request);
   }
+  const topics = ["Основы JavaScript", "Примеры кода JavaScript", "Основы Python", "Примеры кода Python"];
   if (frossGithubToken(env).length < 20) {
+    // GitHub is optional for personal learning: return study notes for the signed-in
+    // browser to save to that user's private Firestore memory.
+    const curriculum = [
+      { topic: topics[0], query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
+      { topic: topics[1], query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
+      { topic: topics[2], query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
+      { topic: topics[3], query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
+    ];
+    const notes = [];
+    const outcomes = [];
+    for (const unit of curriculum) {
+      try {
+        const search = await frossRunSearch(unit.query, "reasoning");
+        const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 3);
+        const learned = await frossBuildTrainingNotes(unit.topic, candidates);
+        notes.push(...learned.slice(0, 3));
+        outcomes.push({ topic: unit.topic, noteCount: learned.length });
+      } catch (error) {
+        outcomes.push({ topic: unit.topic, noteCount: 0, error: String(error?.message || error).slice(0, 120) });
+      }
+    }
     return frossJson({
-      error: "Автоизучение не настроено: в Cloudflare → Workers & Pages → fross → Settings → Variables and Secrets создай Secret FROSS_GITHUB_TOKEN. В GitHub создай Fine-grained personal access token только для репозитория boberbuset132013-web/FROSS с разрешением Contents: Read and write, вставь его в Secret и заново разверни Worker. Не отправляй токен в чат. Личная память Firestore работает отдельно."
-    }, 503, request);
+      ok: true,
+      started: false,
+      personalOnly: true,
+      topics,
+      notes: notes.slice(0, 12),
+      outcomes,
+      message: "GitHub-токен не настроен. Я собрал материалы и передаю их для сохранения в личную память Firestore; общая библиотека GitHub не изменяется."
+    }, 200, request);
   }
   ctx.waitUntil(frossAutoStudyProgramming(env, "manual"));
   return frossJson({
     ok: true,
     started: true,
-    topics: ["Основы JavaScript", "Примеры кода JavaScript", "Основы Python", "Примеры кода Python"],
+    personalOnly: false,
+    topics,
     message: "Фоновое изучение запущено. Проверь memory/knowledge/ и Cloudflare Runtime Logs."
   }, 202, request);
 }
