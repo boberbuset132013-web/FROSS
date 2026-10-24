@@ -426,7 +426,7 @@ async function frossApiGuard(path, request, handler) {
   } catch (error) {
     const errorId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
     const diagnostic = String(error?.message || error || "Unknown error")
-      .replace(/Bearer\s+\\S+/gi, "Bearer [redacted]")
+      .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
       .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[redacted]")
       .replace(/[A-Za-z0-9_-]{40,}/g, "[redacted]")
       .replace(/\s+/g, " ")
