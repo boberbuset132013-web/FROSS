@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Focused tests for the FROSS Transformer implemented and trained from scratch."""
+from __future__ import annotations
+
+import unittest
+
+import torch
+
+import fross_transformer as transformer
+
+
+class TransformerTests(unittest.TestCase):
+    def test_bpe_tokenizer_round_trip(self) -> None:
+        samples = [
+            "Привет, FROSS!",
+            "Attention использует Query, Key и Value.",
+            "Скобки (2 + 3) работают.",
+            "Первая строка\nВторая строка.",
+        ]
+        tokenizer = transformer.BPETokenizer.train(samples * 3, merge_count=32, min_frequency=2)
+        for text in samples:
+            self.assertEqual(tokenizer.decode(tokenizer.encode(text)), text)
+
+    def test_causal_attention_cannot_see_future_tokens(self) -> None:
+        torch.manual_seed(7)
+        model = transformer.FrossTransformer(
+            vocab_size=48,
+            config={
+                "block_size": 16,
+                "n_embd": 16,
+                "n_head": 4,
+                "n_layer": 2,
+                "dropout": 0.0,
+            },
+        )
+        model.eval()
+        first = torch.tensor([[8, 9, 10, 11, 12, 13]], dtype=torch.long)
+        changed_future = torch.tensor([[8, 9, 10, 11, 12, 25]], dtype=torch.long)
+        with torch.inference_mode():
+            logits_a = model(first)
+            logits_b = model(changed_future)
+        self.assertTrue(torch.allclose(logits_a[:, :5], logits_b[:, :5], atol=1e-6, rtol=1e-6))
+
+    def test_model_uses_randomly_initialized_parameters(self) -> None:
+        torch.manual_seed(19)
+        model = transformer.FrossTransformer(
+            vocab_size=32,
+            config={
+                "block_size": 32,
+                "n_embd": 16,
+                "n_head": 4,
+                "n_layer": 1,
+                "dropout": 0.0,
+            },
+        )
+        self.assertGreater(sum(parameter.numel() for parameter in model.parameters()), 1000)
+        self.assertTrue(torch.isfinite(model.token_embedding.weight).all())
+
+    def test_clean_generated_text_preserves_code_and_paragraphs(self) -> None:
+        text = "Первая строка.\n\n```python\ndef main():\n    return 1\n```\n\n\nИтог."
+        cleaned = transformer._clean_generated_text(text)
+        self.assertIn("\n\n```python", cleaned)
+        self.assertIn("\n    return 1", cleaned)
+        self.assertNotIn("\n\n\n", cleaned)
+
+
+if __name__ == "__main__":
+    unittest.main()
