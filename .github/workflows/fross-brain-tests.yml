@@ -124,5 +124,26 @@ jobs:
           assert.ok((explanation.match(/[.!?](?:\s|$)/g) || []).length >= 2, "Brain 0.6 should connect multiple sentences from saved notes");
           const greeting = brain.frossThink({ message: "Привет", knowledge });
           assert.equal(greeting.kind, "local-rule-v05");
-          console.log("Knowledge ranking and greeting priority passed.");
+          const followup = brain.frossThink({
+            message: "подробнее",
+            history: [
+              { role: "user", content: "Как создать сайт?" },
+              { role: "assistant", content: "Сначала определи цель сайта. Затем создай HTML-разметку и добавь CSS-оформление." }
+            ]
+          });
+          assert.match(followup.reply, /продолжу предыдущую мысль/i);
+          assert.match(followup.reply, /HTML-разметку/i);
+          const correction = brain.frossThink({ message: "не это" , history: [{ role: "assistant", content: "Предыдущий ответ." }] });
+          assert.match(correction.reply, /неверно истолковал/i);
+          const errorHelp = brain.frossThink({ message: "не работает" });
+          assert.match(errorHelp.reply, /точный текст ошибки/i);
+          const whyMath = brain.frossThink({
+            message: "почему?",
+            history: [
+              { role: "user", content: "сколько будет (2+3)*4" },
+              { role: "assistant", content: "Ответ: 20. Вычислено локально." }
+            ]
+          });
+          assert.match(whyMath.reply, /Приоритет такой/i);
+          console.log("Knowledge ranking, context-aware follow-ups, correction and error-help passed.");
           JS
