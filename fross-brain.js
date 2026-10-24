@@ -353,8 +353,6 @@ function findKnowledgeReply(query, knowledge, mode = "normal") {
 function frossConversationReply(message, history = []) {
   const q = normalize(frossCorrectText(message)).replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
   const noBotName = q.split(/\s+/).filter(word => !["fross", "фросс", "ботик", "бот"].includes(word)).join(" ").trim();
-  const conversational = frossConversationReply(message, history);
-  if (conversational) return conversational;
   const turns = Array.isArray(history) ? history.slice(-12).filter(item => item && typeof item.content === "string") : [];
   const lastAssistant = turns.slice().reverse().find(item => item.role === "assistant")?.content || "";
   const lastUser = turns.slice().reverse().find(item => item.role !== "assistant")?.content || "";
@@ -419,6 +417,8 @@ function quickReply({ message, isCreator = false, mode = "normal", history = [] 
   const raw = normalize(frossCorrectText(message));
   const q = raw.replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
   const noBotName = q.split(/\s+/).filter(word => !["fross", "фросс", "ботик", "бот"].includes(word)).join(" ").trim();
+  const conversational = frossConversationReply(message, history);
+  if (conversational) return conversational;
 
   if (/^(эй\s+)?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер)$/.test(noBotName)) {
     return isCreator
