@@ -35,7 +35,7 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if false;
+      allow delete: if signedInAs(userId);
 
       match /messages/{messageId} {
         allow read: if signedInAs(userId);
@@ -71,7 +71,7 @@ service cloud.firestore {
           && request.resource.data.state == 'answered'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']);
 
-        allow delete: if false;
+        allow delete: if signedInAs(userId);
       }
     }
   }
