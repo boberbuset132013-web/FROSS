@@ -3,7 +3,6 @@ ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1
 WORKDIR /app
 RUN python -m pip install --no-cache-dir "numpy>=1.26,<3" \
     && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
-COPY fross_brain_v05.py /app/fross_brain_v05.py
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/fross_corpus.jsonl /app/data/fross_corpus.jsonl
 COPY services/python-brain/server.py /app/server.py
