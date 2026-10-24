@@ -370,7 +370,42 @@ $("creatorUnlockForm").addEventListener("submit",async event=>{
 });
 async function deleteKnowledgeNote(id,button){if(!currentUser)return;if(!confirm("Удалить эту заметку из личной памяти FROSS?"))return;button.disabled=true;try{await deleteDoc(doc(db,...knowledgePath(),id));knowledgeNotes=knowledgeNotes.filter(note=>note.id!==id);renderKnowledgeList();$("trainingStatus").textContent="Заметка удалена. Осталось: "+knowledgeNotes.length+"."}catch(error){button.disabled=false;$("trainingStatus").textContent="Не удалось удалить заметку: "+String(error?.message||error)}}
 async function learnTopic(event){event.preventDefault();if(!currentUser)return;const topic=$("trainingTopic").value.trim();if(topic.length<2){$("trainingStatus").textContent="Введи тему подробнее.";return}const button=$("trainingSubmit");button.disabled=true;$("trainingStatus").textContent="Ищу источники, собираю заметки и проверяю дубликаты…";try{const data=await frossApiPost("/api/train",{topic});let saved=0,duplicates=0;for(const note of data.notes||[]){const exists=knowledgeNotes.some(old=>old.url&&note.url&&old.url===note.url&&String(old.topic||"").toLowerCase()===String(note.topic||"").toLowerCase());if(exists){duplicates++;continue}await addDoc(collection(db,...knowledgePath()),{schemaVersion:2,kind:String(note.kind||"source-note").slice(0,40),topic:String(note.topic||topic).slice(0,180),title:String(note.title||"Источник").slice(0,260),url:/^https?:\/\//i.test(note.url||"")?note.url:"",snippet:String(note.snippet||"").slice(0,3200),summary:String(note.summary||"").slice(0,900),keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5).map(value=>String(value).slice(0,300)):[],keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24).map(value=>String(value).slice(0,40)):[],source:String(note.source||"web search").slice(0,80),score:Number(note.score)||0,savedAt:serverTimestamp()});saved++}await loadKnowledge();const github=data.githubStorage||{};const githubStatus=github.saved?" GitHub: сохранено в "+github.path+" (публичная библиотека).":github.public===false?" Общая GitHub-библиотека не изменялась; заметки останутся приватными в этом аккаунте.":github.configured?" GitHub не удалось обновить: "+(github.message||"проверь FROSS_GITHUB_TOKEN"):" GitHub не подключён: добавь Secret FROSS_GITHUB_TOKEN в Cloudflare. Личная память Firestore сохранена отдельно."; $("trainingStatus").textContent="Готово: изучена тема «"+topic+"». Сохранено заметок: "+saved+(duplicates?", дубликатов пропущено: "+duplicates:"")+". "+githubStatus+" "+(data.notice||"");$("trainingTopic").value=""}catch(error){$("trainingStatus").textContent="Не удалось обучить память: "+String(error?.message||error)}finally{button.disabled=false}}
-async function runAutoStudyNow(){if(!currentUser||!isCreator){$("trainingStatus").textContent=creatorSetupMessage();return}const button=$("autoStudyBtn");button.disabled=true;$("trainingStatus").textContent="Запускаю фоновый поиск официальных материалов по JavaScript и Python…";try{const data=await frossApiPost("/api/auto-study",{});$("trainingStatus").textContent=(data.message||"Автоизучение запущено.")+" Темы: "+(Array.isArray(data.topics)?data.topics.join(", "):"JavaScript и Python")+". Сохранение выполняется в фоне; личные чаты в общую библиотеку не отправляются."}catch(error){$("trainingStatus").textContent="Не удалось запустить автоизучение: "+String(error?.message||error)}finally{button.disabled=!isCreator}}
+async function runAutoStudyNow(){
+  if(!currentUser||!isCreator){$("trainingStatus").textContent=creatorSetupMessage();return}
+  const button=$("autoStudyBtn");button.disabled=true;
+  $("trainingStatus").textContent="Ищу официальные материалы по JavaScript и Python…";
+  try{
+    const data=await frossApiPost("/api/auto-study",{});
+    if(data.personalOnly&&Array.isArray(data.notes)){
+      let saved=0,duplicates=0;
+      for(const note of data.notes){
+        const exists=knowledgeNotes.some(old=>old.url&&note.url&&old.url===note.url&&String(old.topic||"").toLowerCase()===String(note.topic||"").toLowerCase());
+        if(exists){duplicates++;continue}
+        await addDoc(collection(db,...knowledgePath()),{
+          schemaVersion:2,
+          kind:String(note.kind||"source-note").slice(0,40),
+          topic:String(note.topic||"Обучение JavaScript/Python").slice(0,180),
+          title:String(note.title||"Источник").slice(0,260),
+          url:/^https?:\/\//i.test(note.url||"")?note.url:"",
+          snippet:String(note.snippet||"").slice(0,3200),
+          summary:String(note.summary||"").slice(0,900),
+          keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5).map(value=>String(value).slice(0,300)):[],
+          keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24).map(value=>String(value).slice(0,40)):[],
+          source:String(note.source||"web search").slice(0,80),
+          score:Number(note.score)||0,
+          savedAt:serverTimestamp()
+        });
+        saved++;
+      }
+      await loadKnowledge();
+      $("trainingStatus").textContent="Автоизучение завершено. Сохранено в личную память: "+saved+" заметок"+(duplicates?", дубликатов пропущено: "+duplicates:"")+". GitHub-токен не настроен, поэтому заметки остаются приватными в твоём аккаунте. Для ежедневного обновления общей базы GitHub настрой Secret FROSS_GITHUB_TOKEN.";
+    }else{
+      $("trainingStatus").textContent=(data.message||"Автоизучение запущено.")+" Темы: "+(Array.isArray(data.topics)?data.topics.join(", "):"JavaScript и Python")+". Сохранение общей базы выполняется в фоне; личные чаты в неё не отправляются.";
+    }
+  }catch(error){
+    $("trainingStatus").textContent="Не удалось запустить автоизучение: "+String(error?.message||error);
+  }finally{button.disabled=!isCreator}
+}
 async function clearKnowledge(){if(!currentUser||!knowledgeNotes.length)return;if(!confirm("Удалить все "+knowledgeNotes.length+" заметок личной памяти? Чаты не будут удалены."))return;const button=$("clearMemoryBtn");button.disabled=true;try{for(const note of knowledgeNotes){await deleteDoc(doc(db,...knowledgePath(),note.id))}knowledgeNotes=[];renderKnowledgeList();$("trainingStatus").textContent="Личная память очищена."}catch(error){$("trainingStatus").textContent="Не удалось полностью очистить память: "+String(error?.message||error);await loadKnowledge()}finally{button.disabled=false}}
 async function saveKnowledge(){
   if(!currentUser){$("trainingStatus").textContent="Войди в FROSS, чтобы сохранить знания.";return}
