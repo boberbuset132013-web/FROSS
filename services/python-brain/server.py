@@ -11,11 +11,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
-if not (ROOT / "fross_brain_v05.py").exists():
+if not (ROOT / "fross_transformer.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import fross_brain_v05 as text_utils  # noqa: E402
 import fross_transformer as transformer  # noqa: E402
 
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
@@ -88,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
         if not raw_message:
             respond(self, 400, {"handled": False, "error": "Message is required."})
             return
-        message = text_utils.correct_text(raw_message)
+        message = raw_message.strip()
         mode = "reasoning" if str(body.get("mode", "normal")).lower() in ("reasoning", "deep") else "normal"
 
         raw_history = body.get("history", [])
