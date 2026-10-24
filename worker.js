@@ -1059,7 +1059,7 @@ function frossTrainingSearchQuery(topic) {
   if (/(python|питон)/i.test(normalized)) {
     return (topic + " Python official tutorial basics variables types conditions loops functions lists dictionaries examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
-  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
+  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
     return (topic + " JavaScript MDN guide basics variables types conditions loops functions arrays objects examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
   return (topic + " guide documentation fundamentals examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
@@ -1067,7 +1067,7 @@ function frossTrainingSearchQuery(topic) {
 
 async function frossBuildTrainingNotes(topic, candidates) {
   const collected = await Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {
-    const url = typeof item.url === "string" && /^https?:\\/\\//i.test(item.url) ? item.url.slice(0, 700) : "";
+    const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
     const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
     return {
