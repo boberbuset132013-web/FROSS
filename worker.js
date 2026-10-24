@@ -48,6 +48,9 @@ export default {
     }
 
     // 3. FROSS API в том же Worker — до фильтра Telegram-путей
+    if (path === "/api/identity") return handleFrossIdentity(request, env);
+    if (path === "/api/train") return handleFrossTrain(request, env);
+
     if (path === "/api/chat") {
       return handleFrossApi(request, env);
     }
@@ -112,7 +115,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Local Brain 0.3 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
+  description: "FROSS Local Brain 0.4 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -538,6 +541,64 @@ function frossSafetyReply(query) {
   return null;
 }
 
+function frossIsCreator(auth, env) {
+  const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
+  return Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email === creatorEmail);
+}
+
+async function handleFrossIdentity(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
+  return frossJson({
+    ok: true,
+    isCreator: frossIsCreator(auth, env),
+    emailVerified: auth.emailVerified,
+    engine: "FROSS Local Brain 0.4",
+    learningEnabled: frossIsCreator(auth, env)
+  }, 200, request);
+}
+
+async function handleFrossTrain(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
+  if (!frossIsCreator(auth, env)) return frossJson({ error: "Режим обучения доступен только подтверждённому аккаунту создателя." }, 403, request);
+
+  let body;
+  try { body = await request.json(); }
+  catch { return frossJson({ error: "Тело запроса должно быть JSON." }, 400, request); }
+  const topic = frossClean(body.topic || "").slice(0, 180);
+  if (topic.length < 2) return frossJson({ error: "Введи тему, которую нужно изучить." }, 400, request);
+
+  const search = await frossRunSearch(topic, "reasoning");
+  const notes = search.results.slice(0, 8).map(item => ({
+    topic,
+    title: frossClean(item.title || "Источник без названия").slice(0, 260),
+    url: typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "",
+    snippet: frossClean(item.snippet || "").slice(0, 1300),
+    source: frossClean(item.source || "web search").slice(0, 80),
+    score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
+  })).filter(note => note.title && (note.snippet || note.url));
+
+  if (!notes.length) return frossJson({
+    ok: false, error: "По этой теме не удалось найти подходящих материалов. Попробуй сформулировать тему конкретнее.",
+    providerErrors: search.errors
+  }, 404, request);
+
+  return frossJson({
+    ok: true,
+    engine: "FROSS Local Brain 0.4",
+    topic,
+    notes,
+    count: notes.length,
+    providerErrors: search.errors,
+    notice: "Это учебные заметки из поисковых заголовков и фрагментов, не проверенная энциклопедия. Перед сохранением проверь источники; сохранённые заметки можно удалить."
+  }, 200, request);
+}
+
 async function handleFrossApi(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/chat." }, 405, request);
@@ -549,8 +610,7 @@ async function handleFrossApi(request, env) {
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Войди через Google, чтобы пользоваться FROSS." }, 401, request);
   // Private creator email is held as a Cloudflare secret, never added to the public code or brain inputs.
-  const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
-  const isCreator = Boolean(creatorEmail && auth.emailVerified && auth.email && auth.email === creatorEmail);
+  const isCreator = frossIsCreator(auth, env);
   const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""), message);
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
   const correctedQuery = frossCorrectText(message);
@@ -559,22 +619,35 @@ async function handleFrossApi(request, env) {
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-    diagnostics: { engine: "FROSS Local Brain 0.3", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+    diagnostics: { engine: "FROSS Local Brain 0.4", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
   const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+  const knowledge = Array.isArray(body.knowledge) ? body.knowledge.slice(0, 40).map(note => ({
+    topic: frossClean(note?.topic || "").slice(0, 180),
+    title: frossClean(note?.title || "").slice(0, 260),
+    url: typeof note?.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
+    snippet: frossClean(note?.snippet || "").slice(0, 1300),
+    source: frossClean(note?.source || "").slice(0, 80),
+    score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
+  })) : [];
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
   let results = [];
   let providerErrors = [];
+  let localMemory = null;
   if (!quickReply) {
-    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
-    results = search.results;
-    providerErrors = search.errors;
+    localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
+    if (localMemory.kind !== "saved-memory-v04") {
+      const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
+      results = search.results;
+      providerErrors = search.errors;
+    }
   }
   const localResult = quickReply
-    ? { reply: quickReply, kind: "local-rule", sources: [] }
-    : frossThink({ message: correctedQuery, history, results, mode, isCreator });
+    ? { reply: quickReply, kind: "local-rule-v04", sources: [] }
+    : localMemory?.kind === "saved-memory-v04" ? localMemory
+    : frossThink({ message: correctedQuery, history, results, knowledge, mode, isCreator });
   const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
@@ -585,7 +658,7 @@ async function handleFrossApi(request, env) {
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
       resultsFound: results.length, providerErrors, aiUsed: false,
-      engine: "FROSS Local Brain 0.3",
+      engine: "FROSS Local Brain 0.4",
       kind: localResult.kind || "local-rule-v03",
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       note: "Ответ сформирован собственным правиловым движком FROSS; готовая языковая модель не вызывается."
