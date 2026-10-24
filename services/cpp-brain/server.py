@@ -107,20 +107,6 @@ class Handler(BaseHTTPRequestHandler):
 
         # C++ supplies a deterministic algorithmic candidate when it can solve or classify
         # the request. The answer itself is produced by our separately trained-from-scratch model.
-        knowledge = body.get("knowledge", [])
-        if not isinstance(knowledge, list):
-            knowledge = []
-        knowledge = [
-            {
-                "topic": str(item.get("topic", ""))[:180],
-                "title": str(item.get("title", ""))[:260],
-                "summary": str(item.get("summary", ""))[:900],
-                "snippet": str(item.get("snippet", ""))[:1000],
-                "url": str(item.get("url", ""))[:700],
-                "keyPoints": item.get("keyPoints", [])[:5] if isinstance(item.get("keyPoints"), list) else [],
-            }
-            for item in knowledge[:10] if isinstance(item, dict)
-        ]
         completed = None
         try:
             completed = subprocess.run(
@@ -175,32 +161,14 @@ class Handler(BaseHTTPRequestHandler):
                 # A missing/invalid checkpoint is not misreported as successful generation.
                 pass
 
-        if completed.returncode == 3:
-            respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-no-match"})
-            return
-        if completed.returncode != 0:
-            respond(self, 500, {"handled": False, "engine": ENGINE_NAME, "error": "C++ brain failed."})
-            return
-        answer = completed.stdout.strip()
-        if not answer:
-            respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "empty-reply"})
-            return
-        trace = [
-            "Разобрать запрос и определить цель",
-            "Проверить локальные правила и вычислимые задачи",
-            "Выбрать алгоритм или шаблон решения",
-            "Проверить крайние случаи",
-            "Сформировать объяснение",
-            "Проверить ограничения ответа",
-            "Подготовить итог",
-        ]
+        # Never present the C++ planner candidate as a final answer if its trained
+        # Transformer checkpoint is missing; the Worker may use its explicit fallback.
         respond(self, 200, {
-            "handled": True,
-            "reply": answer[:25000],
+            "handled": False,
             "engine": ENGINE_NAME,
-            "kind": "cpp-algorithm-v05",
-            "trace": trace,
-            "sources": [],
+            "kind": "generation-model-unavailable",
+            "generationModelStatus": TRANSFORMER_STATUS,
+            "plannerCandidateAvailable": bool(completed and completed.returncode == 0),
         })
 
 
