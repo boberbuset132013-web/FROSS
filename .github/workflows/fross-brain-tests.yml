@@ -6,7 +6,7 @@ on:
     paths:
       - "fross-brain.js"
       - "worker.js"
-      - "fross_brain_v04.py"
+      - "fross_brain_v05.py"
       - "services/**"
       - "render.yaml"
       - ".github/workflows/fross-brain-tests.yml"
@@ -23,9 +23,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python brain and service adapters
-        run: python -m py_compile fross_brain_v04.py services/python-brain/server.py services/cpp-brain/server.py
+        run: python -m py_compile fross_brain_v05.py services/python-brain/server.py services/cpp-brain/server.py
       - name: Run Python brain unit tests
-        run: python fross_brain_v04.py
+        run: python fross_brain_v05.py
       - name: Compile C++ brain
         run: g++ -std=c++17 -O2 -Wall -Wextra -pedantic services/cpp-brain/main.cpp -o /tmp/fross-cpp-brain
       - name: Check C++ greeting
