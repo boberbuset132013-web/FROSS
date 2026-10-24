@@ -278,7 +278,7 @@ function chatPath(){return ["users",currentUser.uid,"chats"]}
 function getChatRef(id){return doc(db,...chatPath(),id)}
 function knowledgePath(){return ["users",currentUser.uid,"knowledge"]}
 async function frossReadJsonResponse(response,path){const text=await response.text();try{return JSON.parse(text)}catch{const contentType=response.headers.get("content-type")||"не указан";if(contentType.toLowerCase().includes("text/html")||/^\s*</.test(text)){throw new Error(path+" вернул HTML вместо JSON (HTTP "+response.status+"). Проверь, что последний Worker опубликован и wrangler.jsonc направляет /api/* в Worker. Ответ сервера: "+text.replace(/\s+/g," ").slice(0,120))}throw new Error(path+" вернул некорректный JSON (HTTP "+response.status+").")}}
-async function frossApiPost(path,payload={}){if(!currentUser)throw new Error("Войди в аккаунт.");const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const creatorToken=sessionStorage.getItem("frossCreatorToken");if(creatorToken)headers["X-FROSS-CREATOR-TOKEN"]=creatorToken;const response=await fetch(path,{method:"POST",headers,body:JSON.stringify(payload)});const data=await frossReadJsonResponse(response,path);if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Ошибка сервера "+response.status)}return data}
+async function frossApiPost(path,payload={}){if(!currentUser)throw new Error("Войди в аккаунт.");const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const creatorToken=localStorage.getItem("frossCreatorToken");if(creatorToken)headers["X-FROSS-CREATOR-TOKEN"]=creatorToken;const response=await fetch(path,{method:"POST",headers,body:JSON.stringify(payload)});const data=await frossReadJsonResponse(response,path);if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Ошибка сервера "+response.status)}return data}
 function chooseKnowledgeForMessage(message,limit=80){
   const queryTerms=[...new Set((String(message||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]).filter(word=>!["это","как","что","для","или","при","the","and","how","what"].includes(word)))];
   const termSet=value=>new Set((String(value||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]));
@@ -359,11 +359,11 @@ $("creatorUnlockForm").addEventListener("submit",async event=>{
   try{
     const data=await frossApiPost("/api/creator-unlock",{password});
     if(!data.creatorToken)throw new Error("Сервер не выдал сессию создателя.");
-    sessionStorage.setItem("frossCreatorToken",data.creatorToken);
+    localStorage.setItem("frossCreatorToken",data.creatorToken);
     $("creatorPasswordInput").value="";
     isCreator=true;
     await refreshCreatorAccess();
-    $("trainingStatus").textContent="Доступ создателя включён на 12 часов в этой вкладке. Brain 0.5 готов к обучению.";
+    $("trainingStatus").textContent="Доступ создателя сохранён в этом браузере на 30 дней. Для постоянного распознавания подтверждённой почты настрой FROSS_CREATOR_EMAIL в Cloudflare.";
   }catch(error){
     $("trainingStatus").textContent="Не удалось включить режим создателя: "+String(error?.message||error);
   }finally{button.disabled=false}
