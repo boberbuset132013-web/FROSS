@@ -132,7 +132,7 @@ jobs:
           const brainSource = readFileSync("fross-brain.js", "utf8");
           const workerSource = readFileSync("worker.js", "utf8");
           const brain = await import("data:text/javascript;base64," + Buffer.from(brainSource).toString("base64"));
-          assert.equal(brain.frossCorrectText("Привте ФРОСС"), "привет фросс");
+          assert.equal(brain.frossCorrectText("Привте ФРОСС"), "Привет ФРОСС");
           assert.equal(typeof brain.frossThink, "undefined");
           assert.equal(typeof brain.frossQuickResponse, "undefined");
           assert.doesNotMatch(brainSource, /DEFINITIONS|function quickReply|export function frossThink/);
