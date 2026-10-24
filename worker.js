@@ -71,6 +71,7 @@ export default {
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
     if (path === "/api/creator-unlock") return frossApiGuard(path, request, () => handleFrossCreatorUnlock(request, env));
     if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
+    if (path === "/api/auto-study") return frossApiGuard(path, request, () => handleFrossAutoStudy(request, env, ctx));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
     // 4. Вебхуки должны проверяться до фильтра Telegram Bot API путей.
@@ -1174,6 +1175,28 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled") {
   console.log("[FROSS auto-study]", JSON.stringify({ trigger, outcomes }));
   return { ok: outcomes.some(item => item.saved), outcomes };
 }
+async function handleFrossAutoStudy(request, env, ctx) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/auto-study." }, 405, request);
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
+  if (!await frossIsCreator(auth, env, request)) {
+    return frossJson({ error: "Запуск автоизучения доступен только создателю." }, 403, request);
+  }
+  if (frossGithubToken(env).length < 20) {
+    return frossJson({
+      error: "Автоизучение не настроено: добавь Secret FROSS_GITHUB_TOKEN с правом Contents: Read and write."
+    }, 503, request);
+  }
+  ctx.waitUntil(frossAutoStudyProgramming(env, "manual"));
+  return frossJson({
+    ok: true,
+    started: true,
+    topics: ["Основы JavaScript", "Примеры кода JavaScript", "Основы Python", "Примеры кода Python"],
+    message: "Фоновое изучение запущено. Проверь memory/knowledge/ и Cloudflare Runtime Logs."
+  }, 202, request);
+}
+
 async function handleFrossTrain(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
