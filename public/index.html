@@ -47,6 +47,104 @@ body.light-theme .tool-btn{background:#fff;color:#383849;border-color:#d6d7e5}
 @media(max-width:760px){.topbar{padding:0 11px;gap:8px}.top-status{display:none}.composer-wrap{padding:7px 10px calc(12px + env(safe-area-inset-bottom))}.composer-bottom{align-items:flex-end}.composer-note{display:none}.composer-tools{gap:5px}.tool-btn{padding:5px 7px;font-size:10px}.jump-bottom{right:15px;bottom:120px}.message-list{padding:18px 12px}.code-block pre{font-size:11px;padding:11px}.settings-card{padding:18px}}
 @media(max-height:560px){.topbar{height:50px;flex-shrink:0}.composer-wrap{padding-top:5px;padding-bottom:7px}.disclaimer{display:none}.welcome{padding:18px}.welcome-inner .orbit{width:52px;height:52px;margin-bottom:12px}.prompt-grid{margin-top:15px}}
 
+
+/* Responsive layout hardening: always fit the available viewport */
+html{width:100%;height:100%;min-height:0;overflow:hidden}
+body{width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
+.app{width:100%;height:100vh;height:100dvh;min-width:0;min-height:0;overflow:hidden;grid-template-rows:minmax(0,1fr)}
+.sidebar{min-width:0;min-height:0;max-height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.brand,.sidebar>.primary,.side-label,.side-bottom{flex-shrink:0}
+.chat-list{flex:1 1 auto;min-width:0;min-height:36px;overscroll-behavior:contain}
+.main{width:100%;height:auto;min-width:0;min-height:0;overflow:hidden}
+.topbar{flex:0 0 66px;min-width:0;min-height:0;overflow:hidden}
+.top-left{flex:1 1 auto;min-width:0;overflow:hidden}
+#topTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar>div:last-child{flex:0 1 auto;min-width:0}
+.model-pill{flex-shrink:0;white-space:nowrap}
+.messages-scroll{flex:1 1 auto;width:100%;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.welcome{width:100%;min-width:0;min-height:100%;overflow:visible}
+.welcome-inner{width:min(720px,100%);max-width:100%;min-width:0}
+.prompt-grid{width:100%;min-width:0}
+.prompt-card{min-width:0;overflow-wrap:anywhere}
+.message-list{width:100%;max-width:900px;min-width:0;margin-inline:auto}
+.message,.message-body,.message-content{min-width:0;max-width:100%}
+.message-content{overflow-wrap:anywhere;word-break:normal}
+.code-block{width:100%;min-width:0;max-width:100%}
+.code-header{flex-wrap:wrap;min-width:0}
+.code-block pre{max-width:100%;overscroll-behavior-x:contain}
+.composer-wrap{flex:0 0 auto;width:100%;min-width:0;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.composer{width:100%;min-width:0}
+.composer-bottom,.composer-tools{min-width:0}
+.composer-note{min-width:0;overflow-wrap:anywhere}
+#messageInput{width:100%;min-width:0;max-width:100%}
+.jump-bottom{position:fixed;right:26px;bottom:calc(106px + env(safe-area-inset-bottom))}
+.settings-modal{overflow-y:auto;overscroll-behavior:contain}
+.settings-card{max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);overflow-y:auto;min-width:0}
+.auth-cover{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.auth-card{max-height:none;min-width:0}
+@media (min-width:761px) and (max-width:1000px){
+  .app{grid-template-columns:230px minmax(0,1fr)}
+  .sidebar{padding:14px 10px;gap:13px}
+  .topbar{padding-inline:14px;gap:10px}
+  .top-status{display:none}
+  .message-list{padding-inline:18px}
+  .composer-wrap{padding-inline:14px}
+}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .main{grid-column:1;grid-row:1}
+  .sidebar{width:min(290px,88vw);max-width:88vw;max-height:100dvh;padding:15px 12px}
+  .topbar{flex-basis:58px;padding-inline:10px;gap:8px}
+  .top-left{gap:8px}
+  #topTitle{max-width:40vw;font-size:14px}
+  .topbar>div:last-child{gap:6px!important}
+  .model-pill{padding:4px 7px;font-size:10px}
+  .welcome{padding:24px 14px}
+  .welcome-inner{width:100%}
+  .welcome h1{font-size:clamp(25px,7vw,32px)}
+  .prompt-grid{grid-template-columns:minmax(0,1fr);gap:8px;margin-top:22px}
+  .prompt-card{padding:12px}
+  .message-list{padding:18px 12px 24px;gap:20px}
+  .composer-wrap{padding:7px 10px calc(12px + env(safe-area-inset-bottom))}
+  .composer{padding:8px}
+  .composer-bottom{gap:7px}
+  .composer-tools{gap:5px}
+  .tool-btn{padding:5px 7px;font-size:10px}
+  .settings-label{display:none}
+  .jump-bottom{right:14px;bottom:calc(118px + env(safe-area-inset-bottom))}
+}
+@media (max-width:420px){
+  .topbar{padding-inline:7px;gap:5px}
+  .top-left{gap:6px}
+  #topTitle{max-width:34vw;font-size:13px}
+  .mobile-menu{width:32px;height:32px;flex:0 0 32px}
+  .model-pill{font-size:9px;padding:4px 5px;gap:4px}
+  .composer-tools{max-width:calc(100% - 43px)}
+  #reasoningBtn{max-width:100%;white-space:normal}
+  .code-header{gap:6px;padding:7px 8px}
+  .code-copy{font-size:10px;padding:5px 7px}
+}
+@media (max-height:650px){
+  .topbar{flex-basis:52px}
+  .composer-wrap{padding-top:5px;padding-bottom:max(7px,env(safe-area-inset-bottom))}
+  .disclaimer{display:none}
+  .composer textarea{max-height:110px}
+  .welcome{padding-block:16px}
+  .welcome .orbit{width:54px;height:54px;margin-bottom:13px}
+  .prompt-grid{margin-top:16px}
+  .auth-cover{place-items:start center}
+  .auth-card{margin:auto}
+}
+@media (max-height:430px){
+  .topbar{flex-basis:46px}
+  .composer textarea{max-height:78px}
+  .composer-wrap{padding-top:3px}
+  .welcome{align-items:flex-start}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
 </style></head><body>
 <div id="appRoot" class="app">
 <aside id="sidebar" class="sidebar"><div class="brand"><div class="brand-mark">F</div><div><div class="brand-title">FROSS</div><div class="brand-sub">PERSONAL AI · 1.0</div></div></div>
