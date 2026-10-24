@@ -64,7 +64,7 @@ export default {
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
       cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
       languageModelConfigured: typeof env.FROSS_LLM_API_KEY === "string" && env.FROSS_LLM_API_KEY.trim().length > 0,
-      languageModel: env.FROSS_LLM_MODEL || "openai/gpt-oss-20b",
+      languageModel: env.FROSS_LLM_MODEL || "openrouter/free",
       autoStudyConfigured: frossGithubToken(env).length >= 20,
       maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
       maxAssistantMessageChars: FROSS_MAX_REPLY_LENGTH,
@@ -1372,7 +1372,7 @@ async function frossGenerateWithModel({ message, history = [], knowledge = [], r
   if (!apiKey) return { configured: false, handled: false };
   const endpoint = typeof env.FROSS_LLM_API_URL === "string" && env.FROSS_LLM_API_URL.trim()
     ? env.FROSS_LLM_API_URL.trim()
-    : "https://api.groq.com/openai/v1/chat/completions";
+    : "https://openrouter.ai/api/v1/chat/completions";
   const model = typeof env.FROSS_LLM_MODEL === "string" && env.FROSS_LLM_MODEL.trim()
     ? env.FROSS_LLM_MODEL.trim()
     : "openai/gpt-oss-20b";
