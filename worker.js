@@ -1394,7 +1394,15 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
     }
     const data = await response.json();
     if (data?.handled !== true || typeof data.reply !== "string" || !data.reply.trim()) {
-      return { configured: true, handled: false, error: "Brain service did not handle this request." };
+      return {
+        configured: true,
+        handled: false,
+        kind: typeof data?.kind === "string" ? data.kind.slice(0, 80) : "generation-unavailable",
+        modelStatus: data?.generationModelStatus && typeof data.generationModelStatus === "object"
+          ? data.generationModelStatus
+          : null,
+        error: typeof data?.error === "string" ? data.error.slice(0, 160) : "FROSS Transformer did not generate an answer."
+      };
     }
     return {
       configured: true,
@@ -1460,18 +1468,16 @@ async function handleFrossApi(request, env) {
   })) : [];
   // v0.5: gather fresh web material for information queries even when personal notes match,
   // then combine the two sources instead of stopping at the first memory hit.
-  const tinySocialMessage = frossIsTinySocialMessage(correctedQuery);
-  const quickReply = tinySocialMessage
-    ? frossQuickResponse({ message: correctedQuery, isCreator, mode, history })
-    : null;
-  const sharedGithubKnowledge = quickReply ? [] : await frossLoadGithubKnowledge(correctedQuery);
+  // The language model handles ordinary replies, including greetings and explanations.
+  // Deterministic rules remain for explicit safety checks and exact algorithmic validation only.
+  const quickReply = null;
+  const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
   // Route ordinary questions to the trained FROSS Transformer. Web lookup is opt-in:
   // use it when the user explicitly asks for recent facts, web pages, or sources.
   const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
   const shouldSearch = !quickReply && !conversationalCandidate && frossShouldSearchExplicit(correctedQuery);
-  const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
   let results = [];
   let providerErrors = [];
   if (shouldSearch) {
@@ -1526,26 +1532,28 @@ async function handleFrossApi(request, env) {
     }
   }
 
-  const localResult = quickReply
-    ? { reply: quickReply, kind: "local-rule-v05", sources: [] }
-    : frossThink({ message: correctedQuery, history, results, knowledge: allKnowledge, mode, isCreator });
-  const reply = localResult.reply;
+  const unavailableReply = remote.configured
+    ? "Собственная генеративная модель FROSS сейчас не смогла создать ответ. Проверь /health соответствующего Render-сервиса и его checkpoint; шаблонным ответом я это не подменяю."
+    : "Собственная модель FROSS ещё не подключена к Worker. Настрой FROSS_PYTHON_BRAIN_URL и FROSS_CPP_BRAIN_URL вместе с FROSS_BRAIN_SERVICE_TOKEN, затем опубликуй Worker.";
   return frossJson({
-    name: FROSS_PROFILE.name, reply, mode, steps: localResult.trace?.slice(0, mode === "reasoning" ? 7 : 4) || frossSteps(mode),
-    sources: (localResult.sources?.length ? localResult.sources : results).slice(0, 8).map(({ title, url, snippet, source, score }) => ({
-      title, url, snippet, source, score: Number((score || 0).toFixed(3))
-    })),
-    profile: { description: FROSS_PROFILE.description, traits: FROSS_PROFILE.traits, style: FROSS_PROFILE.style, rules: FROSS_PROFILE.rules },
+    name: FROSS_PROFILE.name,
+    reply: unavailableReply,
+    mode,
+    steps: ["Проверить подключение собственного генеративного движка", "Не подменять отсутствие модели заготовленным ответом"],
+    sources: [],
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS deterministic local fallback",
+      engine: "FROSS Transformer 1.0",
       remoteBrainConfigured: remote.configured,
-      kind: localResult.kind || "local-rule-v05",
+      kind: remote.kind || "generation-unavailable",
+      generationModel: "FROSS Transformer trained from scratch",
+      generationModelStatus: remote.modelStatus || null,
+      webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
-      note: "Генеративный checkpoint недоступен; использован ограниченный локальный резерв. Проверь Render /health."
+      note: "Генерация не была подтверждена, поэтому ответ не заменён шаблоном."
     }
   }, 200, request);
 }
