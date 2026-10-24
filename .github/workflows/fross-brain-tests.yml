@@ -31,7 +31,7 @@ jobs:
       - name: Install NumPy for neural brain
         run: python -m pip install --disable-pip-version-check "numpy>=1.26,<3"
       - name: Compile Python brain and service adapters
-        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py services/python-brain/server.py services/cpp-brain/server.py
+        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py services/llm_client.py services/python-brain/server.py services/cpp-brain/server.py
       - name: Run Python brain unit tests
         run: python fross_brain_v05.py
       - name: Train and test neural intent classifier
@@ -40,6 +40,8 @@ jobs:
         run: g++ -std=c++17 -O2 -Wall -Wextra -pedantic services/cpp-brain/main.cpp -o /tmp/fross-cpp-brain
       - name: Check C++ greeting
         run: test "$(/tmp/fross-cpp-brain normal 'привет')" = "Привет! Я на связи. Что разберём?"
+      - name: Check uppercase Russian input in C++
+        run: test "$(/tmp/fross-cpp-brain normal 'Привет')" = "Привет! Я на связи. Что разберём?"
       - name: Check C++ arithmetic
         run: test "$(/tmp/fross-cpp-brain reasoning 'сколько будет (2+3)*4' | grep -o '20' | head -n 1)" = "20"
       - name: Check C++ code generation
@@ -67,7 +69,12 @@ jobs:
           assert "return collected.filter(note =>" in worker
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
           assert "function frossTrainingSeedResources(topic)" in worker
-          assert 'brainVersion: "0.6"' in worker
+          assert 'brainVersion: "1.0"' in worker
+          assert "function frossGenerateWithModel" in worker and "FROSS_LLM_API_KEY" in worker
+          assert "frossShouldSearchExplicit(correctedQuery)" in worker
+          assert "languageModelConfigured" in worker
+          assert "SpeechRecognition" in page and 'recognition.lang="ru-RU"' in page
+          assert "Речь распознана. Проверь текст перед отправкой." in page
           assert "function frossComposeExplanation(query, notes, mode = \"normal\")" in Path("fross-brain.js").read_text(encoding="utf-8")
           assert "saveMemoryBtn" in page and "exportMemoryBtn" not in page
           assert "https://docs.python.org/3/tutorial/" in worker
