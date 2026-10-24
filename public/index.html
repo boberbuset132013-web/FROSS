@@ -248,6 +248,155 @@ body.light-theme .knowledge-item-meta{color:#71768a}
 body.light-theme .knowledge-delete{background:#fff;color:#4b4d61;border-color:#d7d9e6}
 @media(max-width:520px){.training-form{flex-direction:column;align-items:stretch}.training-run{width:100%}.training-modal-card{padding:14px}}
 
+/* FROSS visual refresh: ambient depth, restrained motion, clearer focus states */
+:root{
+  --fross-accent:#a78bfa;
+  --fross-accent-2:#66e3d3;
+  --fross-glass:rgba(23,24,35,.82);
+  --fross-border:rgba(171,157,255,.17);
+}
+body{
+  background:
+    radial-gradient(ellipse at 12% 4%,rgba(115,76,206,.10),transparent 36%),
+    radial-gradient(ellipse at 88% 90%,rgba(51,183,170,.075),transparent 38%),
+    #101116;
+}
+body::before,body::after{
+  content:"";
+  position:fixed;
+  width:420px;height:420px;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:0;
+  filter:blur(72px);
+  opacity:.13;
+  will-change:transform;
+}
+body::before{
+  left:-180px;top:12%;
+  background:#9274ff;
+  animation:fross-ambient-a 25s ease-in-out infinite alternate;
+}
+body::after{
+  right:-190px;bottom:-4%;
+  background:#45dbc6;
+  animation:fross-ambient-b 31s ease-in-out infinite alternate;
+}
+.app{position:relative;z-index:1;isolation:isolate}
+.sidebar{
+  background:linear-gradient(165deg,rgba(24,25,37,.96),rgba(17,18,25,.94))!important;
+  border-right:1px solid var(--fross-border);
+  box-shadow:12px 0 48px rgba(0,0,0,.12);
+  backdrop-filter:blur(18px);
+}
+.brand .orbit,.auth-brand .orbit{
+  box-shadow:0 0 0 1px rgba(174,157,255,.23),0 0 34px rgba(144,117,255,.16);
+  animation:fross-orbit-breathe 5.5s ease-in-out infinite;
+}
+.topbar{
+  background:rgba(17,18,25,.76);
+  backdrop-filter:blur(18px) saturate(145%);
+  border-bottom:1px solid rgba(167,139,250,.13);
+}
+.model-pill{
+  border-color:rgba(172,153,255,.25);
+  background:linear-gradient(110deg,rgba(145,119,245,.13),rgba(78,204,188,.07));
+  box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+.model-dot{box-shadow:0 0 12px rgba(93,231,208,.65);animation:fross-status-pulse 2.7s ease-in-out infinite}
+.welcome-inner .orbit{
+  box-shadow:0 0 70px rgba(137,109,255,.15),inset 0 0 22px rgba(104,231,207,.06);
+  animation:fross-orbit-breathe 6s ease-in-out infinite;
+}
+.welcome h1 .gradient{
+  background-size:220% 100%;
+  animation:fross-gradient-flow 9s ease-in-out infinite;
+}
+.prompt-card,.chat-item,.tool-btn,.send-btn,.settings-close,.code-copy{
+  transition:transform .18s ease,border-color .2s ease,background .2s ease,box-shadow .22s ease,color .2s ease;
+}
+.prompt-card{
+  border-color:rgba(155,143,219,.14);
+  background:linear-gradient(145deg,rgba(29,30,43,.88),rgba(22,23,32,.88));
+}
+.prompt-card:hover{
+  transform:translateY(-3px);
+  border-color:rgba(167,139,250,.55);
+  box-shadow:0 12px 30px rgba(0,0,0,.16),0 0 0 1px rgba(167,139,250,.07);
+}
+.chat-item:hover{transform:translateX(2px);border-color:rgba(167,139,250,.24)}
+.message{animation:fross-message-in .24s ease-out both}
+.message .avatar{
+  transition:transform .25s ease,box-shadow .25s ease;
+}
+.message.assistant .avatar{
+  box-shadow:0 0 0 1px rgba(167,139,250,.20),0 0 22px rgba(128,99,232,.10);
+}
+.message.assistant:hover .avatar{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(167,139,250,.34),0 0 26px rgba(128,99,232,.18)}
+.message-content{line-height:1.78;letter-spacing:.002em}
+.message.assistant .message-content{color:#e2e2ed}
+.composer{
+  background:rgba(25,26,36,.88);
+  border-color:rgba(158,146,209,.22);
+  box-shadow:0 14px 42px rgba(0,0,0,.13),inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter:blur(20px);
+  transition:border-color .2s ease,box-shadow .22s ease,transform .2s ease;
+}
+.composer:focus-within{
+  border-color:rgba(167,139,250,.65);
+  box-shadow:0 14px 46px rgba(0,0,0,.18),0 0 0 3px rgba(167,139,250,.065),inset 0 1px rgba(255,255,255,.04);
+}
+.tool-btn:hover,.settings-close:hover,.code-copy:hover{
+  border-color:rgba(167,139,250,.62);
+  box-shadow:0 4px 18px rgba(116,90,208,.10);
+  transform:translateY(-1px);
+}
+.tool-btn:active,.prompt-card:active,.send-btn:active{transform:scale(.975)}
+.tool-btn[aria-pressed="true"]{
+  box-shadow:0 0 0 1px rgba(167,139,250,.12),0 0 24px rgba(124,93,235,.13);
+}
+.send-btn{
+  background:linear-gradient(135deg,#a78bfa,#7d72e8 62%,#67dccc);
+  box-shadow:0 4px 18px rgba(137,111,239,.22);
+}
+.send-btn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 7px 24px rgba(137,111,239,.32)}
+.typing{animation:fross-soft-in .3s ease-out}
+.typing-dots i{animation:fross-dot 1.15s ease-in-out infinite}
+.typing-dots i:nth-child(2){animation-delay:.16s}
+.typing-dots i:nth-child(3){animation-delay:.32s}
+#voiceBtn[aria-pressed="true"]{
+  color:#ffc1d1;
+  border-color:rgba(255,124,164,.58);
+  background:rgba(255,124,164,.09);
+  box-shadow:0 0 0 3px rgba(255,124,164,.05);
+}
+.code-block{border-color:rgba(158,146,209,.19);box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.code-header{background:rgba(42,39,59,.75)}
+.auth-card,.settings-card,.training-modal-card{
+  border-color:rgba(167,139,250,.20);
+  box-shadow:0 28px 100px rgba(0,0,0,.38),0 0 70px rgba(102,76,180,.055);
+}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+  outline:2px solid rgba(167,139,250,.85);
+  outline-offset:3px;
+}
+body.light-theme::before,body.light-theme::after{opacity:.075}
+body.light-theme .topbar{background:rgba(249,249,255,.84);backdrop-filter:blur(18px)}
+body.light-theme .composer{background:rgba(255,255,255,.91)}
+body.light-theme .message.assistant .message-content{color:#292b38}
+@keyframes fross-ambient-a{0%{transform:translate3d(0,0,0) scale(.9)}50%{transform:translate3d(65px,38px,0) scale(1.08)}100%{transform:translate3d(20px,-35px,0) scale(1)}}
+@keyframes fross-ambient-b{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-55px,-45px,0) scale(1.12)}100%{transform:translate3d(-15px,20px,0) scale(.92)}}
+@keyframes fross-orbit-breathe{0%,100%{transform:translateY(0);filter:saturate(1)}50%{transform:translateY(-2px);filter:saturate(1.18)}}
+@keyframes fross-gradient-flow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes fross-status-pulse{0%,100%{opacity:.8;box-shadow:0 0 8px rgba(93,231,208,.4)}50%{opacity:1;box-shadow:0 0 15px rgba(93,231,208,.85)}}
+@keyframes fross-message-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fross-soft-in{from{opacity:.55;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fross-dot{0%,60%,100%{opacity:.28;transform:translateY(0) scale(.85)}30%{opacity:1;transform:translateY(-3px) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  body::before,body::after{animation:none!important}
+}
+
 </style></head><body>
 <div id="appRoot" class="app">
 <aside id="sidebar" class="sidebar"><div class="brand"><div class="brand-mark">F</div><div><div class="brand-title">FROSS</div><div class="brand-sub">PERSONAL AI · 1.1</div></div></div>
@@ -488,9 +637,9 @@ function startVoiceInput(){
 
 function closeSidebar(){$("sidebar").classList.remove("open");$("mobileOverlay").classList.remove("show")}
 function setChatScreen(){const closed=!activeChat||activeChat.status==="closed"||(activeChat.userMessageCount||0)>=60;$("topTitle").textContent=activeChat?.title||"Новый чат";$("topStatus").textContent=activeChat?(closed?"Чат закрыт":"Готов помочь"):"Создай чат";$("limitBanner").classList.toggle("hidden",!activeChat||!closed);$("messageInput").disabled=busy||closed;$("sendBtn").disabled=busy||closed;$("messageInput").placeholder=closed?"Этот чат закрыт":"Напиши сообщение для FROSS..."}
-function renderMessage(item){const row=document.createElement("article");row.className="message "+(item.role==="user"?"user":"assistant");const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=item.role==="user"?((currentUser?.displayName||"Я").charAt(0).toUpperCase()):"F";const body=document.createElement("div");body.className="message-body";const name=document.createElement("div");name.className="message-name";name.textContent=item.role==="user"?"Ты":"FROSS 1.1 · Generative Brain 1.0";const content=document.createElement("div");content.className="message-content";content.innerHTML=formattedContent(item.content||"");body.append(name,content);if(item.sources?.length&&item.role==="assistant"){const sources=document.createElement("div");sources.className="sources";for(const s of item.sources.slice(0,6)){if(!s.url||!/^https?:\/\//i.test(s.url))continue;const a=document.createElement("a");a.className="source-link";a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.title||"Источник";sources.append(a)}if(sources.childElementCount)body.append(sources)}row.append(avatar,body);return row}
+function renderMessage(item){const row=document.createElement("article");row.className="message "+(item.role==="user"?"user":"assistant");const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=item.role==="user"?((currentUser?.displayName||"Я").charAt(0).toUpperCase()):"F";const body=document.createElement("div");body.className="message-body";const name=document.createElement("div");name.className="message-name";name.textContent=item.role==="user"?"Ты":"FROSS 1.1 · FROSS Transformer 1.0";const content=document.createElement("div");content.className="message-content";content.innerHTML=formattedContent(item.content||"");body.append(name,content);if(item.sources?.length&&item.role==="assistant"){const sources=document.createElement("div");sources.className="sources";for(const s of item.sources.slice(0,6)){if(!s.url||!/^https?:\/\//i.test(s.url))continue;const a=document.createElement("a");a.className="source-link";a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.title||"Источник";sources.append(a)}if(sources.childElementCount)body.append(sources)}row.append(avatar,body);return row}
 function renderActiveMessages(){$("welcome").classList.toggle("hidden",activeMessages.length>0);$("messageList").classList.toggle("hidden",activeMessages.length===0);$("messageList").replaceChildren(...activeMessages.map(renderMessage));$("messagesScroll").scrollTop=$("messagesScroll").scrollHeight}
-function showTyping(){$("welcome").classList.add("hidden");$("messageList").classList.remove("hidden");const row=document.createElement("article");row.className="message assistant";row.id="typingRow";row.innerHTML='<div class="avatar">F</div><div class="message-body"><div class="message-name">FROSS 1.1</div><div class="typing"><span id="typingText">Читаю запрос…</span><span class="typing-dots"><i></i><i></i><i></i></span></div></div>';$("messageList").append(row);const stages=reasoningEnabled?(cppBrainReady?["Отправляю задачу в C++…","Разбираю цель и условия…","Проверяю локальные алгоритмы…","Сравниваю подходящие правила…","Проверяю граничные случаи…","Формирую объяснение…","Проверяю формат итогового ответа…"]:["Разбираю запрос локально…","Проверяю доступную память…","Проверяю правила и вычислимые задачи…","Ищу недостающие сведения при необходимости…","Сопоставляю варианты…","Проверяю ограничения…","Формирую ответ…"]):(pythonBrainReady?["Отправляю задачу в Python…","Исправляю знакомые опечатки…","Проверяю правила и вычисления…","Проверяю и оформляю ответ…"]:["Проверяю локальные правила JavaScript…","Смотрю личную базу знаний…","Проверяю, нужен ли веб-поиск…","Формирую ответ…"]);let i=0;const timer=setInterval(()=>{const el=$("typingText");if(el)el.textContent=stages[(++i)%stages.length]},reasoningEnabled?1550:1350);return()=>{clearInterval(timer);$("typingRow")?.remove()}}
+function showTyping(){$("welcome").classList.add("hidden");$("messageList").classList.remove("hidden");const row=document.createElement("article");row.className="message assistant";row.id="typingRow";row.innerHTML='<div class="avatar">F</div><div class="message-body"><div class="message-name">FROSS 1.1</div><div class="typing"><span id="typingText">Читаю запрос…</span><span class="typing-dots"><i></i><i></i><i></i></span></div></div>';$("messageList").append(row);const stages=reasoningEnabled?(cppBrainReady?["Передаю запрос собственному мозгу…","C++ проверяет вычислимые условия…","Обрабатываю контекст и внимание…","Проверяю доступные знания…","Генерирую продолжение токен за токеном…","Проверяю формат ответа…"]:["Определяю цель запроса…","Проверяю контекст и память…","Сопоставляю возможные подходы…","Генерирую продолжение…","Проверяю формат и ограничения…","Формирую итог…"]):(pythonBrainReady?["Передаю запрос собственному мозгу…","Обрабатываю контекст и внимание…","Генерирую текст обученными весами…","Проверяю формат ответа…"]:["Проверяю доступный контекст…","Проверяю, просили ли поиск в интернете…","Готовлю локальный резерв…"]);let i=0;const timer=setInterval(()=>{const el=$("typingText");if(el)el.textContent=stages[(++i)%stages.length]},reasoningEnabled?1550:1350);return()=>{clearInterval(timer);$("typingRow")?.remove()}}
 async function loadChats(){if(!currentUser)return;const snap=await getDocs(query(collection(db,...chatPath()),orderBy("updatedAt","desc")));chats=snap.docs.map(d=>({id:d.id,...d.data()}));const list=$("chatList");list.replaceChildren();for(const c of chats){const row=document.createElement("div");row.className="chat-item"+(activeChat?.id===c.id?" active":"");row.tabIndex=0;row.setAttribute("role","button");row.setAttribute("aria-label","Открыть чат: "+(c.title||"Новый чат"));const icon=document.createElement("span");icon.textContent=c.status==="closed"?"◉":"◌";icon.setAttribute("aria-hidden","true");const title=document.createElement("span");title.className="chat-title";title.textContent=c.title||"Новый чат";row.append(icon,title);if(c.status==="closed"||c.userMessageCount>=60){const tag=document.createElement("span");tag.className="closed-label";tag.textContent="закрыт";row.append(tag)}const del=document.createElement("button");del.type="button";del.className="chat-delete";del.textContent="×";del.title="Удалить чат";del.setAttribute("aria-label","Удалить чат: "+(c.title||"Новый чат"));del.addEventListener("click",event=>{event.stopPropagation();deleteChat(c.id,del)});row.append(del);row.addEventListener("click",event=>{if(event.target.closest(".chat-delete"))return;openChat(c.id).catch(error=>alert("Не удалось открыть чат: "+String(error?.message||error)))});row.addEventListener("keydown",event=>{if(event.target===row&&(event.key==="Enter"||event.key===" ")){event.preventDefault();openChat(c.id).catch(error=>alert("Не удалось открыть чат: "+String(error?.message||error)))}});list.append(row)}}
 async function deleteChat(id,button){if(!currentUser||busy)return;const target=chats.find(item=>item.id===id);const title=target?.title||"Новый чат";if(!window.confirm("Удалить чат «"+title+"» и всю его историю? Это действие нельзя отменить."))return;button.disabled=true;try{const messages=await getDocs(collection(db,...chatPath(),id,"messages"));const docs=messages.docs;for(let i=0;i<docs.length;i+=400){await Promise.all(docs.slice(i,i+400).map(item=>deleteDoc(item.ref)))}await deleteDoc(getChatRef(id));if(activeChat?.id===id){activeChat=null;activeMessages=[];renderActiveMessages();setChatScreen()}await loadChats();if(!activeChat&&chats.length){await openChat(chats[0].id)}else if(!activeChat){renderActiveMessages();setChatScreen()}closeSidebar()}catch(error){button.disabled=false;alert("Не удалось удалить чат: "+String(error?.message||error)+"\nПроверь, что опубликованы новые правила Firestore из файла firestore.rules.")}}
 async function createChat(){if(!currentUser||busy)return;const ref=await addDoc(collection(db,...chatPath()),{ownerUid:currentUser.uid,title:"Новый чат",status:"open",userMessageCount:0,lastUserMessageId:"",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});await loadChats();await openChat(ref.id);$("messageInput").focus();closeSidebar()}
