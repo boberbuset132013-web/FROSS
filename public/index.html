@@ -325,6 +325,52 @@ function renderKnowledgeList(){
     row.append(content,del);box.append(row);
   }
 }
+function setTrainingControls(enabled){["trainingTopic","trainingSubmit","clearMemoryBtn","exportMemoryBtn"].forEach(id=>{const control=$(id);if(control)control.disabled=!enabled})}
+function creatorSetupMessage(){
+  return "Введи пароль создателя выше. Для безопасной проверки в Cloudflare нужно добавить Secret FROSS_CREATOR_PASSWORD; пароль не хранится в публичном коде.";
+}
+async function refreshCreatorAccess(){
+  isCreator=false;knowledgeNotes=[];pythonBrainReady=false;cppBrainReady=false;
+  $("trainingBtn").classList.remove("hidden");
+  setTrainingControls(false);
+  $("trainingStatus").textContent="Проверяю доступ к режиму обучения…";
+  try{
+    const data=await frossApiPost("/api/identity",{});
+    isCreator=data.isCreator===true;
+    $("creatorUnlockForm").classList.toggle("hidden",isCreator);
+    pythonBrainReady=data.brainRoutes?.pythonReady===true;
+    cppBrainReady=data.brainRoutes?.cppReady===true;
+    if(isCreator){
+      setTrainingControls(true);
+      await loadKnowledge();
+    }else{
+      knowledgeNotes=[];
+      renderKnowledgeList();
+      $("trainingStatus").textContent=creatorSetupMessage();
+    }
+  }catch(error){
+    $("trainingStatus").textContent="Не удалось проверить доступ. Если Worker ещё не обновлён, дождись публикации. Детали: "+String(error?.message||error);
+  }
+}
+$("creatorUnlockForm").addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!currentUser)return;
+  const button=$("creatorUnlockBtn");
+  const password=$("creatorPasswordInput").value;
+  button.disabled=true;
+  $("trainingStatus").textContent="Проверяю пароль создателя…";
+  try{
+    const data=await frossApiPost("/api/creator-unlock",{password});
+    if(!data.creatorToken)throw new Error("Сервер не выдал сессию создателя.");
+    sessionStorage.setItem("frossCreatorToken",data.creatorToken);
+    $("creatorPasswordInput").value="";
+    isCreator=true;
+    await refreshCreatorAccess();
+    $("trainingStatus").textContent="Доступ создателя включён на 12 часов в этой вкладке. Brain 0.5 готов к обучению.";
+  }catch(error){
+    $("trainingStatus").textContent="Не удалось включить режим создателя: "+String(error?.message||error);
+  }finally{button.disabled=false}
+});
 async function deleteKnowledgeNote(id,button){if(!currentUser||!isCreator)return;if(!confirm("Удалить эту заметку из личной памяти FROSS?"))return;button.disabled=true;try{await deleteDoc(doc(db,...knowledgePath(),id));knowledgeNotes=knowledgeNotes.filter(note=>note.id!==id);renderKnowledgeList();$("trainingStatus").textContent="Заметка удалена. Осталось: "+knowledgeNotes.length+"."}catch(error){button.disabled=false;$("trainingStatus").textContent="Не удалось удалить заметку: "+String(error?.message||error)}}
 async function learnTopic(event){event.preventDefault();if(!currentUser)return;if(!isCreator){$("trainingStatus").textContent=creatorSetupMessage();return;}const topic=$("trainingTopic").value.trim();if(topic.length<2){$("trainingStatus").textContent="Введи тему подробнее.";return}const button=$("trainingSubmit");button.disabled=true;$("trainingStatus").textContent="Ищу источники, собираю заметки и проверяю дубликаты…";try{const data=await frossApiPost("/api/train",{topic});let saved=0,duplicates=0;for(const note of data.notes||[]){const exists=knowledgeNotes.some(old=>old.url&&note.url&&old.url===note.url&&String(old.topic||"").toLowerCase()===String(note.topic||"").toLowerCase());if(exists){duplicates++;continue}await addDoc(collection(db,...knowledgePath()),{schemaVersion:2,kind:String(note.kind||"source-note").slice(0,40),topic:String(note.topic||topic).slice(0,180),title:String(note.title||"Источник").slice(0,260),url:/^https?:\/\//i.test(note.url||"")?note.url:"",snippet:String(note.snippet||"").slice(0,3200),summary:String(note.summary||"").slice(0,900),keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5).map(value=>String(value).slice(0,300)):[],keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24).map(value=>String(value).slice(0,40)):[],source:String(note.source||"web search").slice(0,80),score:Number(note.score)||0,savedAt:serverTimestamp()});saved++}await loadKnowledge();$("trainingStatus").textContent="Готово: изучена тема «"+topic+"». Сохранено заметок: "+saved+(duplicates?", дубликатов пропущено: "+duplicates:"")+". "+(data.notice||"");$("trainingTopic").value=""}catch(error){$("trainingStatus").textContent="Не удалось обучить память: "+String(error?.message||error)}finally{button.disabled=false}}
 async function clearKnowledge(){if(!currentUser||!isCreator||!knowledgeNotes.length)return;if(!confirm("Удалить все "+knowledgeNotes.length+" заметок личной памяти? Чаты не будут удалены."))return;const button=$("clearMemoryBtn");button.disabled=true;try{for(const note of knowledgeNotes){await deleteDoc(doc(db,...knowledgePath(),note.id))}knowledgeNotes=[];renderKnowledgeList();$("trainingStatus").textContent="Личная память очищена."}catch(error){$("trainingStatus").textContent="Не удалось полностью очистить память: "+String(error?.message||error);await loadKnowledge()}finally{button.disabled=false}}
