@@ -14,8 +14,8 @@ import urllib.request
 from typing import Any
 from urllib.parse import urlparse
 
-DEFAULT_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_MODEL = "openrouter/free"
 ENGINE_NAME = "FROSS Generative Brain 1.0"
 MAX_REPLY_CHARS = 25000
 
