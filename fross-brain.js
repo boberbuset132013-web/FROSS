@@ -93,7 +93,8 @@ function parseMath(text) {
     const answer = addSub();
     if (i !== tokens.length) return null;
     return { expression: expr, value: Number(answer.toPrecision(12)) };
-  } catch {
+  } catch (error) {
+    if (error?.message === "Делить на ноль нельзя") return { error: "division-by-zero" };
     return null;
   }
 }
@@ -124,6 +125,7 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
   }
 
   const math = parseMath(message);
+  if (math?.error === "division-by-zero") return "Делить на ноль нельзя — такое выражение не имеет определённого результата.";
   if (math) {
     const result = String(math.value);
     if (mode === "reasoning") {
