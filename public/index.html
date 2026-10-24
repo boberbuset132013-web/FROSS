@@ -145,6 +145,76 @@ body{width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;overscroll-
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
 
+
+/* Complete light theme: override hard-coded dark surfaces throughout the UI */
+body.light-theme{color-scheme:light}
+body.light-theme .sidebar{background:#fff;border-color:#dfe1ed;color:#252637}
+body.light-theme .brand-title,body.light-theme .top-title,body.light-theme .user-name{color:#262737}
+body.light-theme .brand-sub,body.light-theme .user-email,body.light-theme .side-label{color:#75798b}
+body.light-theme .side-bottom{border-color:#e4e5ef}
+body.light-theme .chat-item{background:transparent;color:#515568;border-color:transparent}
+body.light-theme .chat-item:hover{background:#f1f1fa}
+body.light-theme .chat-item.active{background:#eeebff;border-color:#d3cafc;color:#39305d}
+body.light-theme .closed-label{color:#6e53ba}
+body.light-theme .primary{color:#fff}
+body.light-theme .main{background:#f5f6fb;color:#242535}
+body.light-theme .topbar{background:#fff;border-color:#e0e2ec}
+body.light-theme .model-pill{background:#efedff;border-color:#d9d2ff;color:#5d4a9d}
+body.light-theme .model-dot{background:#159b69;box-shadow:0 0 0 3px #159b6920}
+body.light-theme .mobile-menu{background:#fff;color:#34364a;border-color:#d9dbe8}
+body.light-theme .welcome p{color:#6c7184}
+body.light-theme .orbit{background:linear-gradient(135deg,#f0ecff,#e7efff);border-color:#d4ccf4}
+body.light-theme .orbit:before{border-color:#9c8fe766}
+body.light-theme .prompt-card{background:#fff;border-color:#e0e2ed;color:#2a2c3d}
+body.light-theme .prompt-card span{color:#73788a}
+body.light-theme .prompt-card:hover{border-color:#b6a9ed;box-shadow:0 5px 18px #6c5ab50e}
+body.light-theme .message-name{color:#53566a}
+body.light-theme .message-content{color:#2e3041}
+body.light-theme .message-content strong{color:#171927}
+body.light-theme .message-content a{color:#6650bd}
+body.light-theme .message.user .avatar{background:#e9e5ff;color:#51438f}
+body.light-theme .message.assistant .avatar{color:#fff}
+body.light-theme .source-link{background:#fff;border-color:#e0dbfa;color:#6651b4}
+body.light-theme .typing{color:#6a5bb0}
+body.light-theme .typing-dots i{background:#8874e4}
+body.light-theme .composer-wrap{background:linear-gradient(180deg,#f5f6fb00,#f5f6fb 22%)}
+body.light-theme .composer{background:#fff;border-color:#dfe1ed;box-shadow:0 7px 24px #313b650a}
+body.light-theme .composer:focus-within{border-color:#9f8ee8}
+body.light-theme .composer textarea{color:#232536}
+body.light-theme .composer textarea::placeholder{color:#8b8fa0}
+body.light-theme .composer-note,body.light-theme .disclaimer{color:#777c8e}
+body.light-theme .tool-btn{background:#fff;border-color:#d9dbea;color:#4a4d61}
+body.light-theme .tool-btn:hover{background:#f5f2ff;border-color:#b9abea;color:#433277}
+body.light-theme .tool-btn[aria-pressed="true"]{background:#eee9ff;border-color:#ad9aed;color:#52408e}
+body.light-theme .send-btn{color:#fff}
+body.light-theme .limit-banner{background:#f0ebff;border-color:#d7cbff;color:#5c469f}
+body.light-theme .code-block{background:#fbfbfe;border-color:#d9dbea;box-shadow:0 6px 20px #3034500a}
+body.light-theme .code-header{background:#f0f1f8;border-color:#dfe1ec;color:#4a4e62}
+body.light-theme .code-block code{color:#25283a}
+body.light-theme .code-copy{background:#fff;border-color:#d3d5e3;color:#45485d}
+body.light-theme .code-copy:hover{background:#f1edff;border-color:#bcb0ee}
+body.light-theme .messages-scroll{scrollbar-color:#c6c1de #f1f2f8}
+body.light-theme .messages-scroll::-webkit-scrollbar-track,body.light-theme .chat-list::-webkit-scrollbar-track{background:#f1f2f8;border-color:#f1f2f8}
+body.light-theme .messages-scroll::-webkit-scrollbar-thumb,body.light-theme .chat-list::-webkit-scrollbar-thumb{background:#c6c1de;border-color:#f1f2f8}
+body.light-theme .jump-bottom{background:#fff;border-color:#d5d3e4;color:#5d4b9c;box-shadow:0 5px 18px #25213c1a}
+body.light-theme .settings-modal{background:#17152666}
+body.light-theme .settings-card{background:#fff;border-color:#dfe1ed;color:#292b3c}
+body.light-theme .settings-head{color:#252739}
+body.light-theme .settings-close{background:#f6f6fb;border-color:#d8dae7;color:#42455a}
+body.light-theme .settings-field{color:#484b60}
+body.light-theme .settings-field select{background:#fff;border-color:#d9dbea;color:#25273a}
+body.light-theme .settings-note{color:#74798c}
+body.light-theme .auth-cover{background:radial-gradient(ellipse at 48% 30%,#e7e3fb 0%,#f5f6fb 58%,#eceef7 100%)}
+body.light-theme .auth-card{background:#fff;border-color:#dfe1ed;box-shadow:0 25px 90px #3034501a}
+body.light-theme .auth-card h2{color:#252638}
+body.light-theme .auth-card p{color:#6b7082}
+body.light-theme .auth-input{background:#fff;border-color:#d7d9e6;color:#242638}
+body.light-theme .auth-secondary{background:#f6f6fb;border-color:#d7d9e6;color:#4a4d61}
+body.light-theme .auth-message{background:#f1effb;border-color:#ddd7f5;color:#5b527d}
+body.light-theme .auth-footer{color:#777c8e}
+body.light-theme .auth-footer a,body.light-theme .auth-switch button,body.light-theme .reset-btn{color:#6550b9}
+body.light-theme .mobile-overlay.show{background:#25243b55}
+
 </style></head><body>
 <div id="appRoot" class="app">
 <aside id="sidebar" class="sidebar"><div class="brand"><div class="brand-mark">F</div><div><div class="brand-title">FROSS</div><div class="brand-sub">PERSONAL AI · 1.0</div></div></div>
