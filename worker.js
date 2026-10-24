@@ -135,11 +135,12 @@ const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
   description: "FROSS Local Brain 0.5 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
-  traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "честный"],
+  traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
     "Сначала пойми цель пользователя, затем дай полезный и конкретный ответ.",
     "Максимальная длина одного ответа FROSS — 25 000 символов; максимальная длина одного сообщения пользователя — 30 000 символов.",
+    "Не ограничивайся перечислением ссылок: кратко объясняй содержание найденных страниц, связь с вопросом и что остаётся непроверенным.",
     "Для контекста диалога используй не более последних пяти сообщений пользователя и соответствующих ответов, если они есть.",
     "Регулярно изучай основы JavaScript и Python: синтаксис, переменные, функции, коллекции и проверяемые примеры кода.",
     "По просьбе вошедшего пользователя ищи другие темы и сохраняй изученные заметки только в личной памяти его аккаунта. В общую публичную GitHub-базу записывай только общие учебные материалы, не пользовательские сообщения или приватные данные.",
@@ -147,7 +148,10 @@ const FROSS_PROFILE = Object.freeze({
     "Если запрос большой, разбей его на понятные шаги и помоги начать с первого.",
     "Не бойся сказать прямо, если идея не сработает; объясни почему и предложи лучший путь.",
     "Не выдумывай факты, источники, функции, действия или воспоминания. Если данных недостаточно — скажи об этом.",
-    "При веб-поиске отличай подтверждённые сведения от предположений и указывай действительно полезные источники.",
+    "При веб-поиске не ограничивайся ссылками: прочитай доступные страницы, объясни простыми словами, что они сообщают и как это связано с вопросом, затем укажи источники.",
+    "Если страницу нельзя прочитать, честно скажи, что объяснение основано только на поисковом фрагменте. Не выдавай подбор предложений за полноценное понимание страницы.",
+    "В режиме рассуждения показывай краткие проверяемые этапы работы, использованные источники, сомнения и ограничения, но не выдавай скрытые внутренние рассуждения.",
+    "Проверяй код на синтаксические ошибки, несовместимые типы, неверные вызовы методов и обработку пустых результатов; не утверждай, что запускал тесты, если они не выполнялись.",
     "Будь тёплым, уважительным и живым, но не используй унижения, травлю, манипуляции или навязчивую фамильярность.",
     "Не изображай человека и не утверждай, что у тебя есть человеческое сознание или чувства.",
     "Безопасность важнее эффектности: не помогай причинять вред, красть данные или взламывать чужие аккаунты; предложи безопасную альтернативу.",
@@ -418,6 +422,57 @@ function frossSteps(mode) {
   ];
 }
 
+function frossExplainSentences(query, sourceText) {
+  const queryWords = [...frossTokens(query)].filter(word => word.length > 2);
+  const sentences = String(sourceText || "")
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+(?=[A-ZА-ЯЁ0-9])/)
+    .map(sentence => sentence.trim())
+    .filter(sentence => sentence.length >= 45 && sentence.length <= 700);
+  if (!sentences.length) return "";
+  const ranked = sentences.map((sentence, index) => {
+    const words = frossTokens(sentence);
+    const hits = queryWords.filter(word => words.has(word)).length;
+    const coverage = queryWords.length ? hits / queryWords.length : 0;
+    return { sentence, index, score: coverage + Math.min(sentence.length, 260) / 2600 };
+  }).sort((a, b) => b.score - a.score || a.index - b.index);
+  const selected = [];
+  for (const item of ranked) {
+    if (selected.length >= 3) break;
+    if (selected.some(existing => existing.toLowerCase() === item.sentence.toLowerCase())) continue;
+    selected.push(item.sentence);
+  }
+  return selected.join(" ").slice(0, 1350);
+}
+
+async function frossExplainSearchResults(query, ranked) {
+  const top = ranked.slice(0, 3);
+  const settled = await Promise.allSettled(top.map(async item => {
+    const pageText = await frossReadPublicPageExcerpt(item.url);
+    const sourceText = pageText || item.snippet || "";
+    const explanation = frossExplainSentences(query, sourceText);
+    return {
+      ...item,
+      pageRead: Boolean(pageText),
+      explanation: explanation || (item.snippet
+        ? "На странице не удалось выделить достаточно содержательных предложений; доступен только поисковый фрагмент."
+        : "Страница не предоставила читаемый текст.")
+    };
+  }));
+  const enrichedByUrl = new Map();
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") enrichedByUrl.set(String(top[index].url || ""), result.value);
+    else enrichedByUrl.set(String(top[index].url || ""), {
+      ...top[index],
+      pageRead: false,
+      explanation: top[index].snippet
+        ? "Страницу не удалось прочитать; вывод основан только на фрагменте поисковой выдачи."
+        : "Страницу не удалось прочитать, поэтому содержательное объяснение недоступно."
+    });
+  });
+  return ranked.map(item => enrichedByUrl.get(String(item.url || "")) || item);
+}
+
 async function frossRunSearch(query, mode) {
   query = frossClean(query).slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   if (!query) return { results: [], errors: ["Поисковый запрос пуст после ограничения длины."] };
@@ -455,6 +510,7 @@ async function frossRunSearch(query, mode) {
     ranked = frossRankAndDedupe(query, allResults);
   }
 
+  ranked = await frossExplainSearchResults(query, ranked);
   return { results: ranked, errors };
 }
 
@@ -630,8 +686,9 @@ async function frossCreateCreatorToken(auth, env) {
   if (!key) return null;
   const payload = frossBase64UrlEncode(new TextEncoder().encode(JSON.stringify({
     uid: auth.uid,
-    exp: Date.now() + 12 * 60 * 60 * 1000,
-    version: "0.5"
+    email: typeof auth.email === "string" ? auth.email.toLowerCase() : "",
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    version: "0.6"
   })));
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
   return payload + "." + frossBase64UrlEncode(new Uint8Array(signature));
@@ -646,7 +703,7 @@ async function frossHasCreatorToken(auth, env, request) {
     const valid = await crypto.subtle.verify("HMAC", key, frossBase64UrlDecode(parts[1]), new TextEncoder().encode(parts[0]));
     if (!valid) return false;
     const payload = JSON.parse(new TextDecoder().decode(frossBase64UrlDecode(parts[0])));
-    return payload.uid === auth?.uid && Number(payload.exp) > Date.now() && payload.version === "0.5";
+    return payload.uid === auth?.uid && Number(payload.exp) > Date.now() && payload.version === "0.6";
   } catch { return false; }
 }
 async function frossIsCreator(auth, env, request) {
