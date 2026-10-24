@@ -68,8 +68,16 @@ function correctToken(token) {
   return bestDistance <= maxDistance && !ambiguous ? best : token;
 }
 
-/** Normalize known typos only. It deliberately does not create an answer. */
+/** Correct known typos without changing the user's original capitalization or code. */
 export function frossCorrectText(text) {
-  return String(text || "").toLowerCase().replace(/ё/g, "е")
-    .replace(/[a-zа-я]+/gi, token => correctToken(token));
+  return String(text || "").replace(/[a-zа-яё]+/gi, token => {
+    const lower = token.toLowerCase().replace(/ё/g, "е");
+    const corrected = correctToken(lower);
+    if (corrected === lower) return token;
+    if (token === token.toUpperCase()) return corrected.toUpperCase();
+    if (token[0] === token[0].toUpperCase()) {
+      return corrected.charAt(0).toUpperCase() + corrected.slice(1);
+    }
+    return corrected;
+  });
 }
