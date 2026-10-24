@@ -1202,7 +1202,7 @@ async function handleFrossTrain(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  if (!await frossIsCreator(auth, env, request)) return frossJson({ error: "Режим обучения доступен только создателю. Введи пароль создателя в окне обучения." }, 403, request);
+  const isCreator = await frossIsCreator(auth, env, request);
 
   let body;
   try { body = await request.json(); }
@@ -1220,7 +1220,16 @@ async function handleFrossTrain(request, env) {
     providerErrors: search.errors
   }, 404, request);
 
-  const githubStorage = await frossSaveKnowledgeToGitHub(topic, notes, env);
+  // Any signed-in user may study a topic, but only creator-authenticated learning
+  // may publish content to the shared GitHub library. Other users stay private.
+  const githubStorage = isCreator
+    ? await frossSaveKnowledgeToGitHub(topic, notes, env)
+    : {
+        configured: false,
+        saved: false,
+        public: false,
+        message: "Материалы будут сохранены только в приватной памяти этого аккаунта."
+      };
 
   return frossJson({
     ok: true,
@@ -1228,6 +1237,7 @@ async function handleFrossTrain(request, env) {
     topic,
     notes,
     count: notes.length,
+    storageScope: isCreator ? "private-and-shared" : "private",
     githubStorage,
     providerErrors: search.errors,
     notice: "FROSS попробовал прочитать публичные страницы и, если сайт не разрешил загрузку, сохранил поисковые фрагменты. Это заметки, а не дообучение модели; проверь источники и удали неточные записи."
