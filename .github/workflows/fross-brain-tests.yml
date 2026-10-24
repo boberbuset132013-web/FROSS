@@ -1,4 +1,4 @@
-name: FROSS Local Brain checks
+name: FROSS Brain checks
 
 on:
   push:
@@ -7,11 +7,13 @@ on:
       - "fross-brain.js"
       - "worker.js"
       - "fross_brain_v04.py"
+      - "services/**"
+      - "render.yaml"
       - ".github/workflows/fross-brain-tests.yml"
   workflow_dispatch:
 
 jobs:
-  test-local-brain:
+  test-brains:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -20,10 +22,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile Python engine
-        run: python -m py_compile fross_brain_v04.py
-      - name: Run Python engine tests
+      - name: Compile Python brain and service adapters
+        run: python -m py_compile fross_brain_v04.py services/python-brain/server.py services/cpp-brain/server.py
+      - name: Run Python brain unit tests
         run: python fross_brain_v04.py
+      - name: Compile C++ brain
+        run: g++ -std=c++17 -O2 -Wall -Wextra -pedantic services/cpp-brain/main.cpp -o /tmp/fross-cpp-brain
+      - name: Check C++ greeting
+        run: test "$(/tmp/fross-cpp-brain normal 'привет')" = "Привет! Я на связи. Что разберём?"
+      - name: Check C++ arithmetic
+        run: test "$(/tmp/fross-cpp-brain reasoning 'сколько будет (2+3)*4' | grep -o '20' | head -n 1)" = "20"
+      - name: Check C++ code generation
+        run: /tmp/fross-cpp-brain normal 'создай простейший код на Python' | grep -q 'def main'
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
