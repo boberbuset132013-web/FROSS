@@ -1066,14 +1066,17 @@ function frossTrainingSearchQuery(topic) {
 }
 
 async function frossBuildTrainingNotes(topic, candidates) {
-  const collected = await Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {
+  const safeCandidates = (Array.isArray(candidates) ? candidates : [])
+    .filter(item => item && typeof item === "object")
+    .slice(0, 8);
+  const tasks = safeCandidates.map(async item => {
     const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
     const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
     return {
       schemaVersion: 2,
       kind: "source-note",
-      topic,
+      topic: frossClean(topic).slice(0, 180),
       title: frossClean(item.title || "Источник без названия").slice(0, 260),
       url,
       snippet: sourceText,
@@ -1083,7 +1086,19 @@ async function frossBuildTrainingNotes(topic, candidates) {
       source: frossClean(pageExcerpt ? "article text" : item.source || "web search excerpt").slice(0, 80),
       score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
     };
-  }));
+  });
+
+  // Resolve every task before filtering. One failed source must not break the entire learning job.
+  const settled = await Promise.allSettled(tasks);
+  const collected = [];
+  for (let index = 0; index < settled.length; index++) {
+    const result = settled[index];
+    if (result.status === "fulfilled" && result.value && typeof result.value === "object") {
+      collected.push(result.value);
+    } else if (result.status === "rejected") {
+      console.warn("[FROSS training] source processing failed", index);
+    }
+  }
   return collected.filter(note => note.title && (note.snippet || note.url));
 }
 
