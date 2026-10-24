@@ -10,7 +10,6 @@ WORKDIR /app
 RUN python -m pip install --no-cache-dir "numpy>=1.26,<3" \
     && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 COPY --from=builder /fross-cpp-brain /app/fross-cpp-brain
-COPY fross_brain_v05.py /app/fross_brain_v05.py
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/fross_corpus.jsonl /app/data/fross_corpus.jsonl
 COPY services/cpp-brain/server.py /app/server.py
