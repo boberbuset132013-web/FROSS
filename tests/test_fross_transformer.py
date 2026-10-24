@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import unittest
+import sys
+from pathlib import Path
 
 import torch
 
+# Running this file directly sets sys.path[0] to tests/, not the repository root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fross_transformer as transformer
 
 
