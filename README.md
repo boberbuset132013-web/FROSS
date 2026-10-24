@@ -1,6 +1,6 @@
 # FROSS 1.0
 
-FROSS is a Russian-language experimental assistant with Google/email sign-in, saved chat history, a local rule-based reasoning engine, limited code templates, and creator-only private learning memory.
+FROSS is a Russian-language experimental assistant with Google/email sign-in, saved chat history, a local rule-based engine, code templates, a Python service for normal requests, a C++ service for reasoning, and creator-only private learning memory.
 
 ## Main files
 - [Web interface](public/index.html)
@@ -8,6 +8,10 @@ FROSS is a Russian-language experimental assistant with Google/email sign-in, sa
 - [Worker and API](worker.js)
 - [FROSS Local Brain 0.4 JavaScript engine](fross-brain.js)
 - [Python engine and tests 0.4](fross_brain_v04.py)
+- [Python HTTP service](services/python-brain/server.py)
+- [C++ reasoning engine](services/cpp-brain/main.cpp)
+- [C++ HTTP service](services/cpp-brain/server.py)
+- [Render blueprint for two free services](render.yaml)
 - [Python engine 0.3](fross_brain_v03.py)
 - [Legacy Python entrypoint](fross_brain_v02.py)
 - [Firestore security rules](firestore.rules)
@@ -18,4 +22,4 @@ FROSS is a Russian-language experimental assistant with Google/email sign-in, sa
 ## First-time setup
 Follow [SETUP.md](SETUP.md) before signing in. Firebase Web App values must be added to `public/firebase-config.js`, Google sign-in enabled, the Firestore database created, and `firestore.rules` published.
 
-FROSS Local Brain 0.4 uses custom JavaScript rules and does not call a hosted language model. Web search is used when a question needs outside information; creator-only learning can save public page excerpts and source links into private Firestore memory. Saved notes are consulted before another search. Deploy with `npx wrangler deploy`.
+JavaScript dispatches ordinary requests to the Python HTTP service and deep-reasoning requests to the C++ HTTP service when their URLs and shared secret are configured in Cloudflare. If a service is unavailable or cannot answer, the Worker falls back to its local JavaScript brain. No hosted language model is called. Web search is reserved for questions that appear to need external facts. Creator-only learning can save public page excerpts and source links in private Firestore memory. Follow `SETUP.md` to deploy the two free service instances and configure secrets.
