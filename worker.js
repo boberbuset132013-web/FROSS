@@ -51,8 +51,10 @@ export default {
     if (path === "/api/health") return frossApiGuard(path, request, async () => frossJson({
       ok: true,
       worker: "FROSS",
-      version: "0.6-kb2",
+      version: "1.1",
+      brainVersion: "0.5",
       creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
+      githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
       cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
     }, 200, request));
@@ -752,8 +754,7 @@ async function frossGithubReadContents(path, token) {
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "FROSS-Knowledge-Worker",
       ...(token ? { "Authorization": "Bearer " + token } : {})
-    },
-    cf: { cacheTtl: 30, cacheEverything: true }
+    }
   });
   if (response.status === 404) return { ok: true, exists: false, sha: "", text: "" };
   if (!response.ok) return { ok: false, exists: false, error: "GitHub GET " + path + " returned HTTP " + response.status + "." };
@@ -1172,12 +1173,11 @@ async function handleFrossApi(request, env) {
     source: frossClean(note?.source || "").slice(0, 80),
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
-  const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
-  const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
-
   // v0.5: gather fresh web material for information queries even when personal notes match,
   // then combine the two sources instead of stopping at the first memory hit.
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
+  const sharedGithubKnowledge = quickReply ? [] : await frossLoadGithubKnowledge(correctedQuery);
+  const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
   const shouldSearch = !quickReply && frossShouldSearch(correctedQuery);
   let results = [];
   let providerErrors = [];
