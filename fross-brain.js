@@ -556,7 +556,22 @@ export function frossThink({ message, history = [], results = [], knowledge = []
       unique.push(item);
     }
     const relevant = unique.filter(item => item.localRelevance >= 0.08);
-    const top = (relevant.length ? relevant : unique).slice(0, mode === "reasoning" ? 4 : 3);
+    if (!relevant.length) {
+      if (memoryReply) {
+        return {
+          ...memoryReply,
+          reply: memoryReply.reply + "\n\nПоиск вернул страницы, которые недостаточно совпадают с вопросом, поэтому я не добавляю случайные результаты.",
+          trace: [...(memoryReply.trace || []), "Отфильтровать нерелевантные результаты поиска"]
+        };
+      }
+      return {
+        reply: "Поиск вернул страницы, которые почти не совпадают с вопросом. Я не буду выдавать случайный результат за ответ. Попробуй уточнить запрос или добавь ключевое слово.",
+        kind: "no-match-v05",
+        sources: [],
+        trace: ["Нормализовать запрос", "Оценить совпадение найденных страниц", "Отклонить нерелевантные результаты", "Не выдавать случайный материал за ответ"]
+      };
+    }
+    const top = relevant.slice(0, mode === "reasoning" ? 4 : 3);
     const lines = [];
     if (memoryReply) {
       lines.push("**Сначала — что FROSS уже изучил:**\n" + memoryReply.reply);
