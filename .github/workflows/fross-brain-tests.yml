@@ -9,6 +9,7 @@ on:
       - "public/**"
       - "firestore.rules"
       - "SETUP.md"
+      - "FROSS_CHARACTER.md"
       - "wrangler.jsonc"
       - "fross_brain_v05.py"
       - "services/**"
@@ -59,6 +60,9 @@ jobs:
           assert "return collected.filter(note =>" in worker
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
           assert "function frossTrainingSeedResources(topic)" in worker
+          assert 'brainVersion: "0.6"' in worker
+          assert "function frossComposeExplanation(query, notes, mode = \"normal\")" in Path("fross-brain.js").read_text(encoding="utf-8")
+          assert "saveMemoryBtn" in page and "exportMemoryBtn" not in page
           assert "https://docs.python.org/3/tutorial/" in worker
           assert "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide" in worker
           assert 'path === "/api/auto-study"' in worker
@@ -115,6 +119,9 @@ jobs:
           const learned = brain.frossThink({ message: "Основы Python", knowledge });
           assert.equal(learned.kind, "saved-memory-v06");
           assert.match(learned.reply, /данные в переменных/);
+          assert.match(learned.reply, /Объяснение простыми словами/);
+          const explanation = learned.reply.split("Объяснение простыми словами:**")[1]?.split("\\n\\n")[0] || "";
+          assert.ok((explanation.match(/[.!?](?:\\s|$)/g) || []).length >= 2, "Brain 0.6 should connect multiple sentences from saved notes");
           const greeting = brain.frossThink({ message: "Привет", knowledge });
           assert.equal(greeting.kind, "local-rule-v05");
           console.log("Knowledge ranking and greeting priority passed.");
