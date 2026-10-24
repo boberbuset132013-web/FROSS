@@ -61,6 +61,8 @@ jobs:
           rules = Path("firestore.rules").read_text(encoding="utf-8")
           wrangler = Path("wrangler.jsonc").read_text(encoding="utf-8")
           character = Path("FROSS_CHARACTER.md").read_text(encoding="utf-8")
+          assert "function frossLikelyConversationIntent(message)" in worker
+          assert "как у тебя дела" in worker and "как у вас дела" in worker
           assert "const settled = await Promise.allSettled(tasks);" in worker
           assert "return collected.filter(note =>" in worker
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
@@ -162,5 +164,10 @@ jobs:
           assert.match(project.reply, /самой первой версии/i);
           const smallTalk = brain.frossThink({ message: "давай поговорим" });
           assert.match(smallTalk.reply, /Какая тема сейчас интереснее/i);
-          console.log("Knowledge ranking, contextual follow-ups, context recall, casual chat and error-help passed.");
+          const howAreYou = brain.frossQuickResponse({ message: "как у тебя дела" });
+          assert.match(howAreYou, /готов помогать/i);
+          assert.match(howAreYou, /А у тебя как дела/i);
+          const otherSmallTalk = brain.frossQuickResponse({ message: "что у тебя нового?" });
+          assert.match(otherSmallTalk, /готов помогать/i);
+          console.log("Knowledge retrieval, conversational context, natural small-talk variants and error-help passed.");
           JS
