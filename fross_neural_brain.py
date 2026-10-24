@@ -387,6 +387,8 @@ def main() -> int:
     prediction = model.predict(args.text or "приветик")
     checks = [
         ("приветик", "greeting"),
+        ("как у тебя дела", "small_talk"),
+        ("что у тебя нового", "small_talk"),
         ("спасибо огромное", "thanks"),
         ("хочу просто пообщаться", "casual_chat"),
         ("я не это имел в виду", "correction"),
