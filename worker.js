@@ -47,14 +47,19 @@ export default {
       });
     }
 
-    // 3. FROSS API в том же Worker — до фильтра Telegram-путей
-    if (path === "/api/identity") return handleFrossIdentity(request, env);
-    if (path === "/api/creator-unlock") return handleFrossCreatorUnlock(request, env);
-    if (path === "/api/train") return handleFrossTrain(request, env);
-
-    if (path === "/api/chat") {
-      return handleFrossApi(request, env);
-    }
+    // 3. FROSS API: JSON-ошибки вместо HTML-страниц Cloudflare.
+    if (path === "/api/health") return frossApiGuard(path, request, async () => frossJson({
+      ok: true,
+      worker: "FROSS",
+      version: "0.6-kb2",
+      creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
+      pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+      cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
+    }, 200, request));
+    if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
+    if (path === "/api/creator-unlock") return frossApiGuard(path, request, () => handleFrossCreatorUnlock(request, env));
+    if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
+    if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
     // 4. Вебхуки должны проверяться до фильтра Telegram Bot API путей.
     // Иначе /webhook/... никогда не дойдёт до handleWebhook.
@@ -415,6 +420,29 @@ async function frossRunSearch(query, mode) {
   return { results: ranked, errors };
 }
 
+async function frossApiGuard(path, request, handler) {
+  try {
+    return await handler();
+  } catch (error) {
+    const errorId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+    const diagnostic = String(error?.message || error || "Unknown error")
+      .replace(/Bearer\\s+\\S+/gi, "Bearer [redacted]")
+      .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[redacted]")
+      .replace(/[A-Za-z0-9_-]{40,}/g, "[redacted]")
+      .replace(/\\s+/g, " ")
+      .slice(0, 200);
+    console.error("[FROSS API]", errorId, path, error?.stack || error);
+    return frossJson({
+      ok: false,
+      error: "Внутренняя ошибка FROSS Worker.",
+      diagnostic,
+      errorId,
+      route: path,
+      hint: "Открой /api/health и проверь Runtime Logs Worker по errorId."
+    }, 500, request);
+  }
+}
+
 function frossJson(data, status = 200, request) {
   const origin = request?.headers?.get("Origin") || "*";
   return new Response(JSON.stringify(data), {
@@ -675,6 +703,39 @@ async function frossReadPublicPageExcerpt(value) {
   }
 }
 
+function frossKnowledgeTokens(value) {
+  const ignored = new Set([
+    "это","как","для","что","или","при","его","ее","они","она","оно","the","and","for","with","from","are","was",
+    "быть","который","которая","которые","также","может","можно","если","чтобы","всего","основы","введение"
+  ]);
+  return (String(value || "").toLowerCase().replace(/ё/g, "е").match(/[a-zа-я0-9+#]{2,}/g) || [])
+    .filter(word => !ignored.has(word));
+}
+function frossBuildKnowledgeKeywords(topic, title, text) {
+  const weights = new Map();
+  for (const [value, weight] of [[topic, 5], [title, 3], [text, 1]]) {
+    for (const word of frossKnowledgeTokens(value)) weights.set(word, (weights.get(word) || 0) + weight);
+  }
+  return [...weights.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([word]) => word);
+}
+function frossBuildKnowledgeKeyPoints(topic, title, text, limit = 5) {
+  const sentences = String(text || "").replace(/\\s+/g, " ")
+    .split(/(?<=[.!?])\\s+|\\s+•\\s+|\\s+;\\s+/)
+    .map(value => value.trim()).filter(value => value.length >= 45);
+  if (!sentences.length) return String(text || "").trim() ? [String(text).trim().slice(0, 280)] : [];
+  const focus = [...new Set([...frossKnowledgeTokens(topic), ...frossKnowledgeTokens(title)])];
+  const ranked = sentences.map((sentence, index) => {
+    const words = new Set(frossKnowledgeTokens(sentence));
+    const hits = focus.filter(word => words.has(word)).length;
+    const density = focus.length ? hits / Math.min(focus.length, 8) : 0;
+    return { sentence, index, score: density * 2 + Math.min(sentence.length, 240) / 1200 };
+  }).sort((a, b) => b.score - a.score || a.index - b.index);
+  return ranked.slice(0, limit).sort((a, b) => a.index - b.index).map(item => item.sentence.slice(0, 300));
+}
+function frossBuildKnowledgeSummary(topic, title, text) {
+  return frossBuildKnowledgeKeyPoints(topic, title, text, 3).join(" ").slice(0, 900);
+}
+
 async function handleFrossTrain(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
@@ -691,13 +752,19 @@ async function handleFrossTrain(request, env) {
   const search = await frossRunSearch(topic, "reasoning");
   const candidates = search.results.slice(0, 8);
   const notes = await Promise.all(candidates.map(async item => {
-    const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
+    const url = typeof item.url === "string" && /^https?:\\/\\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
+    const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
     return {
+      schemaVersion: 2,
+      kind: "source-note",
       topic,
       title: frossClean(item.title || "Источник без названия").slice(0, 260),
       url,
-      snippet: (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200),
+      snippet: sourceText,
+      summary: frossBuildKnowledgeSummary(topic, item.title || "", sourceText),
+      keyPoints: frossBuildKnowledgeKeyPoints(topic, item.title || "", sourceText, 5),
+      keywords: frossBuildKnowledgeKeywords(topic, item.title || "", sourceText),
       source: frossClean(pageExcerpt ? "article text" : item.source || "web search excerpt").slice(0, 80),
       score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
     };
@@ -812,15 +879,19 @@ async function handleFrossApi(request, env) {
     role: item?.role === "assistant" ? "assistant" : "user",
     content: frossClean(item?.content || "").slice(0, 4000)
   })) : [];
-  const knowledge = Array.isArray(body.knowledge) ? body.knowledge.slice(0, 40).map(note => ({
+  const knowledge = Array.isArray(body.knowledge) ? body.knowledge.slice(0, 80).map(note => ({
+    schemaVersion: Number(note?.schemaVersion) === 2 ? 2 : 1,
+    kind: frossClean(note?.kind || "source-note").slice(0, 40),
     topic: frossClean(note?.topic || "").slice(0, 180),
     title: frossClean(note?.title || "").slice(0, 260),
-    url: typeof note?.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
+    url: typeof note?.url === "string" && /^https?:\\/\\//i.test(note.url) ? note.url.slice(0, 700) : "",
     snippet: frossClean(note?.snippet || "").slice(0, 3200),
+    summary: frossClean(note?.summary || "").slice(0, 900),
+    keyPoints: Array.isArray(note?.keyPoints) ? note.keyPoints.slice(0, 5).map(value => frossClean(value).slice(0, 300)) : [],
+    keywords: Array.isArray(note?.keywords) ? note.keywords.slice(0, 24).map(value => frossClean(value).slice(0, 40)) : [],
     source: frossClean(note?.source || "").slice(0, 80),
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
-
   // v0.5: gather fresh web material for information queries even when personal notes match,
   // then combine the two sources instead of stopping at the first memory hit.
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
