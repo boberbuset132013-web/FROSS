@@ -425,6 +425,10 @@ def generate_reply(
         logits[PAD_ID] = float("-inf")
         logits[UNK_ID] = float("-inf")
         logits[BOS_ID] = float("-inf")
+        # Avoid a zero-length answer: the first few tokens should establish a
+        # continuation before EOS is allowed to end sampling.
+        if len(generated) < 8:
+            logits[EOS_ID] = float("-inf")
         logits = logits / temp
         if recent_generated:
             seen = set(recent_generated[-64:])
