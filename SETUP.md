@@ -13,7 +13,7 @@
 
 ## 2. FROSS Local Brain 0.5: распределённая схема
 Сайт остаётся на JavaScript, но может передавать запросы в отдельные сервисы:
-- обычный режим → `FROSS Python Brain 0.5` (`services/python-brain/server.py`, использует `fross_brain_v04.py`);
+- обычный режим → `FROSS Python Brain 0.5` (`services/python-brain/server.py`, использует `fross_brain_v05.py`);
 - режим «Рассуждение» → `FROSS C++ Reasoning Brain 0.5` (`services/cpp-brain/main.cpp`, HTTP-обёртка находится в `services/cpp-brain/server.py`);
 - если сервис не настроен, недоступен или не понимает запрос, Worker использует локальный JavaScript-движок и при необходимости поиск.
 
@@ -42,7 +42,7 @@
 При включённых внешних движках текст нового сообщения и последние сообщения текущего чата могут быть переданы в Render-сервис Python или C++, вместе с выбранными заметками памяти. Сервисы настроены не записывать содержимое сообщений в журналы, но всё равно не отправляй в чат пароли, токены, закрытые ключи или другие секреты.
 
 ## 4. Пароль создателя, приватное обучение и база знаний
-1. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets → Add → Secret**. Имя секрета: `FROSS_CREATOR_PASSWORD`. В значение вставь пароль создателя, который хочешь использовать. Не добавляй пароль в GitHub, HTML, JavaScript, `wrangler.jsonc` или README. Секреты Cloudflare предназначены для хранения паролей и токенов: [официальная документация](https://developers.cloudflare.com/workers/configuration/secrets/).
+1. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets → Add → Secret**. Имя секрета — `FROSS_CREATOR_PASSWORD`; в поле значения введи сам пароль, который хочешь использовать. Важно: **не добавляй его в раздел `vars` и не меняй местами имя и значение**. Не добавляй пароль в GitHub, HTML, JavaScript, `wrangler.jsonc` или README. Если используешь Wrangler CLI вместо панели, выполни `npx wrangler secret put FROSS_CREATOR_PASSWORD` и введи пароль в приглашении. Секреты Cloudflare предназначены для хранения паролей и токенов: [официальная документация](https://developers.cloudflare.com/workers/configuration/secrets/).
 2. После сохранения секрета выполни Deploy Worker. Если пароль был отправлен в чат или кому-то ещё, безопаснее заменить его новым случайным паролем и использовать новый секрет.
 3. Войди в FROSS через Google или email/пароль. Открой **«Обучение FROSS»**, введи пароль создателя и нажми **«Стать создателем»**. Сервер выдаёт подписанную сессию создателя на 12 часов, привязанную к текущему Firebase-пользователю. При выходе из аккаунта токен удаляется из вкладки.
 4. Открой Firebase → Firestore Database → Rules и опубликуй актуальный файл `firestore.rules`. В нём есть отдельная коллекция `users/{uid}/knowledge`, а данные отделены для каждого пользователя.
@@ -68,6 +68,7 @@
 
 ## 8. Если не работает
 - Ошибка конфигурации/кнопка Google выключена: проверь `public/firebase-config.js`.
+- `Unexpected token '<'` или сообщение `вернул HTML вместо JSON`: API получил HTML-страницу вместо JSON. Обычно сайт обслуживается старой/не той публикацией или маршруты `/api/*` не попадают в Worker. Проверь `wrangler.jsonc` (в `assets.run_worker_first` должен быть `"/api/*"`), сделай Deploy актуального Worker и обнови сайт через Ctrl+F5. В обычном чате запрос должен идти на `/api/chat`; секрет создателя сам по себе эту ошибку не вызывает.
 - `auth/unauthorized-domain`: добавь домен Worker в Firebase Authentication → Authorized domains.
 - `Missing or insufficient permissions`: проверь опубликованные `firestore.rules`.
 - Ответы слишком шаблонные: это ограничение rule-based FROSS Local Brain; расширяй `fross-brain.js` новыми правилами и примерами.
