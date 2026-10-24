@@ -10,9 +10,29 @@
 #include <initializer_list>
 
 static std::string lowerAscii(std::string value) {
-    for (char &ch : value) {
-        unsigned char u = static_cast<unsigned char>(ch);
-        if (u >= 'A' && u <= 'Z') ch = static_cast<char>(u - 'A' + 'a');
+    // Lowercase ASCII plus Russian UTF-8 (А-Я and Ё). The old byte-only
+    // implementation missed uppercase Cyrillic words such as "Привет".
+    for (size_t i = 0; i < value.size(); ++i) {
+        unsigned char u = static_cast<unsigned char>(value[i]);
+        if (u >= 'A' && u <= 'Z') {
+            value[i] = static_cast<char>(u - 'A' + 'a');
+            continue;
+        }
+        if (u == 0xD0 && i + 1 < value.size()) {
+            unsigned char next = static_cast<unsigned char>(value[i + 1]);
+            if (next == 0x81) { // Ё -> ё
+                value[i] = static_cast<char>(0xD1);
+                value[i + 1] = static_cast<char>(0x91);
+                ++i;
+            } else if (next >= 0x90 && next <= 0x9F) { // А-П -> а-п
+                value[i + 1] = static_cast<char>(next + 0x20);
+                ++i;
+            } else if (next >= 0xA0 && next <= 0xAF) { // Р-Я -> р-я
+                value[i] = static_cast<char>(0xD1);
+                value[i + 1] = static_cast<char>(next - 0x20);
+                ++i;
+            }
+        }
     }
     return value;
 }
@@ -189,7 +209,7 @@ int main(int argc, char **argv) {
         answer = "Автор проекта FROSS: [@Spamton_BigShot_hahaha](https://t.me/Spamton_BigShot_hahaha).";
         approach = "проверить сохранённые сведения о проекте.";
     } else if (any(q, {"твоя модель", "какая у тебя модель", "ты просто гуглишь"})) {
-        answer = "Я — FROSS C++ Reasoning Brain 0.6. Это самописный алгоритмический движок, а не обученная нейросеть. Я использую локальные правила и безопасные алгоритмы.";
+        answer = "Я — FROSS C++ Planning Brain 1.0. Это самописный алгоритмический движок, а не обученная нейросеть. Я использую локальные правила и безопасные алгоритмы.";
         approach = "объяснить устройство движка без преувеличений.";
     } else if (calculate(q, answer)) {
         approach = "разобрать арифметику с учётом скобок и приоритета операций.";
