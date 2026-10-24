@@ -137,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=280 if mode == "reasoning" else 150,
+                    max_new_tokens=360 if mode == "reasoning" else 180,
                 )
                 if reply:
                     respond(self, 200, {
