@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Python Brain 0.6 HTTP adapter with an optional trained NumPy intent model."""
+"""FROSS Python Brain 1.0 HTTP adapter for the original trained-from-scratch Transformer."""
 from __future__ import annotations
 
 import hmac
@@ -17,14 +17,16 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "services"))
 import fross_brain_v05 as brain  # noqa: E402
 import fross_neural_brain as neural  # noqa: E402
-import llm_client  # noqa: E402
+import fross_transformer as transformer  # noqa: E402
 
 NEURAL_MODEL_PATH = os.environ.get("FROSS_NEURAL_MODEL_PATH", str(ROOT / "fross-neural-model.npz"))
 NEURAL_MODEL, NEURAL_MODEL_STATUS = neural.load_or_train(NEURAL_MODEL_PATH)
+TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
+TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Generative Brain 1.0"
+ENGINE_NAME = "FROSS Python Transformer Brain 1.0"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -38,7 +40,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Brain/0.6"
+    server_version = "FROSS-Python-Brain/1.0"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log the prompt, chat history, auth header, or saved notes.
@@ -52,9 +54,12 @@ class Handler(BaseHTTPRequestHandler):
             "ok": True,
             "engine": ENGINE_NAME,
             "version": "1.0",
-            "languageModelConfigured": llm_client.is_configured(),
-            "languageModel": os.environ.get("FROSS_LLM_MODEL", llm_client.DEFAULT_MODEL),
+            "generationModelLoaded": TRANSFORMER_MODEL is not None,
+            "generationModel": TRANSFORMER.VERSION if TRANSFORMER_MODEL is not None else None,
+            "generationModelStatus": TRANSFORMER_STATUS,
             "neuralModelLoaded": NEURAL_MODEL is not None,
+                        "generationModelLoaded": TRANSFORMER_MODEL is not None,
+                        "generationModelStatus": TRANSFORMER_STATUS,
             "neuralModelVersion": neural.VERSION if NEURAL_MODEL is not None else None,
             "neuralIntentCount": len(NEURAL_MODEL.labels) if NEURAL_MODEL is not None else 0,
             "neuralTrainingAccuracy": round(NEURAL_MODEL.train_accuracy, 3) if NEURAL_MODEL is not None else None,
@@ -119,34 +124,38 @@ class Handler(BaseHTTPRequestHandler):
         ]
 
         try:
-            # Free-form generation is the primary path when a provider key is configured.
-            # On provider errors the service falls back to the local rules and intent router.
-            if llm_client.is_configured():
+            # Primary response path: our own randomly initialized Transformer trained
+            # from the local corpus. No pretrained weights or hosted model API are used.
+            if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
                 try:
-                    generated = llm_client.generate_reply(
-                        message, mode=mode, history=history, knowledge=knowledge
+                    reply = transformer.generate_reply(
+                        TRANSFORMER_MODEL,
+                        TRANSFORMER_TOKENIZER,
+                        message,
+                        history=history,
+                        knowledge=knowledge,
+                        mode=mode,
+                        max_new_tokens=240 if mode == "reasoning" else 150,
                     )
-                    respond(self, 200, {
-                        "handled": True,
-                        "reply": generated["reply"],
-                        "engine": generated["engine"],
-                        "kind": "llm-generated-v1",
-                        "model": generated["model"],
-                        "trace": [
-                            "Сформировать смысл запроса и учесть контекст",
-                            "Сгенерировать связный ответ языковой моделью",
-                            "Проверить соответствие ответа запросу",
-                        ] if mode == "normal" else [
-                            "Определить цель и ограничения",
-                            "Сопоставить контекст и доступные знания",
-                            "Сгенерировать и проверить решение",
-                            "Сформировать итог без вывода скрытых рассуждений",
-                        ],
-                        "sources": [],
-                    })
-                    return
+                    if reply:
+                        respond(self, 200, {
+                            "handled": True,
+                            "reply": reply[:25000],
+                            "engine": ENGINE_NAME,
+                            "kind": "fross-transformer-v1",
+                            "generationModel": TRANSFORMER.VERSION,
+                            "generationModelStatus": TRANSFORMER_STATUS,
+                            "trace": [
+                                "Токенизировать запрос и контекст",
+                                "Обработать контекст причинным self-attention",
+                                "Пошагово предсказать новые токены обученными весами",
+                                "Остановить генерацию и проверить формат",
+                            ],
+                            "sources": [],
+                        })
+                        return
                 except Exception:
-                    # Never return provider details, keys, or prompts to the client.
+                    # Keep the server safe and let deterministic fallback handle the request.
                     pass
 
             reply = brain.quick_reply(message, is_creator=False, mode=mode, history=history)
@@ -173,11 +182,11 @@ class Handler(BaseHTTPRequestHandler):
                             "handled": True,
                             "reply": neural_reply[:25000],
                             "engine": ENGINE_NAME,
-                            "kind": "neural-intent-v01",
+                            "kind": "intent-router-fallback-v01",
                             "trace": [
                                 "Локальные правила и сохранённые знания не нашли уверенный ответ",
                                 "Нейросеть оценила намерение сообщения",
-                                "Использован ответ-шаблон для распознанного намерения",
+                                "Использован резервный классификатор намерения (модель генерации недоступна)",
                             ],
                             "sources": [],
                             "neural": {
