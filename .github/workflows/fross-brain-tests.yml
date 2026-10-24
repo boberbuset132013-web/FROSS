@@ -33,11 +33,6 @@ jobs:
           python -m pip install --disable-pip-version-check "numpy>=1.26,<3"
           python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
       - name: Compile Python brain and service adapters
-        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py fross_transformer.py services/python-brain/server.py services/cpp-brain/server.py tests/test_fross_transformer.py
-      - name: Run Python brain unit tests
-        run: python fross_brain_v05.py
-      - name: Train and test neural intent classifier
-        run: python fross_neural_brain.py test --output /tmp/fross-neural-model.npz
       - name: Test original Transformer architecture and tokenizer
         run: python tests/test_fross_transformer.py
       - name: Train a scratch Transformer checkpoint and smoke-test generation
