@@ -350,7 +350,72 @@ function findKnowledgeReply(query, knowledge, mode = "normal") {
   };
 }
 
-function quickReply({ message, isCreator = false, mode = "normal" }) {
+function frossConversationReply(message, history = []) {
+  const q = normalize(frossCorrectText(message)).replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
+  const noBotName = q.split(/\s+/).filter(word => !["fross", "фросс", "ботик", "бот"].includes(word)).join(" ").trim();
+  const conversational = frossConversationReply(message, history);
+  if (conversational) return conversational;
+  const turns = Array.isArray(history) ? history.slice(-12).filter(item => item && typeof item.content === "string") : [];
+  const lastAssistant = turns.slice().reverse().find(item => item.role === "assistant")?.content || "";
+  const lastUser = turns.slice().reverse().find(item => item.role !== "assistant")?.content || "";
+  const cleanPrevious = String(lastAssistant).replace(/[\u0060]{3}[\s\S]*?[\u0060]{3}/g, " пример кода ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/https?:\/\/\S+/g, "")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "").replace(/[*_#>\u0060]/g, " ").replace(/\s+/g, " ").trim();
+  const sentences = cleanPrevious.split(/(?<=[.!?])\s+(?=[A-ZА-ЯЁ0-9])/)
+    .map(sentence => sentence.trim()).filter(sentence => sentence.length >= 18).slice(0, 4);
+  const usefulLines = String(lastAssistant).split(/\n/)
+    .map(line => line.replace(/^\s*(?:[-•]|\d+[.)])\s*/, "").replace(/[*_#>\u0060]/g, "").trim())
+    .filter(line => line.length >= 24 && !/^(источники|ограничение|проверка ограничений)\b/i.test(line)).slice(0, 4);
+
+  if (/^(не то|не так|ты не понял|ты меня не понял|я имел в виду|я имела в виду|я хотел сказать|я хотела сказать|я про другое|не это)$/.test(noBotName) ||
+      /^(я имел в виду|я имела в виду|я хотел сказать|я хотела сказать|ты не понял|ты меня не понял)\b/.test(noBotName)) {
+    return "Понял, я неверно истолковал запрос. Буду ориентироваться на твоё уточнение: «" + String(message).trim().slice(0, 420) + "». Если я снова упущу важную деталь, поправь меня — я скорректирую ответ.";
+  }
+  if (/^(я сделал|я сделала|получилось|заработало|исправил|исправила|готово|всё готово|все готово|теперь работает)[.! ]*$/.test(noBotName)) {
+    return "Отлично, значит этот шаг сработал. Дальше стоит проверить результат на одном-двух примерах, чтобы убедиться, что исправление не повлияло на другие функции.";
+  }
+  if (/^(не работает|ничего не работает|не получается|не сработало|у меня ошибка|вылезла ошибка|сломалось|не запускается|опять ошибка)[.! ]*$/.test(noBotName)) {
+    return "Давай найдём причину без догадок. Пришли точный текст ошибки и напиши, после какого действия она появляется. По этим деталям выберем следующий шаг.";
+  }
+  if (/^(да|ага|угу|ок|окей|ладно|хорошо|ясно|понял|понятно|договорились|верно|именно)[.! ]*$/.test(noBotName)) {
+    if (lastAssistant.trim().endsWith("?")) return "Хорошо, понял. Продолжим с учётом этого ответа. Напиши следующую деталь или покажи, что получилось.";
+    return "Понял. Продолжим — можем разобрать следующий шаг или проверить результат на примере.";
+  }
+  if (/^(нет|неа|не нужно|не надо|не хочу)[.! ]*$/.test(noBotName)) {
+    if (lastAssistant.trim().endsWith("?")) return "Хорошо, не будем идти в этом направлении. Учту ответ; можем изменить подход или перейти к другой задаче.";
+    return "Понял, этот вариант не подходит. Скажи, что хочется изменить, и я подстрою следующий ответ.";
+  }
+
+  const isFollowUp = /^(а\s+)?(почему|а почему|как так|а как|что это значит|что значит это|поясни|объясни подробнее|расскажи подробнее|подробнее|продолжи|продолжай|и дальше|а дальше|и что дальше|а если|что насчёт этого|что насчет этого)[?!. ]*$/.test(noBotName);
+  if (isFollowUp) {
+    if (!lastAssistant.trim()) return "Я не вижу предыдущего ответа в переданном контексте. Повтори тему или фразу, к которой относится вопрос, и я продолжу.";
+    const math = parseMath(lastUser);
+    if (/^(почему|а почему|как так)[?!. ]*$/.test(noBotName) && math && !math.error) {
+      return "Ты спрашиваешь о предыдущем вычислении «" + String(lastUser).trim().slice(0, 100) + "». Результат — " + math.value + ". Приоритет такой: сначала скобки и степени, потом умножение/деление, затем сложение/вычитание. Если нужно, разберу выражение по действиям.";
+    }
+    if (/^(почему|а почему)[?!. ]*$/.test(noBotName)) {
+      const cause = sentences.find(sentence => /\b(потому что|так как|поскольку|из-за|поэтому)\b/i.test(sentence));
+      if (cause) return "В предыдущем ответе причина была сформулирована так: «" + cause.slice(0, 360) + "». Если вопрос о другом тезисе, укажи его — разберу именно его.";
+      return "Связываю вопрос с предыдущим ответом: «" + (sentences[0] || cleanPrevious).slice(0, 360) + "». Причина не была раскрыта достаточно подробно, поэтому не буду её придумывать. Укажи утверждение, к которому относится «почему», и я разберу его точнее.";
+    }
+    if (/^(а если)[?!. ]*$/.test(noBotName)) {
+      return "Можем проверить другой вариант. Сейчас предыдущий контекст — «" + (sentences[0] || cleanPrevious).slice(0, 280) + "». Напиши условие, которое хочешь изменить, и я сравню результат.";
+    }
+    const points = usefulLines.length ? usefulLines : sentences;
+    const summary = points.slice(0, 3).map((line, index) => (index + 1) + ". " + line.slice(0, 260)).join("\n");
+    return "Конечно, продолжу предыдущую мысль. Вот её основные части:\n" + (summary || cleanPrevious.slice(0, 500)) + "\n\nЭто разбор уже сказанного, а не новый источник. Напиши, какой пункт раскрыть примером или пошаговым объяснением.";
+  }
+
+  if (/^(круто|класс|супер|отлично|здорово|понятно спасибо|всё понятно|все понятно)[.! ]*$/.test(noBotName)) {
+    return "Отлично! Хорошо, что стало понятнее. Можем перейти к следующему шагу или проверить идею на конкретном примере.";
+  }
+  if (/^(что думаешь|а ты как думаешь|твоё мнение|твое мнение|по твоему|как считаешь)[?!. ]*$/.test(noBotName) && lastAssistant.trim()) {
+    return "Могу оценить предыдущую идею по трём вещам: насколько она решает задачу, насколько сложна в реализации и какие у неё риски. По текущему контексту лучше сначала проверить маленький рабочий вариант, а затем усложнять его.";
+  }
+  return null;
+}
+
+function quickReply({ message, isCreator = false, mode = "normal", history = [] }) {
   const raw = normalize(frossCorrectText(message));
   const q = raw.replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
   const noBotName = q.split(/\s+/).filter(word => !["fross", "фросс", "ботик", "бот"].includes(word)).join(" ").trim();
@@ -426,7 +491,7 @@ export function frossQuickResponse(options) {
 
 export function frossThink({ message, history = [], results = [], knowledge = [], mode = "normal", isCreator = false } = {}) {
   const correctedMessage = frossCorrectText(message);
-  const direct = quickReply({ message: correctedMessage, isCreator, mode });
+  const direct = quickReply({ message: correctedMessage, isCreator, mode, history });
   const memoryReply = findKnowledgeReply(correctedMessage, knowledge, mode);
   const simpleIntent = normalize(correctedMessage).replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
   const conversationalIntent = /^(эй )?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер|спасибо|благодарю|спс|пасиб|пока|до свидания|увидимся|как дела|что нового|ты здесь|ты тут|ты на связи|ау|кто ты|ты кто|как тебя зовут|что ты такое)$/.test(simpleIntent);
