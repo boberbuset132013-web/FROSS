@@ -33,9 +33,6 @@ jobs:
         run: python tests/test_fross_transformer.py
       - name: Train a scratch Transformer checkpoint and smoke-test generation
         run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --merges 32 --text "Объясни attention простыми словами"
-        run: /tmp/fross-cpp-brain normal 'Привет' | grep -q '"intent":"conversation"'
-        run: /tmp/fross-cpp-brain reasoning 'сколько будет (2+3)*4' | grep -q '"candidateResult":"20"'
-        run: /tmp/fross-cpp-brain normal 'создай простейший код на Python' | grep -q '"intent":"code"'
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
