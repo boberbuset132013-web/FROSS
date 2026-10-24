@@ -1,23 +1,18 @@
-# FROSS 1.1 · Generative Brain 1.0
+# FROSS 1.1 · Transformer Brain 1.0
 
 FROSS is a Russian-language experimental assistant with a decoder-only Transformer implemented from scratch, a corpus and tokenizer built inside this repository, Python generation, a C++ planning/checking layer, saved chat history, and private learning memory.
 
 ## Main files
 - [Web interface](public/index.html)
 - [Firebase web configuration template](public/firebase-config.js)
-- [Worker and API](worker.js)
 - [FROSS Worker and request router](worker.js)
 - [From-scratch Transformer and BPE tokenizer](fross_transformer.py)
 - [Original training corpus](data/fross_corpus.jsonl)
 - [Transformer architecture tests](tests/test_fross_transformer.py)
-- [Python rule engine and tests 0.6](fross_brain_v05.py)
-- [Optional experimental intent classifier](fross_neural_brain.py)
 - [Python HTTP service](services/python-brain/server.py)
 - [C++ planning engine](services/cpp-brain/main.cpp)
 - [C++ HTTP service](services/cpp-brain/server.py)
 - [Render blueprint for two free services](render.yaml)
-- [Python engine 0.3](fross_brain_v03.py)
-- [Legacy Python entrypoint](fross_brain_v02.py)
 - [Firestore security rules](firestore.rules)
 - [Memory design overview](memory/README.md)
 - [Shared GitHub knowledge index](memory/knowledge/index.json)
