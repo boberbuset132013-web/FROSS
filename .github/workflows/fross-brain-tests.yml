@@ -28,7 +28,8 @@ jobs:
           python-version: "3.12"
       - name: Install CPU training dependency
         run: python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
-      - name: Compile Python Transformer and service adapters
+      - name: Compile Python Transformer and service adapter
+        run: python -m py_compile fross_transformer.py services/python-brain/server.py tests/test_fross_transformer.py
       - name: Test original Transformer architecture and tokenizer
         run: python tests/test_fross_transformer.py
       - name: Train a scratch Transformer checkpoint and smoke-test generation
