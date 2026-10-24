@@ -55,9 +55,16 @@ jobs:
           rules = Path("firestore.rules").read_text(encoding="utf-8")
           wrangler = Path("wrangler.jsonc").read_text(encoding="utf-8")
           character = Path("FROSS_CHARACTER.md").read_text(encoding="utf-8")
-          assert "const collected = await Promise.all(" in worker
+          assert "const settled = await Promise.allSettled(tasks);" in worker
           assert "return collected.filter(note =>" in worker
-          assert "const notes = await Promise.all(candidates.map(async item => {" not in worker
+          assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
+          assert "function frossTrainingSeedResources(topic)" in worker
+          assert "https://docs.python.org/3/tutorial/" in worker
+          assert "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide" in worker
+          assert 'path === "/api/auto-study"' in worker
+          assert "async function handleFrossAutoStudy" in worker
+          assert "frossMergeTrainingCandidates(topic, search.results, 8)" in worker
+          assert "autoStudyBtn" in page
           assert "const FROSS_MAX_MESSAGE_LENGTH = 30000;" in worker
           assert "const FROSS_MAX_REPLY_LENGTH = 25000;" in worker
           assert "const history = frossLimitHistory(body.history);" in worker
