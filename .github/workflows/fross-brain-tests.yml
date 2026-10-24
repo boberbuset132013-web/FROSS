@@ -28,24 +28,28 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install NumPy for neural brain
-        run: python -m pip install --disable-pip-version-check "numpy>=1.26,<3"
+      - name: Install CPU training dependencies
+        run: |
+          python -m pip install --disable-pip-version-check "numpy>=1.26,<3"
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
       - name: Compile Python brain and service adapters
-        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py services/llm_client.py services/python-brain/server.py services/cpp-brain/server.py
+        run: python -m py_compile fross_brain_v05.py fross_neural_brain.py fross_transformer.py services/python-brain/server.py services/cpp-brain/server.py tests/test_fross_transformer.py
       - name: Run Python brain unit tests
         run: python fross_brain_v05.py
       - name: Train and test neural intent classifier
         run: python fross_neural_brain.py test --output /tmp/fross-neural-model.npz
+      - name: Test original Transformer architecture and tokenizer
+        run: python tests/test_fross_transformer.py
+      - name: Train a scratch Transformer checkpoint and smoke-test generation
+        run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --merges 32 --text "Объясни attention простыми словами"
       - name: Compile C++ brain
         run: g++ -std=c++17 -O2 -Wall -Wextra -pedantic services/cpp-brain/main.cpp -o /tmp/fross-cpp-brain
-      - name: Check C++ greeting
-        run: test "$(/tmp/fross-cpp-brain normal 'привет')" = "Привет! Я на связи. Что разберём?"
-      - name: Check uppercase Russian input in C++
-        run: test "$(/tmp/fross-cpp-brain normal 'Привет')" = "Привет! Я на связи. Что разберём?"
-      - name: Check C++ arithmetic
-        run: test "$(/tmp/fross-cpp-brain reasoning 'сколько будет (2+3)*4' | grep -o '20' | head -n 1)" = "20"
-      - name: Check C++ code generation
-        run: /tmp/fross-cpp-brain normal 'создай простейший код на Python' | grep -q 'def main'
+      - name: Check C++ conversational classification
+        run: /tmp/fross-cpp-brain normal 'Привет' | grep -q '"intent":"conversation"'
+      - name: Check C++ exact arithmetic candidate
+        run: /tmp/fross-cpp-brain reasoning 'сколько будет (2+3)*4' | grep -q '"candidateResult":"20"'
+      - name: Check C++ coding-task planning
+        run: /tmp/fross-cpp-brain normal 'создай простейший код на Python' | grep -q '"intent":"code"'
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -69,10 +73,16 @@ jobs:
           assert "return collected.filter(note =>" in worker
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
           assert "function frossTrainingSeedResources(topic)" in worker
+          transformer = Path("fross_transformer.py").read_text(encoding="utf-8")
           assert 'brainVersion: "1.0"' in worker
-          assert "function frossGenerateWithModel" in worker and "FROSS_LLM_API_KEY" in worker
+          assert "class CausalSelfAttention" in transformer and "class FrossTransformer" in transformer
+          assert "masked_fill(causal_mask" in transformer
+          assert "trained_from_random_weights" in transformer
+          assert "FROSS_LLM_API_KEY" not in worker and "openrouter" not in worker.lower()
+          assert "function frossGenerateWithModel" not in worker
           assert "frossShouldSearchExplicit(correctedQuery)" in worker
-          assert "languageModelConfigured" in worker
+          assert 'generationModel: "FROSS Transformer 1.0"' in worker
+          assert not Path("services/llm_client.py").exists()
           assert "SpeechRecognition" in page and 'recognition.lang="ru-RU"' in page
           assert "Речь распознана. Проверь текст перед отправкой." in page
           assert "function frossComposeExplanation(query, notes, mode = \"normal\")" in Path("fross-brain.js").read_text(encoding="utf-8")
