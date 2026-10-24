@@ -169,5 +169,16 @@ jobs:
           assert.match(howAreYou, /А у тебя как дела/i);
           const otherSmallTalk = brain.frossQuickResponse({ message: "что у тебя нового?" });
           assert.match(otherSmallTalk, /готов помогать/i);
-          console.log("Knowledge retrieval, conversational context, natural small-talk variants and error-help passed.");
+          const irrelevantSearch = brain.frossThink({
+            message: "объясни термин Kubernetes",
+            results: [{
+              title: "Как дома, как дела?",
+              snippet: "Художественный фильм о жизни в Тбилиси.",
+              url: "https://example.test/film",
+              score: 0
+            }]
+          });
+          assert.equal(irrelevantSearch.kind, "no-match-v05");
+          assert.match(irrelevantSearch.reply, /не буду выдавать случайный результат/i);
+          console.log("Knowledge retrieval, conversational context, small-talk variants and irrelevant-search rejection passed.");
           JS
