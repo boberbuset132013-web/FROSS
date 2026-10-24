@@ -120,8 +120,8 @@ jobs:
           assert.equal(learned.kind, "saved-memory-v06");
           assert.match(learned.reply, /данные в переменных/);
           assert.match(learned.reply, /Объяснение простыми словами/);
-          const explanation = learned.reply.split("Объяснение простыми словами:**")[1]?.split("\\n\\n")[0] || "";
-          assert.ok((explanation.match(/[.!?](?:\\s|$)/g) || []).length >= 2, "Brain 0.6 should connect multiple sentences from saved notes");
+          const explanation = learned.reply.split("Объяснение простыми словами:**")[1]?.split("\n\n")[0] || "";
+          assert.ok((explanation.match(/[.!?](?:\s|$)/g) || []).length >= 2, "Brain 0.6 should connect multiple sentences from saved notes");
           const greeting = brain.frossThink({ message: "Привет", knowledge });
           assert.equal(greeting.kind, "local-rule-v05");
           console.log("Knowledge ranking and greeting priority passed.");
