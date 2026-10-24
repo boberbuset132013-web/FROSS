@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Python Brain 1.0 HTTP adapter for the original trained-from-scratch Transformer."""
+"""Authenticated HTTP service for the original FROSS Transformer trained from random weights."""
 from __future__ import annotations
 
 import hmac
@@ -14,19 +14,17 @@ ROOT = Path(__file__).resolve().parent
 if not (ROOT / "fross_brain_v05.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "services"))
-import fross_brain_v05 as brain  # noqa: E402
-import fross_neural_brain as neural  # noqa: E402
+
+import fross_brain_v05 as text_utils  # noqa: E402
 import fross_transformer as transformer  # noqa: E402
 
-NEURAL_MODEL_PATH = os.environ.get("FROSS_NEURAL_MODEL_PATH", str(ROOT / "fross-neural-model.npz"))
-NEURAL_MODEL, NEURAL_MODEL_STATUS = neural.load_or_train(NEURAL_MODEL_PATH)
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Python Transformer Brain 1.0"
+MAX_REPLY_CHARS = 25000
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -40,11 +38,11 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Brain/1.0"
+    server_version = "FROSS-Python-Transformer/1.0"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        # Never log the prompt, chat history, auth header, or saved notes.
-        print("FROSS Python Brain request: " + str(args[1] if len(args) > 1 else "request"))
+        # Never log prompts, history, knowledge notes, credentials, or generated text.
+        print("FROSS Python Transformer HTTP " + str(args[1] if len(args) > 1 else "request"))
 
     def do_GET(self) -> None:
         if self.path not in ("/health", "/"):
@@ -54,13 +52,9 @@ class Handler(BaseHTTPRequestHandler):
             "ok": True,
             "engine": ENGINE_NAME,
             "version": "1.0",
-            "generationModelLoaded": TRANSFORMER_MODEL is not None,
-            "generationModel": TRANSFORMER.VERSION if TRANSFORMER_MODEL is not None else None,
+            "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
+            "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
-            "neuralModelLoaded": NEURAL_MODEL is not None,
-            "neuralModelVersion": neural.VERSION if NEURAL_MODEL is not None else None,
-            "neuralIntentCount": len(NEURAL_MODEL.labels) if NEURAL_MODEL is not None else 0,
-            "neuralTrainingAccuracy": round(NEURAL_MODEL.train_accuracy, 3) if NEURAL_MODEL is not None else None,
         })
 
     def do_POST(self) -> None:
@@ -70,9 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         if not SERVICE_TOKEN:
             respond(self, 503, {"handled": False, "error": "Service token is not configured."})
             return
-        expected = "Bearer " + SERVICE_TOKEN
-        supplied = self.headers.get("Authorization", "")
-        if not hmac.compare_digest(supplied, expected):
+        if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
             respond(self, 401, {"handled": False, "error": "Unauthorized"})
             return
 
@@ -96,127 +88,92 @@ class Handler(BaseHTTPRequestHandler):
         if not raw_message:
             respond(self, 400, {"handled": False, "error": "Message is required."})
             return
-        message = brain.correct_text(raw_message)
+        message = text_utils.correct_text(raw_message)
         mode = "reasoning" if str(body.get("mode", "normal")).lower() in ("reasoning", "deep") else "normal"
-        history = body.get("history", [])
-        if not isinstance(history, list):
-            history = []
+
+        raw_history = body.get("history", [])
+        if not isinstance(raw_history, list):
+            raw_history = []
         history = [
-            {"role": "assistant" if item.get("role") == "assistant" else "user",
-             "content": str(item.get("content", ""))[:1600]}
-            for item in history[-10:] if isinstance(item, dict)
-        ]
-        knowledge = body.get("knowledge", [])
-        if not isinstance(knowledge, list):
-            knowledge = []
-        knowledge = [
             {
+                "role": "assistant" if item.get("role") == "assistant" else "user",
+                "content": str(item.get("content", ""))[:1600],
+            }
+            for item in raw_history[-10:] if isinstance(item, dict)
+        ]
+
+        raw_knowledge = body.get("knowledge", [])
+        if not isinstance(raw_knowledge, list):
+            raw_knowledge = []
+        knowledge = []
+        for item in raw_knowledge[:24]:
+            if not isinstance(item, dict):
+                continue
+            points = item.get("keyPoints", [])
+            knowledge.append({
                 "topic": str(item.get("topic", ""))[:180],
                 "title": str(item.get("title", ""))[:260],
                 "url": str(item.get("url", ""))[:700],
-                "snippet": str(item.get("snippet", ""))[:3200],
+                "summary": str(item.get("summary", ""))[:900],
+                "snippet": str(item.get("snippet", ""))[:1800],
+                "keyPoints": [str(point)[:300] for point in points[:5]] if isinstance(points, list) else [],
                 "source": str(item.get("source", ""))[:80],
-                "score": max(0.0, min(1.0, float(item.get("score", 0) or 0))),
-            }
-            for item in knowledge[:24] if isinstance(item, dict)
-        ]
+            })
+
+        if TRANSFORMER_MODEL is None or TRANSFORMER_TOKENIZER is None:
+            respond(self, 200, {
+                "handled": False,
+                "engine": ENGINE_NAME,
+                "kind": "generation-model-unavailable",
+                "generationModelStatus": TRANSFORMER_STATUS,
+            })
+            return
 
         try:
-            # Primary response path: our own randomly initialized Transformer trained
-            # from the local corpus. No pretrained weights or hosted model API are used.
-            if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
-                try:
-                    reply = transformer.generate_reply(
-                        TRANSFORMER_MODEL,
-                        TRANSFORMER_TOKENIZER,
-                        message,
-                        history=history,
-                        knowledge=knowledge,
-                        mode=mode,
-                        max_new_tokens=240 if mode == "reasoning" else 150,
-                    )
-                    if reply:
-                        respond(self, 200, {
-                            "handled": True,
-                            "reply": reply[:25000],
-                            "engine": ENGINE_NAME,
-                            "kind": "fross-transformer-v1",
-                            "generationModel": TRANSFORMER.VERSION,
-                            "generationModelStatus": TRANSFORMER_STATUS,
-                            "trace": [
-                                "Токенизировать запрос и контекст",
-                                "Обработать контекст причинным self-attention",
-                                "Пошагово предсказать новые токены обученными весами",
-                                "Остановить генерацию и проверить формат",
-                            ],
-                            "sources": [],
-                        })
-                        return
-                except Exception:
-                    # Keep the server safe and let deterministic fallback handle the request.
-                    pass
-
-            reply = brain.quick_reply(message, is_creator=False, mode=mode, history=history)
-            kind = "python-rule-v05"
-            trace = [
-                "Нормализовать запрос и исправить известные опечатки",
-                "Проверить локальные правила и безопасный вычислитель",
-                "Сформировать ответ или пример кода",
-                "Проверить формат и ограничения",
-            ]
-            if not reply:
-                result = brain.think(
-                    message, history=history, results=[], mode=mode,
-                    is_creator=False, knowledge=knowledge
-                )
-                kind = str(result.get("kind", "python-no-match"))
-                if kind == "no-match-v05":
-                    # The neural model is a fallback intent classifier, not a free-form generator.
-                    # Rule answers and saved knowledge keep priority over this prediction.
-                    prediction = NEURAL_MODEL.predict(message) if NEURAL_MODEL is not None else None
-                    neural_reply = neural.build_reply(message, prediction, history) if prediction else None
-                    if neural_reply:
-                        respond(self, 200, {
-                            "handled": True,
-                            "reply": neural_reply[:25000],
-                            "engine": ENGINE_NAME,
-                            "kind": "intent-router-fallback-v01",
-                            "trace": [
-                                "Локальные правила и сохранённые знания не нашли уверенный ответ",
-                                "Нейросеть оценила намерение сообщения",
-                                "Использован резервный классификатор намерения (модель генерации недоступна)",
-                            ],
-                            "sources": [],
-                            "neural": {
-                                "version": neural.VERSION,
-                                "intent": prediction["intent"],
-                                "confidence": round(float(prediction["confidence"]), 3),
-                                "margin": round(float(prediction["margin"]), 3),
-                            },
-                        })
-                        return
-                    respond(self, 200, {
-                        "handled": False, "engine": ENGINE_NAME, "kind": kind,
-                        "trace": trace,
-                        "neuralModelLoaded": NEURAL_MODEL is not None,
-                    })
-                    return
-                reply = str(result.get("reply", "")).strip()
-                trace = list(result.get("trace", trace))[:4]
-            if not reply:
-                respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "empty-reply"})
-                return
+            reply = transformer.generate_reply(
+                TRANSFORMER_MODEL,
+                TRANSFORMER_TOKENIZER,
+                message,
+                history=history,
+                knowledge=knowledge,
+                mode=mode,
+                max_new_tokens=360 if mode == "reasoning" else 180,
+            ).strip()
+        except Exception as exc:
+            # Return only the exception class, never the prompt or internal traceback.
             respond(self, 200, {
-                "handled": True,
-                "reply": reply[:25000],
+                "handled": False,
                 "engine": ENGINE_NAME,
-                "kind": kind,
-                "trace": trace,
-                "sources": [],
+                "kind": "generation-error",
+                "diagnostic": type(exc).__name__,
+                "generationModelStatus": TRANSFORMER_STATUS,
             })
-        except Exception:
-            # Do not send stack traces, environment variables, or secrets to the client.
-            respond(self, 500, {"handled": False, "engine": ENGINE_NAME, "error": "Python brain failed."})
+            return
+
+        if not reply:
+            respond(self, 200, {
+                "handled": False,
+                "engine": ENGINE_NAME,
+                "kind": "empty-generation",
+                "generationModelStatus": TRANSFORMER_STATUS,
+            })
+            return
+
+        respond(self, 200, {
+            "handled": True,
+            "reply": reply[:MAX_REPLY_CHARS],
+            "engine": ENGINE_NAME,
+            "kind": "fross-transformer-v1",
+            "generationModel": transformer.VERSION,
+            "generationModelStatus": TRANSFORMER_STATUS,
+            "trace": [
+                "Разбить запрос и контекст на собственные BPE-токены",
+                "Обработать последовательность блоками причинного self-attention",
+                "Предсказать следующий токен обученными весами и повторить цикл",
+                "Сохранить абзацы и форматирование сгенерированного текста",
+            ],
+            "sources": [],
+        })
 
 
 if __name__ == "__main__":
