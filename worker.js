@@ -1204,9 +1204,12 @@ async function handleFrossApi(request, env) {
 
   // Delegate algorithmic tasks to Python or C++; for questions needing fresh facts,
   // merge saved notes with current search snippets locally so neither source is discarded.
+  // Keep the default result outside the conditional: the final diagnostics also read it
+  // on web-search paths where the external brain is intentionally skipped.
+  let remote = { configured: false, handled: false, error: "" };
   if (!shouldSearch || (!results.length && localMemory.kind !== "saved-memory-v06")) {
     const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
-    const remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
+    remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
       message: correctedQuery,
       mode,
       history,
@@ -1250,7 +1253,9 @@ async function handleFrossApi(request, env) {
     profile: { description: FROSS_PROFILE.description, traits: FROSS_PROFILE.traits, style: FROSS_PROFILE.style, rules: FROSS_PROFILE.rules },
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
-      resultsFound: results.length, providerErrors: remote.error ? [remote.error] : [], aiUsed: false,
+      resultsFound: results.length,
+      providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
+      aiUsed: false,
       engine: "FROSS Local Brain 0.5 local fallback",
       remoteBrainConfigured: remote.configured,
       kind: localResult.kind || "local-rule-v05",
