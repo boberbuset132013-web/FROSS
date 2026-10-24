@@ -1,4 +1,4 @@
-// FROSS Local Brain 0.3 — original rule-based reasoning engine.
+// FROSS Local Brain 0.4 — original rule-based reasoning engine.
 // It calls no hosted language-model API. Answers come from explicit rules,
 // a safe arithmetic parser, local templates, and summaries of search snippets.
 
@@ -186,6 +186,108 @@ function parseMath(text) {
   }
 }
 
+function generateCodeReply(message) {
+  const q = normalize(frossCorrectText(message));
+  const wantsCode = /(напиши|создай|сделай|сгенерируй|покажи|пример).{0,55}(код|программ)|\bкод на\b|\bпрограмма на\b|пример кода|простейший код/.test(q);
+  if (!wantsCode) return null;
+
+  const lang = /(c\+\+|си плюс плюс|\bcpp\b)/.test(q) ? "cpp"
+    : /(python|пайтон|питон)/.test(q) ? "python"
+    : /(javascript|java script|\bjs\b|джаваскрипт)/.test(q) ? "javascript"
+    : /\bhtml\b/.test(q) ? "html" : "python";
+  const task = /(калькулятор|посчитать|сумм|сложи два числа|арифметик)/.test(q) ? "calculator"
+    : /(фибоначчи|fibonacci)/.test(q) ? "fibonacci"
+    : /(факториал|factorial)/.test(q) ? "factorial"
+    : /(простое число|проверить прост|prime number)/.test(q) ? "prime"
+    : /(четн|нечет|чётн|even|odd)/.test(q) ? "even"
+    : /(hello world|привет мир|выведи привет|напечатай привет)/.test(q) ? "hello"
+    : "hello";
+  const fence = String.fromCharCode(96).repeat(3);
+  let code = "";
+  let description = "";
+  if (lang === "python") {
+    if (task === "calculator") {
+      description = "Небольшой калькулятор с проверкой деления на ноль.";
+      code = "def calculate(a, operator, b):\n    if operator == \\"+\\":\n        return a + b\n    if operator == \\"-\\":\n        return a - b\n    if operator == \\"*\\":\n        return a * b\n    if operator == \\"/\\":\n        if b == 0:\n            raise ValueError(\\"На ноль делить нельзя\\")\n        return a / b\n    raise ValueError(\\"Неизвестная операция\\")\n\nprint(calculate(8, \\"+\\", 4))";
+    } else if (task === "fibonacci") {
+      description = "Функция возвращает первые n чисел последовательности Фибоначчи.";
+      code = "def fibonacci(n):\n    result = []\n    a, b = 0, 1\n    for _ in range(max(0, n)):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))";
+    } else if (task === "factorial") {
+      description = "Вычисляет факториал неотрицательного целого числа.";
+      code = "def factorial(n):\n    if n < 0:\n        raise ValueError(\\"n должно быть неотрицательным\\")\n    result = 1\n    for value in range(2, n + 1):\n        result *= value\n    return result\n\nprint(factorial(5))  # 120";
+    } else if (task === "prime") {
+      description = "Проверяет, является ли целое число простым.";
+      code = "def is_prime(n):\n    if n < 2:\n        return False\n    divisor = 2\n    while divisor * divisor <= n:\n        if n % divisor == 0:\n            return False\n        divisor += 1\n    return True\n\nprint(is_prime(17))  # True";
+    } else if (task === "even") {
+      description = "Проверяет чётность числа.";
+      code = "number = int(input(\\"Введите целое число: \\"))\nif number % 2 == 0:\n    print(\\"Чётное\\")\nelse:\n    print(\\"Нечётное\\")";
+    } else {
+      description = "Минимальная программа на Python.";
+      code = "def main():\n    print(\\"Привет, мир!\\")\n\nif __name__ == \\"__main__\\":\n    main()";
+    }
+  } else if (lang === "cpp") {
+    if (task === "calculator") {
+      description = "Простой калькулятор для двух чисел с проверкой деления на ноль.";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    double a, b;\n    char op;\n    cout << \\"Введите выражение (например 8 + 4): \\";\n    cin >> a >> op >> b;\n    if (op == '+') cout << a + b;\n    else if (op == '-') cout << a - b;\n    else if (op == '*') cout << a * b;\n    else if (op == '/' && b != 0) cout << a / b;\n    else cout << \\"Ошибка операции или деление на ноль\\";\n    cout << endl;\n    return 0;\n}";
+    } else if (task === "fibonacci") {
+      description = "Выводит первые 10 чисел Фибоначчи.";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    long long a = 0, b = 1;\n    for (int i = 0; i < 10; ++i) {\n        cout << a << (i == 9 ? '\\n' : ' ');\n        long long next = a + b;\n        a = b;\n        b = next;\n    }\n    return 0;\n}";
+    } else if (task === "factorial") {
+      description = "Считает факториал числа с проверкой входных данных.";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    unsigned long long result = 1;\n    cout << \\"Введите n (0..20): \\";\n    cin >> n;\n    if (n < 0 || n > 20) {\n        cout << \\"Недопустимое значение\\" << endl;\n        return 1;\n    }\n    for (int i = 2; i <= n; ++i) result *= i;\n    cout << result << endl;\n    return 0;\n}";
+    } else if (task === "prime") {
+      description = "Проверяет, является ли число простым.";
+      code = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    bool prime = n >= 2;\n    for (int d = 2; d * d <= n && prime; ++d)\n        if (n % d == 0) prime = false;\n    cout << (prime ? \\"Простое\\" : \\"Не простое\\") << endl;\n    return 0;\n}";
+    } else {
+      description = "Минимальная программа на C++.";
+      code = "#include <iostream>\n\nint main() {\n    std::cout << \\"Привет, мир!\\\\n\\";\n    return 0;\n}";
+    }
+  } else if (lang === "javascript") {
+    description = task === "calculator" ? "Простой калькулятор двух чисел." : "Минимальная программа на JavaScript.";
+    code = task === "calculator"
+      ? "function calculate(a, operator, b) {\n  if (operator === \\"+\\") return a + b;\n  if (operator === \\"-\\") return a - b;\n  if (operator === \\"*\\") return a * b;\n  if (operator === \\"/\\") {\n    if (b === 0) throw new Error(\\"Деление на ноль\\");\n    return a / b;\n  }\n  throw new Error(\\"Неизвестная операция\\");\n}\n\nconsole.log(calculate(8, \\"+\\", 4));"
+      : "function main() {\n  console.log(\\"Привет, мир!\\");\n}\n\nmain();";
+  } else {
+    description = "Минимальная HTML-страница.";
+    code = "<!doctype html>\n<html lang=\\"ru\\">\n<head>\n  <meta charset=\\"utf-8\\">\n  <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">\n  <title>Моя страница</title>\n</head>\n<body>\n  <h1>Привет, мир!</h1>\n</body>\n</html>";
+  }
+  const compileNote = lang === "cpp" ? "\n\nСохрани как main.cpp и собери компилятором C++17, например: g++ main.cpp -std=c++17 -o app." : "";
+  return description + "\n\n" + fence + lang + "\n" + code + "\n" + fence + compileNote;
+}
+
+const FROSS_STOP_WORDS_LOCAL = new Set(["что", "как", "где", "когда", "для", "это", "the", "and", "with", "про", "пожалуйста", "расскажи", "объясни"]);
+
+function findKnowledgeReply(query, knowledge, mode = "normal") {
+  if (!Array.isArray(knowledge) || !knowledge.length) return null;
+  const queryWords = [...new Set(normalize(frossCorrectText(query)).match(/[a-zа-яё0-9+#]{2,}/g) || [])]
+    .filter(word => !FROSS_STOP_WORDS_LOCAL.has(word));
+  if (!queryWords.length) return null;
+  const ranked = knowledge.map(note => {
+    const topicText = normalize(frossCorrectText(String(note.topic || "")));
+    const titleText = normalize(frossCorrectText(String(note.title || "")));
+    const text = normalize(frossCorrectText(String(note.snippet || note.content || "")));
+    const merged = topicText + " " + titleText + " " + text;
+    const topicHits = queryWords.filter(word => topicText.includes(word)).length;
+    const hits = queryWords.filter(word => merged.includes(word)).length;
+    const coverage = hits / queryWords.length;
+    const topicCoverage = topicHits / queryWords.length;
+    const score = Math.min(1, coverage * 0.65 + topicCoverage * 0.45 + Math.max(0, Number(note.score) || 0) * 0.1);
+    return { note, score };
+  }).sort((a, b) => b.score - a.score);
+  const matches = ranked.filter(item => item.score >= 0.48).slice(0, mode === "reasoning" ? 4 : 2);
+  if (!matches.length) return null;
+  const lines = [mode === "reasoning"
+    ? "Сначала проверил личную базу знаний FROSS и нашёл подходящие сохранённые заметки."
+    : "Нашёл подходящие заметки в личной базе знаний FROSS:"];
+  for (const [index, item] of matches.entries()) {
+    const note = item.note;
+    lines.push((index + 1) + ". **" + String(note.title || note.topic || "Заметка") + "**\n" + String(note.snippet || note.content || "").slice(0, 850));
+    if (note.url && /^https?:\/\//i.test(note.url)) lines.push("Источник: [" + String(note.url) + "](" + note.url + ")");
+  }
+  if (mode === "reasoning") lines.push("**Ограничение:** это сохранённые фрагменты из источников, а не дообучение нейросети. При устаревшей заметке открой источник и проверь актуальность.");
+  return { reply: lines.join("\n"), kind: "saved-memory-v04", sources: matches.map(item => item.note), trace: mode === "reasoning" ? ["Нормализовать запрос", "Сопоставить с личной памятью", "Оценить совпадения", "Сформировать ответ из сохранённых заметок", "Указать источники", "Проверить ограничения", "Ответить"] : ["Проверить личную память", "Найти совпадения", "Ответить из сохранённых заметок", "Указать источники"] };
+}
+
 function quickReply({ message, isCreator = false, mode = "normal" }) {
   const raw = normalize(frossCorrectText(message));
   const q = raw.replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
@@ -201,7 +303,7 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
   if (/^(пока|до свидания|увидимся)$/.test(noBotName)) return "До встречи! Возвращайся, когда понадобится разобраться с задачей.";
   if (/^(как дела|что нового|ты здесь|ты тут|ты на связи|ау)$/.test(noBotName)) return "Я на связи. Могу посчитать выражение, объяснить базовую тему или найти материалы в интернете.";
   if (/^(кто ты|ты кто|как тебя зовут|что ты такое)$/.test(noBotName)) {
-    return "Я FROSS Local Brain 0.3 — самописный движок на JavaScript с правилами, безопасным калькулятором, простыми шаблонами и поисковой сводкой. Я не использую готовую языковую модель, поэтому честно скажу, когда моих правил недостаточно.";
+    return "Я FROSS Local Brain 0.4 — самописный движок на JavaScript с правилами, безопасным калькулятором, простыми шаблонами и поисковой сводкой. Я не использую готовую языковую модель, поэтому честно скажу, когда моих правил недостаточно.";
   }
   if (/(кто|назови|скажи|подскажи).{0,45}(создател|создал|автор|разработчик|владелец|сделал)/.test(q) || /(кто сделал тебя|кто тебя создал|кто создал фросс|кто автор фросс)/.test(q)) {
     return "Автор проекта FROSS: [@Spamton_BigShot_hahaha](https://t.me/Spamton_BigShot_hahaha).";
@@ -215,7 +317,10 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
     return "Я умею выполнять арифметические выражения, объяснять несколько базовых технических понятий, выдавать некоторые шаблоны кода и собирать краткие сводки найденных страниц. Для открытых вопросов я использую поиск, но пока не могу свободно генерировать любой ответ как большая языковая модель.";
   }
   if (/(что такое fross local brain|что за версия мышления|версия твоего мышления|какая у тебя версия)/.test(q)) {
-    return "Сейчас у меня FROSS Local Brain 0.3. Я определяю тип запроса, пробую локальные правила и вычисления, а если этого недостаточно — сопоставляю заголовки и фрагменты результатов поиска. Это собственный алгоритмический движок, не обученная нейросеть.";
+    return "Сейчас у меня FROSS Local Brain 0.4. Я определяю тип запроса, пробую локальные правила и вычисления, а если этого недостаточно — сопоставляю заголовки и фрагменты результатов поиска. Это собственный алгоритмический движок, не обученная нейросеть.";
+  }
+  if (/(твоя модель|какая у тебя модель|какую модель ты используешь|какая нейросеть|ты используешь модель|ты на какой модели|ты просто гуглишь|почему ты ищешь в интернете)/.test(q)) {
+    return "Я не использую готовую языковую модель. Я — FROSS Local Brain 0.4: правила, безопасный вычислитель, генерация простого кода, личная база знаний и поиск только тогда, когда сохранённых знаний не хватает. Это не нейросеть и не дообучение весов.";
   }
 
   const math = parseMath(message);
@@ -238,21 +343,8 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
       : "");
   }
 
-  if (/(пример кода|напиши код|сгенерируй код|напиши программу|сделай программу|код на|программа на)/.test(q)) {
-    const python = /(python|питон)/.test(q);
-    const js = /(javascript|java script|\bjs\b|джаваскрипт)/.test(q);
-    const html = /\bhtml\b/.test(q);
-    const hello = /(hello world|привет мир|выведи привет|напечатай привет)/.test(q);
-    const calculator = /(калькулятор|сложи два числа|арифметическ)/.test(q);
-    const fibonacci = /(фибоначчи|fibonacci)/.test(q);
-    const fence = String.fromCharCode(96).repeat(3);
-    if (hello && python) return "Пример на Python:\n\n" + fence + "python\nprint(\"Привет, мир!\")\n" + fence + "\n\nЗапусти файл командой python имя_файла.py.";
-    if (hello && js) return "Пример на JavaScript:\n\n" + fence + "javascript\nconsole.log(\"Привет, мир!\");\n" + fence + "\n\nЗапусти в браузере или среде Node.js.";
-    if (hello && html) return "Минимальная HTML-страница:\n\n" + fence + "html\n<!doctype html>\n<html lang=\"ru\">\n<head><meta charset=\"utf-8\"><title>Привет</title></head>\n<body><h1>Привет, мир!</h1></body>\n</html>\n" + fence;
-    if (calculator && python) return "Небольшой калькулятор на Python:\n\n" + fence + "python\ndef calculate(a, operator, b):\n    if operator == \"+\":\n        return a + b\n    if operator == \"-\":\n        return a - b\n    if operator == \"*\":\n        return a * b\n    if operator == \"/\":\n        if b == 0:\n            raise ValueError(\"На ноль делить нельзя\")\n        return a / b\n    raise ValueError(\"Неизвестная операция\")\n\nprint(calculate(8, \"+\", 4))\n" + fence + "\n\nПример выводит 12. Функция явно проверяет деление на ноль.";
-    if (fibonacci && python) return "Пример последовательности Фибоначчи на Python:\n\n" + fence + "python\ndef fibonacci(count):\n    result = []\n    a, b = 0, 1\n    for _ in range(max(0, count)):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))\n" + fence + "\n\nФункция возвращает первые count чисел последовательности.";
-    return "Я пока умею выдавать только некоторые заранее проверенные шаблоны кода. Опиши конкретную задачу, язык и ожидаемый результат: я попробую подобрать подходящий шаблон, но не буду обещать произвольный готовый проект.";
-  }
+  const generatedCode = generateCodeReply(message);
+  if (generatedCode) return generatedCode;
 
   if (/(с чего начать|план для|составь план|помоги спланировать|как разработать|как создать)/.test(q)) {
     if (/(сайт|веб|вебсайт|страниц)/.test(q)) {
@@ -270,10 +362,13 @@ export function frossQuickResponse(options) {
   return quickReply(options || {});
 }
 
-export function frossThink({ message, history = [], results = [], mode = "normal", isCreator = false } = {}) {
+export function frossThink({ message, history = [], results = [], knowledge = [], mode = "normal", isCreator = false } = {}) {
   const correctedMessage = frossCorrectText(message);
   const direct = quickReply({ message: correctedMessage, isCreator, mode });
-  if (direct) return { reply: direct, kind: "local-rule-v03", sources: [], trace: correctedMessage !== normalize(message) ? ["Нормализовал текст", "Исправил вероятные опечатки по словарю", "Распознал тип задачи", "Ответил локальным правилом"] : ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
+  if (direct) return { reply: direct, kind: "local-rule-v04", sources: [], trace: correctedMessage !== normalize(message) ? ["Нормализовал текст", "Исправил вероятные опечатки по словарю", "Распознал тип задачи", "Ответил локальным правилом"] : ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
+
+  const memoryReply = findKnowledgeReply(correctedMessage, knowledge, mode);
+  if (memoryReply) return memoryReply;
 
   if (results.length) {
     const queryWords = [...new Set(normalize(correctedMessage).match(/[a-zа-яё0-9]{2,}/g) || [])]
@@ -304,7 +399,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
     const top = (relevant.length ? relevant : unique).slice(0, mode === "reasoning" ? 4 : 3);
     const lines = [];
     lines.push(mode === "reasoning"
-      ? "Я использовал локальную процедуру FROSS 0.3: выделил слова запроса, сравнил их с заголовками и фрагментами, убрал дубликаты и отсортировал результаты."
+      ? "Я использовал локальную процедуру FROSS 0.4: выделил слова запроса, сравнил их с заголовками и фрагментами, убрал дубликаты и отсортировал результаты."
       : "Вот наиболее подходящие найденные материалы по совпадению с запросом.");
     top.forEach((item, index) => {
       const snippet = String(item.snippet || "Поисковик не предоставил краткого описания.").slice(0, 480);
@@ -321,7 +416,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
     });
     return {
       reply: lines.join("\n"),
-      kind: "search-summary-v03",
+      kind: "search-summary-v04",
       sources: top,
       trace: mode === "reasoning"
         ? ["Нормализовать запрос", "Выделить ключевые термины", "Сопоставить заголовки и фрагменты", "Оценить релевантность", "Убрать дубликаты", "Проверить слабые совпадения", "Сформировать сводку и оговорки"]
@@ -333,7 +428,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
   if (/(^|\s)(а почему|почему|а как|а если|что значит это|расскажи подробнее|продолжи)(\s|[?!.,]|$)/i.test(String(message || "")) && lastAssistant) {
     return {
       reply: "Похоже, ты уточняешь предыдущую тему, но я не смог определить, к какой детали относится вопрос. Укажи фразу, которую нужно разобрать, — так я смогу точнее ответить.",
-      kind: "context-fallback-v03",
+      kind: "context-fallback-v04",
       sources: [],
       trace: ["Проверить историю текущего чата", "Не удалось связать уточнение с конкретной деталью", "Запросить узкое уточнение"]
     };
@@ -341,7 +436,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
 
   return {
     reply: "Я пока не нашёл достаточно надёжных данных и не хочу выдумывать ответ. Мой движок 0.3 работает на локальных правилах и поисковых фрагментах, поэтому иногда ему не хватает контекста. Попробуй переформулировать запрос или уточнить желаемый результат.",
-    kind: "no-match-v03",
+    kind: "no-match-v04",
     sources: [],
     trace: ["Нормализовать запрос", "Проверить локальные правила", "Недостаточно надёжных совпадений", "Честно сообщить об ограничении"]
   };
