@@ -1051,12 +1051,12 @@ async function handleFrossTrain(request, env) {
     };
   })).filter(note => note.title && (note.snippet || note.url));
 
-  const githubStorage = await frossSaveKnowledgeToGitHub(topic, notes, env);
-
   if (!notes.length) return frossJson({
     ok: false, error: "По этой теме не удалось найти подходящих материалов. Попробуй сформулировать тему конкретнее.",
     providerErrors: search.errors
   }, 404, request);
+
+  const githubStorage = await frossSaveKnowledgeToGitHub(topic, notes, env);
 
   return frossJson({
     ok: true,
