@@ -6,8 +6,9 @@ FROSS is a Russian-language experimental assistant with Google/email sign-in, sa
 - [Web interface](public/index.html)
 - [Firebase web configuration template](public/firebase-config.js)
 - [Worker and API](worker.js)
-- [FROSS Local Brain 0.2 JavaScript engine](fross-brain.js)
-- [Python reference engine and tests](fross_brain_v02.py)
+- [FROSS Local Brain 0.3 JavaScript engine](fross-brain.js)
+- [Python reference engine and tests](fross_brain_v03.py)
+- [Legacy Python entrypoint](fross_brain_v02.py)
 - [Firestore security rules](firestore.rules)
 - [Character and safety profile](FROSS_CHARACTER.md)
 - [Setup guide](SETUP.md)
@@ -16,4 +17,4 @@ FROSS is a Russian-language experimental assistant with Google/email sign-in, sa
 ## First-time setup
 Follow [SETUP.md](SETUP.md) before signing in. Firebase Web App values must be added to `public/firebase-config.js`, Google sign-in enabled, the Firestore database created, and `firestore.rules` published.
 
-FROSS Local Brain 0.2 uses custom JavaScript rules and does not call a hosted language model. Web search is still used to gather links and short snippets. Deploy with `npx wrangler deploy`.
+FROSS Local Brain 0.3 uses custom JavaScript rules and does not call a hosted language model. Web search is still used to gather links and short snippets. Deploy with `npx wrangler deploy`.
