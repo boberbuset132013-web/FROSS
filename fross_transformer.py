@@ -271,8 +271,8 @@ def train_model(
     corpus_path: str | Path = DEFAULT_CORPUS,
     output_path: str | Path = DEFAULT_CHECKPOINT,
     *,
-    steps: int = 240,
-    batch_size: int = 8,
+    steps: int = 600,
+    batch_size: int = 4,
     block_size: int = 256,
     merge_count: int = 384,
     seed: int = 1337,
@@ -381,19 +381,19 @@ def generate_reply(
         raise ValueError("Message must not be empty.")
     deep = str(mode).lower() in {"reasoning", "deep"}
     previous = []
-    for item in (history if isinstance(history, list) else [])[-10:]:
+    for item in (history if isinstance(history, list) else [])[-6:]:
         if not isinstance(item, dict):
             continue
         role = "FROSS" if item.get("role") == "assistant" else "Пользователь"
-        content = " ".join(str(item.get("content", "")).split())[:240]
+        content = " ".join(str(item.get("content", "")).split())[:180]
         if content:
             previous.append(f"{role}: {content}")
     memory_lines = []
-    for item in (knowledge if isinstance(knowledge, list) else [])[:2]:
+    for item in (knowledge if isinstance(knowledge, list) else [])[:4]:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title", item.get("topic", ""))).strip()[:100]
-        summary = str(item.get("summary", item.get("snippet", ""))).strip()[:180]
+        summary = str(item.get("summary", item.get("snippet", ""))).strip()[:320]
         if title and summary:
             memory_lines.append(f"{title}: {summary}")
     prompt_parts = []
@@ -402,9 +402,18 @@ def generate_reply(
     prompt_parts.extend(previous)
     prompt_parts.append("Пользователь: " + str(message).strip()[:3000] + "\nFROSS:")
     prompt = "\n".join(prompt_parts)
-    token_ids = [BOS_ID] + tokenizer.encode(prompt)
     block_size = int(model.config["block_size"])
-    token_ids = token_ids[-block_size:]
+    prompt_tokens = tokenizer.encode(prompt)
+    # Preserve both ends of an unusually long question. Blind tail truncation could
+    # otherwise remove the actual task wording at the beginning of a prompt.
+    prompt_budget = max(32, block_size - 1)
+    if len(prompt_tokens) > prompt_budget:
+        keep_head = max(12, prompt_budget // 4)
+        separator = tokenizer.encode(" … ")
+        keep_tail = max(8, prompt_budget - keep_head - len(separator))
+        prompt_tokens = prompt_tokens[:keep_head] + separator + prompt_tokens[-keep_tail:]
+        prompt_tokens = prompt_tokens[-prompt_budget:]
+    token_ids = ([BOS_ID] + prompt_tokens)[-block_size:]
     max_tokens = max_new_tokens if max_new_tokens is not None else (240 if deep else 150)
     temp = float(temperature if temperature is not None else (0.78 if deep else 0.72))
     temp = max(0.1, min(1.5, temp))
@@ -437,9 +446,17 @@ def generate_reply(
         decoded = tokenizer.decode(generated)
         if "\nПользователь:" in decoded:
             decoded = decoded.split("\nПользователь:", 1)[0]
-            return decoded.strip()
+            return _clean_generated_text(decoded)
     answer = tokenizer.decode(generated).split("\nПользователь:", 1)[0]
-    return " ".join(answer.replace("\r", "").split()).strip()
+    return _clean_generated_text(answer)
+
+
+def _clean_generated_text(text: str) -> str:
+    """Keep paragraph/code formatting while removing runaway blank lines."""
+    answer = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    while "\n\n\n" in answer:
+        answer = answer.replace("\n\n\n", "\n\n")
+    return answer
 
 
 def main() -> int:
@@ -447,8 +464,8 @@ def main() -> int:
     parser.add_argument("command", choices=("train", "test", "generate"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
-    parser.add_argument("--steps", type=int, default=240)
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--steps", type=int, default=600)
+    parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=256)
     parser.add_argument("--merges", type=int, default=384)
     parser.add_argument("--text", default="Объясни, как обучается нейросеть.")
