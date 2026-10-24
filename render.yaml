@@ -10,15 +10,3 @@ services:
     envVars:
       - key: FROSS_BRAIN_SERVICE_TOKEN
         sync: false
-
-  - type: web
-    name: fross-cpp-brain
-    runtime: docker
-    plan: free
-    dockerfilePath: ./services/cpp-brain/Dockerfile
-    dockerContext: .
-    healthCheckPath: /health
-    autoDeploy: true
-    envVars:
-      - key: FROSS_BRAIN_SERVICE_TOKEN
-        sync: false
