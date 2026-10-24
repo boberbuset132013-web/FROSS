@@ -821,8 +821,11 @@ async function frossSaveKnowledgeToGitHub(topic, notes, env) {
 
   let previous = null;
   if (topicRead.exists) {
-    try { previous = JSON.parse(topicRead.text); }
-    catch { return { configured: true, saved: false, public: true, message: "Существующий файл базы знаний не является корректным JSON: " + topicPath };
+    try {
+      previous = JSON.parse(topicRead.text);
+    } catch {
+      return { configured: true, saved: false, public: true, message: "Существующий файл базы знаний не является корректным JSON: " + topicPath };
+    }
   }
   let index = { schemaVersion: 1, updatedAt: "", topics: [] };
   if (indexRead.exists) {
@@ -1237,7 +1240,7 @@ async function handleFrossApi(request, env) {
 
   const localResult = quickReply
     ? { reply: quickReply, kind: "local-rule-v05", sources: [] }
-    : frossThink({ message: correctedQuery, history, results, knowledge, mode, isCreator });
+    : frossThink({ message: correctedQuery, history, results, knowledge: allKnowledge, mode, isCreator });
   const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
