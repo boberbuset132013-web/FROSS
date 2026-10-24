@@ -7,8 +7,7 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1
 ENV FROSS_CPP_EXECUTABLE=/app/fross-cpp-brain
 WORKDIR /app
-RUN python -m pip install --no-cache-dir "numpy>=1.26,<3" \
-    && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 COPY --from=builder /fross-cpp-brain /app/fross-cpp-brain
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/fross_corpus.jsonl /app/data/fross_corpus.jsonl
