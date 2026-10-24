@@ -13,7 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 BINARY = os.environ.get("FROSS_CPP_EXECUTABLE", "/app/brain")
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-MAX_BODY = 256 * 1024
+MAX_BODY = 1024 * 1024
 ENGINE_NAME = "FROSS C++ Reasoning Brain 0.5"
 
 
