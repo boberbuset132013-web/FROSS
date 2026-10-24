@@ -58,7 +58,7 @@ export default {
       ok: true,
       worker: "FROSS",
       version: "1.1",
-      brainVersion: "0.5",
+      brainVersion: "0.6",
       creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
       githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
@@ -134,7 +134,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Local Brain 0.5 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
+  description: "FROSS Local Brain 0.6 — алгоритмический помощник с композицией связанных предложений, личной памятью, вычислителем и поисковым ранжированием.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -1243,7 +1243,7 @@ async function handleFrossAutoStudy(request, env, ctx) {
   }
   if (frossGithubToken(env).length < 20) {
     return frossJson({
-      error: "Автоизучение не настроено: добавь Secret FROSS_GITHUB_TOKEN с правом Contents: Read and write."
+      error: "Автоизучение не настроено: в Cloudflare → Workers & Pages → fross → Settings → Variables and Secrets создай Secret FROSS_GITHUB_TOKEN. В GitHub создай Fine-grained personal access token только для репозитория boberbuset132013-web/FROSS с разрешением Contents: Read and write, вставь его в Secret и заново разверни Worker. Не отправляй токен в чат. Личная память Firestore работает отдельно."
     }, 503, request);
   }
   ctx.waitUntil(frossAutoStudyProgramming(env, "manual"));
