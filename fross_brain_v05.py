@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Local Brain 0.5 — Python reference implementation.
+"""FROSS Local Brain 0.6 — Python reference implementation.
 
 The deployed Cloudflare Worker runs the matching JavaScript implementation
 because Cloudflare Workers do not execute ordinary Python modules. This
@@ -11,7 +11,7 @@ import re
 from difflib import SequenceMatcher
 from typing import Any
 
-VERSION = "FROSS Local Brain 0.5"
+VERSION = "FROSS Local Brain 0.6"
 
 DEFINITIONS: list[tuple[tuple[str, ...], str]] = [
     (("html", "хтмл"), "HTML описывает структуру веб-страницы. CSS отвечает за оформление, а JavaScript — за поведение."),
@@ -243,8 +243,59 @@ def generate_code_reply(message: str) -> str | None:
     return "Минимальная HTML-страница.\n\n" + fence + "html\n" + code + "\n" + fence
 
 
-def quick_reply(message: str, is_creator: bool = False, mode: str = "normal") -> str | None:
+def conversation_reply(message: str, history: list[dict[str, Any]] | None = None) -> str | None:
+    """Answer short follow-ups from recent chat context without inventing new facts."""
+    _, stripped = clean_intent(message)
+    turns = [item for item in (history or [])[-12:] if isinstance(item, dict)]
+    previous = next((str(item.get("content", "")) for item in reversed(turns)
+                     if item.get("role") == "assistant"), "")
+    last_user = next((str(item.get("content", "")) for item in reversed(turns)
+                      if item.get("role") != "assistant"), "")
+    plain = re.sub(r"[\u0060]{3}[\s\S]*?[\u0060]{3}", "пример кода", previous)
+    plain = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", plain)
+    plain = re.sub(r"https?://\S+", "", plain)
+    plain = re.sub(r"[*_#>\u0060]", " ", plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+(?=[A-ZА-ЯЁ0-9])", plain)
+                 if len(part.strip()) >= 18][:3]
+
+    if re.fullmatch(r"(не то|не так|я имел в виду|я имела в виду|я хотел сказать|я хотела сказать|я про другое|не это)", stripped):
+        return f"Понял, я неверно истолковал запрос. Буду ориентироваться на твоё уточнение: «{message.strip()[:420]}». Я скорректирую ответ с учётом этого."
+    if re.fullmatch(r"(готово|я сделал|я сделала|получилось|заработало|исправил|исправила)", stripped):
+        return "Отлично, значит этот шаг сработал. Проверь результат ещё на одном примере, чтобы убедиться, что исправление не затронуло другие функции."
+    if re.fullmatch(r"(не работает|не получается|не сработало|у меня ошибка|сломалось|не запускается)", stripped):
+        return "Давай найдём причину без догадок. Пришли точный текст ошибки и укажи, после какого действия она появляется."
+    if re.fullmatch(r"(да|ага|угу|ок|окей|ладно|хорошо|понятно|договорились)", stripped):
+        return "Понял. Продолжим с учётом этого ответа — можешь прислать следующую деталь или показать результат."
+    if re.fullmatch(r"(нет|неа|не нужно|не надо|не хочу)", stripped):
+        return "Понял, этот вариант не подходит. Можем изменить подход или перейти к другой задаче."
+    if re.fullmatch(r"(а\s+)?(почему|а почему|как так|что это значит|поясни|подробнее|расскажи подробнее|объясни подробнее|продолжи|продолжай|а если)", stripped):
+        if not previous.strip():
+            return "Я не вижу предыдущего ответа в переданном контексте. Повтори тему или фразу, к которой относится вопрос, и я продолжу."
+        math = parse_math(last_user)
+        if stripped in {"почему", "а почему", "как так"} and math:
+            _, value = math
+            return (f"Ты спрашиваешь о вычислении «{last_user.strip()[:100]}». Результат — {value:g}. "
+                    "Сначала выполняются скобки и степени, затем умножение/деление, потом сложение/вычитание.")
+        if stripped in {"почему", "а почему"}:
+            cause = next((part for part in sentences if re.search(r"\b(потому что|так как|поскольку|из-за|поэтому)\b", part, re.I)), "")
+            if cause:
+                return f"В предыдущем ответе причина была сформулирована так: «{cause[:360]}». Если вопрос о другом тезисе, укажи его — разберу именно его."
+            return f"Связываю вопрос с предыдущим ответом: «{(sentences[0] if sentences else plain)[:360]}». Причина там раскрыта не полностью, поэтому не буду придумывать детали. Укажи, какой тезис объяснить."
+        summary = "\n".join(f"{i}. {part[:260]}" for i, part in enumerate(sentences, 1))
+        return "Конечно, продолжу предыдущую мысль. Основные части ответа:\n" + (summary or plain[:500]) + "\n\nНапиши, какой пункт разобрать примером или пошагово."
+    if re.fullmatch(r"(круто|класс|супер|отлично|здорово|всё понятно|все понятно)", stripped):
+        return "Отлично! Можем перейти к следующему шагу или проверить идею на конкретном примере."
+    if re.fullmatch(r"(что думаешь|а ты как думаешь|твоё мнение|твое мнение|как считаешь)", stripped) and previous.strip():
+        return "Могу оценить предыдущую идею по трём вещам: пользу, сложность реализации и возможные риски. Лучше начать с маленького рабочего варианта и проверить его."
+    return None
+
+
+def quick_reply(message: str, is_creator: bool = False, mode: str = "normal", history: list[dict[str, Any]] | None = None) -> str | None:
     q, stripped = clean_intent(message)
+    conversational = conversation_reply(message, history)
+    if conversational:
+        return conversational
     if re.fullmatch(r"(эй\s+)?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер)", stripped):
         return "Привет, создатель FROSS! Что будем разбирать сегодня?" if is_creator else "Привет! Я на связи. Что разберём?"
     if stripped in {"спасибо", "благодарю", "спс", "пасиб"}:
@@ -303,7 +354,7 @@ def think(message: str, history: list[dict[str, Any]] | None = None,
           knowledge: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     history = history or []
     results = results or []
-    direct = quick_reply(message, is_creator=is_creator, mode=mode)
+    direct = quick_reply(message, is_creator=is_creator, mode=mode, history=history)
     if direct:
         return {"reply": direct, "kind": "local-rule-v05",
                 "trace": ["Нормализовать запрос", "Распознать намерение", "Ответить локальным правилом"], "sources": []}
