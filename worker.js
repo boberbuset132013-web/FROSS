@@ -1054,23 +1054,20 @@ function frossBuildKnowledgeSummary(topic, title, text) {
   return frossBuildKnowledgeKeyPoints(topic, title, text, 3).join(" ").slice(0, 900);
 }
 
-async function handleFrossTrain(request, env) {
-  if (request.method === "OPTIONS") return corsPreflight();
-  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
-  const auth = await frossVerifyFirebaseToken(request);
-  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  if (!await frossIsCreator(auth, env, request)) return frossJson({ error: "Режим обучения доступен только создателю. Введи пароль создателя в окне обучения." }, 403, request);
+function frossTrainingSearchQuery(topic) {
+  const normalized = String(topic || "").toLowerCase().replace(/ё/g, "е");
+  if (/(python|питон)/i.test(normalized)) {
+    return (topic + " Python official tutorial basics variables types conditions loops functions lists dictionaries examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
+    return (topic + " JavaScript MDN guide basics variables types conditions loops functions arrays objects examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  return (topic + " guide documentation fundamentals examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+}
 
-  let body;
-  try { body = await request.json(); }
-  catch { return frossJson({ error: "Тело запроса должно быть JSON." }, 400, request); }
-  const topic = frossClean(body.topic || "").slice(0, 180);
-  if (topic.length < 2) return frossJson({ error: "Введи тему, которую нужно изучить." }, 400, request);
-
-  const search = await frossRunSearch(topic, "reasoning");
-  const candidates = search.results.slice(0, 8);
-  const notes = await Promise.all(candidates.map(async item => {
-    const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
+async function frossBuildTrainingNotes(topic, candidates) {
+  const collected = await Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {
+    const url = typeof item.url === "string" && /^https?:\\/\\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
     const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
     return {
@@ -1086,7 +1083,55 @@ async function handleFrossTrain(request, env) {
       source: frossClean(pageExcerpt ? "article text" : item.source || "web search excerpt").slice(0, 80),
       score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
     };
-  })).filter(note => note.title && (note.snippet || note.url));
+  }));
+  return collected.filter(note => note.title && (note.snippet || note.url));
+}
+
+async function frossAutoStudyProgramming(env, trigger = "scheduled") {
+  if (frossGithubToken(env).length < 20) {
+    console.warn("[FROSS auto-study] skipped: FROSS_GITHUB_TOKEN is not configured");
+    return { skipped: true, reason: "FROSS_GITHUB_TOKEN is not configured" };
+  }
+  const curriculum = [
+    { topic: "Основы JavaScript", query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
+    { topic: "Примеры кода JavaScript", query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
+    { topic: "Основы Python", query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
+    { topic: "Примеры кода Python", query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
+  ];
+  const outcomes = [];
+  for (const unit of curriculum) {
+    try {
+      const search = await frossRunSearch(unit.query, "reasoning");
+      const notes = await frossBuildTrainingNotes(unit.topic, search.results.slice(0, 5));
+      if (!notes.length) {
+        outcomes.push({ topic: unit.topic, saved: false, noteCount: 0, error: "No suitable public search results", providerErrors: search.errors.slice(0, 3) });
+        continue;
+      }
+      const storage = await frossSaveKnowledgeToGitHub(unit.topic, notes, env);
+      outcomes.push({ topic: unit.topic, saved: storage.saved === true, noteCount: notes.length, path: storage.path || "", error: storage.saved ? "" : (storage.message || "GitHub save failed") });
+    } catch (error) {
+      outcomes.push({ topic: unit.topic, saved: false, noteCount: 0, error: String(error?.message || error).slice(0, 160) });
+    }
+  }
+  console.log("[FROSS auto-study]", JSON.stringify({ trigger, outcomes }));
+  return { ok: outcomes.some(item => item.saved), outcomes };
+}
+async function handleFrossTrain(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
+  if (!await frossIsCreator(auth, env, request)) return frossJson({ error: "Режим обучения доступен только создателю. Введи пароль создателя в окне обучения." }, 403, request);
+
+  let body;
+  try { body = await request.json(); }
+  catch { return frossJson({ error: "Тело запроса должно быть JSON." }, 400, request); }
+  const topic = frossClean(body.topic || "").slice(0, 180);
+  if (topic.length < 2) return frossJson({ error: "Введи тему, которую нужно изучить." }, 400, request);
+
+  const searchQuery = frossTrainingSearchQuery(topic);
+  const search = await frossRunSearch(searchQuery, "reasoning");
+  const notes = await frossBuildTrainingNotes(topic, search.results.slice(0, 8));
 
   if (!notes.length) return frossJson({
     ok: false, error: "По этой теме не удалось найти подходящих материалов. Попробуй сформулировать тему конкретнее.",
@@ -1155,7 +1200,7 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
     return {
       configured: true,
       handled: true,
-      reply: data.reply.slice(0, 16000),
+      reply: data.reply.slice(0, FROSS_MAX_REPLY_LENGTH),
       engine: typeof data.engine === "string" ? data.engine.slice(0, 80) : "FROSS external brain",
       kind: typeof data.kind === "string" ? data.kind.slice(0, 80) : "remote-brain",
       trace: Array.isArray(data.trace) ? data.trace.slice(0, 7).map(item => String(item).slice(0, 120)) : [],
@@ -1178,7 +1223,11 @@ async function handleFrossApi(request, env) {
   let body;
   try { body = await request.json(); }
   catch { return frossJson({ error: "Тело запроса должно быть JSON." }, 400, request); }
-  const message = frossClean(body.message || "").slice(0, FROSS_MAX_QUERY_LENGTH);
+  const rawMessage = typeof body.message === "string" ? body.message : "";
+  if (rawMessage.length > FROSS_MAX_MESSAGE_LENGTH) {
+    return frossJson({ error: "Сообщение слишком длинное. Максимум — 30 000 символов." }, 413, request);
+  }
+  const message = frossClean(rawMessage).slice(0, FROSS_MAX_MESSAGE_LENGTH);
   if (!message) return frossJson({ error: "Напиши сообщение для FROSS." }, 400, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Войди через Google, чтобы пользоваться FROSS." }, 401, request);
@@ -1196,10 +1245,7 @@ async function handleFrossApi(request, env) {
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
-  const history = Array.isArray(body.history) ? body.history.slice(-8).map(item => ({
-    role: item?.role === "assistant" ? "assistant" : "user",
-    content: frossClean(item?.content || "").slice(0, 4000)
-  })) : [];
+  const history = frossLimitHistory(body.history);
   const knowledge = Array.isArray(body.knowledge) ? body.knowledge.slice(0, 80).map(note => ({
     schemaVersion: Number(note?.schemaVersion) === 2 ? 2 : 1,
     kind: frossClean(note?.kind || "source-note").slice(0, 40),
