@@ -23,6 +23,16 @@ from torch import nn
 import torch.nn.functional as F
 
 VERSION = "FROSS Transformer 1.0"
+
+
+def _preferred_device() -> torch.device:
+    """Use CUDA only when the installed PyTorch build can actually access it."""
+    requested = os.environ.get("FROSS_DEVICE", "auto").strip().lower()
+    if requested == "cpu":
+        return torch.device("cpu")
+    if requested in {"cuda", "gpu"}:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 PAD_ID, UNK_ID, BOS_ID, EOS_ID = 0, 1, 2, 3
 SPECIAL_TOKENS = ("<pad>", "<unk>", "<bos>", "<eos>")
 BASE_CHARS = "".join(dict.fromkeys(
@@ -256,11 +266,12 @@ def _evaluate(model: FrossTransformer, stream: list[int], block_size: int, batch
         return float("nan")
     model.eval()
     values = []
+    device = next(model.parameters()).device
     last_start = len(stream) - block_size - 1
     for _ in range(batches):
         starts = [random.randint(0, last_start) for _ in range(4)]
-        x = torch.tensor([stream[i:i + block_size] for i in starts], dtype=torch.long)
-        y = torch.tensor([stream[i + 1:i + block_size + 1] for i in starts], dtype=torch.long)
+        x = torch.tensor([stream[i:i + block_size] for i in starts], dtype=torch.long, device=device)
+        y = torch.tensor([stream[i + 1:i + block_size + 1] for i in starts], dtype=torch.long, device=device)
         logits = model(x)
         values.append(float(F.cross_entropy(logits.reshape(-1, model.vocab_size), y.reshape(-1))))
     model.train()
@@ -294,15 +305,16 @@ def train_model(
         raise ValueError("Training corpus is too small for the selected context length.")
 
     config = {**DEFAULT_CONFIG, "block_size": actual_block}
-    model = FrossTransformer(tokenizer.vocab_size, config)
+    device = _preferred_device()
+    model = FrossTransformer(tokenizer.vocab_size, config).to(device)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
     last_start = len(train_stream) - actual_block - 1
     last_loss = float("nan")
     for step in range(steps):
         starts = [random.randint(0, last_start) for _ in range(batch_size)]
-        x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long)
-        y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long)
+        x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
+        y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long, device=device)
         optimizer.zero_grad(set_to_none=True)
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
@@ -327,6 +339,7 @@ def train_model(
         "metrics": {
             "train_loss": round(last_loss, 5),
             "validation_loss": round(validation_loss, 5) if math.isfinite(validation_loss) else None,
+            "training_device": str(device),
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
             "training_steps": steps,
@@ -353,11 +366,14 @@ def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer 
         config = checkpoint["config"]
         model = FrossTransformer(tokenizer.vocab_size, config)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
+        device = _preferred_device()
+        model.to(device)
         model.eval()
         return model, tokenizer, {
             "loaded": True,
             "version": checkpoint.get("version", VERSION),
             "path": str(target),
+            "device": str(device),
             **checkpoint.get("metrics", {}),
         }
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, EOFError) as exc:
@@ -426,7 +442,8 @@ def generate_reply(
     generated: list[int] = []
     recent_generated: list[int] = []
     for _ in range(max(1, min(int(max_tokens), 480))):
-        inputs = torch.tensor([token_ids[-block_size:]], dtype=torch.long)
+        device = next(model.parameters()).device
+        inputs = torch.tensor([token_ids[-block_size:]], dtype=torch.long, device=device)
         logits = model(inputs)[0, -1, :].float()
         logits[PAD_ID] = float("-inf")
         logits[UNK_ID] = float("-inf")
