@@ -1065,6 +1065,48 @@ function frossTrainingSearchQuery(topic) {
   return (topic + " guide documentation fundamentals examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
 }
 
+function frossTrainingSeedResources(topic) {
+  const normalized = String(topic || "").toLowerCase().replace(/ё/g, "е");
+  if (/(python|питон)/i.test(normalized)) {
+    return [
+      { title: "The Python Tutorial — официальная документация Python", url: "https://docs.python.org/3/tutorial/", snippet: "Официальное руководство Python: типы данных, управление потоком, функции и структуры данных.", source: "Python Documentation", score: 1 },
+      { title: "Data Structures — официальная документация Python", url: "https://docs.python.org/3/tutorial/datastructures.html", snippet: "Списки, кортежи, множества, словари и практические примеры структур данных Python.", source: "Python Documentation", score: 0.98 }
+    ];
+  }
+  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
+    return [
+      { title: "JavaScript Guide — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide", snippet: "Руководство MDN по JavaScript: типы, управление потоком, функции, объекты и асинхронное программирование.", source: "MDN Web Docs", score: 1 },
+      { title: "JavaScript Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference", snippet: "Справочник JavaScript по встроенным объектам, операторам и языковым конструкциям с примерами.", source: "MDN Web Docs", score: 0.98 }
+    ];
+  }
+  return [];
+}
+
+function frossMergeTrainingCandidates(topic, searchResults, limit = 8) {
+  const combined = [
+    ...frossTrainingSeedResources(topic),
+    ...(Array.isArray(searchResults) ? searchResults : [])
+  ];
+  const seen = new Set();
+  const result = [];
+  for (const item of combined) {
+    if (!item || typeof item !== "object" || typeof item.url !== "string") continue;
+    try {
+      const url = new URL(item.url);
+      if (!["http:", "https:"].includes(url.protocol)) continue;
+      url.hash = "";
+      const normalizedUrl = url.toString();
+      if (seen.has(normalizedUrl)) continue;
+      seen.add(normalizedUrl);
+      result.push({ ...item, url: normalizedUrl });
+      if (result.length >= limit) break;
+    } catch {
+      continue;
+    }
+  }
+  return result;
+}
+
 async function frossBuildTrainingNotes(topic, candidates) {
   const safeCandidates = (Array.isArray(candidates) ? candidates : [])
     .filter(item => item && typeof item === "object")
