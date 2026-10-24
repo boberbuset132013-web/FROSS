@@ -388,7 +388,8 @@ function frossLimitHistory(history, maxUserMessages = FROSS_MAX_HISTORY_USER_MES
 function frossAddContext(query, history) {
   const refersBack =
     /\b(он|она|это|этот|эта|там|тогда|его|её|они|такой|такая|тот|предыдущий|предыдущая)\b/i.test(query) ||
-    /^(а если|а что насчёт|а как насчёт)\b/i.test(query);
+    /^(а если|а что насчёт|а как насчёт)\b/i.test(query) ||
+    /^(а\s+)?(почему|а почему|как так|а как|подробнее|расскажи подробнее|объясни подробнее|продолжи|продолжай|что это значит|что насчёт этого|что насчет этого)[?!.,\s]*$/i.test(query);
 
   if (!refersBack || !history.length) return query;
 
@@ -1440,7 +1441,7 @@ async function handleFrossApi(request, env) {
   })) : [];
   // v0.5: gather fresh web material for information queries even when personal notes match,
   // then combine the two sources instead of stopping at the first memory hit.
-  const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
+  const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode, history });
   const sharedGithubKnowledge = quickReply ? [] : await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
