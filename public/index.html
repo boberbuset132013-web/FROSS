@@ -224,10 +224,33 @@ body.light-theme .mobile-overlay.show{background:#25243b55}
 body.light-theme .chat-delete{color:#777b8d}
 body.light-theme .chat-delete:hover{background:#fff0f0;border-color:#ecc8ce;color:#a42b44}
 
+
+.training-modal-card{width:min(620px,100%);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto}
+.training-description{font-size:12px;line-height:1.55;color:#9da1b1;margin:0 0 14px}
+.training-form{display:flex;gap:8px;align-items:center}
+.training-input{flex:1;min-width:0;height:42px;padding:0 12px;border:1px solid #444253;border-radius:10px;background:#11131a;color:#f1f2f8}
+.training-run{white-space:nowrap}
+.training-status{font-size:12px;line-height:1.5;color:#b6addf;margin:10px 0}
+.knowledge-list{display:grid;gap:8px;margin-top:12px}
+.knowledge-item{border:1px solid #3c3a4c;background:#20212b;border-radius:10px;padding:10px;display:flex;gap:10px;align-items:flex-start}
+.knowledge-item-content{flex:1;min-width:0}
+.knowledge-item-title{font-size:12px;font-weight:700;overflow-wrap:anywhere}
+.knowledge-item-meta{font-size:10px;color:#9699ac;margin-top:4px;overflow-wrap:anywhere}
+.knowledge-delete{border:1px solid #494354;background:#292630;color:#e1d7eb;border-radius:8px;padding:4px 8px;flex-shrink:0}
+.knowledge-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.training-warning{font-size:11px;color:#8f93a6;line-height:1.5;margin-top:12px}
+body.light-theme .training-description,body.light-theme .training-warning{color:#6f7488}
+body.light-theme .training-input{background:#fff;border-color:#d9dbea;color:#27293a}
+body.light-theme .knowledge-item{background:#fff;border-color:#dfe1ed}
+body.light-theme .knowledge-item-title{color:#292b3c}
+body.light-theme .knowledge-item-meta{color:#71768a}
+body.light-theme .knowledge-delete{background:#fff;color:#4b4d61;border-color:#d7d9e6}
+@media(max-width:520px){.training-form{flex-direction:column;align-items:stretch}.training-run{width:100%}.training-modal-card{padding:14px}}
+
 </style></head><body>
 <div id="appRoot" class="app">
 <aside id="sidebar" class="sidebar"><div class="brand"><div class="brand-mark">F</div><div><div class="brand-title">FROSS</div><div class="brand-sub">PERSONAL AI · 1.0</div></div></div>
-<button id="newChatBtn" class="primary"><span>＋</span> Новый чат</button><div class="side-label">История</div><div id="chatList" class="chat-list"></div>
+<button id="newChatBtn" class="primary"><span>＋</span> Новый чат</button><button id="trainingBtn" class="tool-btn hidden" type="button" style="width:100%;justify-content:flex-start">✧ Обучение FROSS</button><div class="side-label">История</div><div id="chatList" class="chat-list"></div>
 <div class="side-bottom"><div class="user-row"><img id="userAvatar" class="avatar hidden" alt=""><div id="userInitial" class="avatar">F</div><div class="user-meta"><div id="userName" class="user-name">Гость</div><div id="userEmail" class="user-email">Вход не выполнен</div></div><button id="logoutBtn" class="logout hidden" title="Выйти">↗</button></div><div style="padding:9px 8px 0;font-size:11px;color:#85899a">Создатель FROSS: <a href="https://t.me/Spamton_BigShot_hahaha" target="_blank" rel="noopener noreferrer" style="color:#b8aaff;text-decoration:none">@Spamton_BigShot_hahaha</a></div></div></aside>
 <div id="mobileOverlay" class="mobile-overlay"></div>
 <main class="main"><header class="topbar"><div class="top-left"><button id="mobileMenu" class="mobile-menu" aria-label="Меню">☰</button><div id="topTitle" class="top-title">Новый чат</div></div><div style="display:flex;align-items:center;gap:8px"><button id="settingsBtn" class="tool-btn" type="button" aria-label="Настройки">⚙ <span class="settings-label">Настройки</span></button><span class="top-status" id="topStatus">Готов помочь</span><span class="model-pill"><i class="model-dot"></i> FROSS 1.0</span></div></header>
@@ -237,6 +260,7 @@ body.light-theme .chat-delete:hover{background:#fff0f0;border-color:#ecc8ce;colo
 <div id="authCover" class="auth-cover"><div class="auth-card"><div class="auth-brand"><div class="orbit"><span>F</span></div><h2>Встречай <span class="gradient">FROSS 1.0</span></h2><p>Войди через Google или используй электронную почту и пароль.</p></div><button id="googleBtn" class="google-btn"><span class="google-g">G</span><span>Продолжить с Google</span></button><div style="display:flex;align-items:center;gap:12px;margin:17px 0 0;color:#737889;font-size:11px"><span style="height:1px;background:#353744;flex:1"></span>ИЛИ ПО ЭЛЕКТРОННОЙ ПОЧТЕ<span style="height:1px;background:#353744;flex:1"></span></div><form id="emailAuthForm" class="auth-form"><input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="Электронная почта" required><input id="authPassword" class="auth-input" type="password" autocomplete="current-password" minlength="6" placeholder="Пароль (не менее 6 символов)" required><button id="emailSubmitBtn" class="primary auth-submit" type="submit">Войти</button></form><div class="auth-switch"><span id="authSwitchText">Нет аккаунта?</span><button id="authSwitchBtn" type="button">Создать аккаунт</button></div><div style="text-align:center;margin-top:7px"><button id="resetPasswordBtn" class="reset-btn" type="button">Забыл пароль</button></div><div id="authMessage" class="auth-message">Для регистрации укажи почту и придумай пароль. Пароль хранится и проверяется Firebase.</div><div class="auth-footer">Продолжая, используй сервис ответственно.<br><a href="https://github.com/boberbuset132013-web/FROSS/blob/main/SETUP.md" target="_blank" rel="noopener noreferrer">Инструкция по настройке</a></div></div></div>
 <button id="jumpBottomBtn" class="jump-bottom hidden" type="button" aria-label="Вниз к последнему сообщению" title="К последнему сообщению">↓</button>
 <div id="settingsModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="settings-card"><div class="settings-head"><span id="settingsTitle">Настройки чата</span><button id="settingsClose" class="settings-close" type="button">Закрыть</button></div><label class="settings-field">Тема интерфейса<select id="themeSelect"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></label><label class="settings-field">Размер текста <span id="fontSizeValue">100%</span><input id="fontSizeRange" type="range" min="90" max="125" step="5" value="100"></label><div class="settings-note">Настройки применяются сразу в этом браузере. Режим рассуждения делает ответ подробнее, но не показывает скрытые внутренние рассуждения модели.</div></div></div>
+<div id="trainingModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainingTitle"><div class="settings-card training-modal-card"><div class="settings-head"><span id="trainingTitle">Обучение FROSS</span><button id="trainingClose" class="settings-close" type="button">Закрыть</button></div><p class="training-description">Введи тему — FROSS найдёт источники, сохранит их краткие фрагменты в приватную базу знаний твоего аккаунта и будет сначала проверять эту память перед новым поиском.</p><form id="trainingForm" class="training-form"><input id="trainingTopic" class="training-input" type="text" maxlength="180" placeholder="Например: основы Python или история космоса" required><button id="trainingSubmit" class="primary training-run" type="submit">Изучить</button></form><div id="trainingStatus" class="training-status" role="status"></div><div id="knowledgeList" class="knowledge-list"></div><div class="knowledge-actions"><button id="exportMemoryBtn" class="tool-btn" type="button">Экспорт JSON</button><button id="clearMemoryBtn" class="tool-btn" type="button">Очистить память</button></div><p class="training-warning">Это не дообучение весов нейросети. FROSS сохраняет заметки с заголовками, ссылками и фрагментами поисковой выдачи. Источники могут быть ошибочными или устаревшими, поэтому перепроверяй важную информацию. Память приватна для аккаунта; не сохраняй секреты, пароли или личные данные.</p></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
