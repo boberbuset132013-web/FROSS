@@ -54,21 +54,24 @@ export default {
     }
 
     // 3. FROSS API: JSON-ошибки вместо HTML-страниц Cloudflare.
-    if (path === "/api/health") return frossApiGuard(path, request, async () => frossJson({
-      ok: true,
-      worker: "FROSS",
-      version: "1.1",
-      brainVersion: "1.0",
-      build: "fross-python-transformer-2026-10-24",
-      creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
-      githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
-      pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
-      cppBrainConfigured: false,
-      autoStudyConfigured: frossGithubToken(env).length >= 20,
-      maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
-      maxAssistantMessageChars: FROSS_MAX_REPLY_LENGTH,
-      chatMemoryUserMessages: FROSS_MAX_HISTORY_USER_MESSAGES
-    }, 200, request));
+    if (path === "/api/health") return frossApiGuard(path, request, async () => {
+      const pythonBrainHealth = await frossProbePythonHealth(env.FROSS_PYTHON_BRAIN_URL);
+      return frossJson({
+        ok: true,
+        worker: "FROSS",
+        version: "1.1",
+        brainVersion: "1.0",
+        build: "fross-python-transformer-2026-10-24",
+        creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
+        githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
+        pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+        pythonBrainHealth,
+        autoStudyConfigured: frossGithubToken(env).length >= 20,
+        maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
+        maxAssistantMessageChars: FROSS_MAX_REPLY_LENGTH,
+        chatMemoryUserMessages: FROSS_MAX_HISTORY_USER_MESSAGES
+      }, 200, request);
+    });
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
     if (path === "/api/creator-unlock") return frossApiGuard(path, request, () => handleFrossCreatorUnlock(request, env));
     if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
@@ -1419,6 +1422,59 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
       configured: true,
       handled: false,
       error: error?.name === "AbortError" ? "Brain service timeout." : "Brain service is unreachable."
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function frossProbePythonHealth(endpoint, timeoutMs = 2500) {
+  if (typeof endpoint !== "string" || !endpoint.trim()) {
+    return { configured: false, reachable: false, generationModelLoaded: false };
+  }
+  let healthUrl;
+  try {
+    healthUrl = new URL(endpoint);
+    if (healthUrl.protocol !== "https:" || healthUrl.username || healthUrl.password || healthUrl.hash) {
+      return { configured: true, reachable: false, error: "Python service URL must be HTTPS without credentials." };
+    }
+    const basePath = healthUrl.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
+    healthUrl.pathname = (basePath || "") + "/health";
+    healthUrl.search = "";
+  } catch {
+    return { configured: true, reachable: false, error: "Invalid Python service URL." };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(healthUrl.toString(), {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store",
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return { configured: true, reachable: false, httpStatus: response.status, generationModelLoaded: false };
+    }
+    const data = await response.json();
+    return {
+      configured: true,
+      reachable: true,
+      httpStatus: response.status,
+      engine: typeof data?.engine === "string" ? data.engine.slice(0, 100) : null,
+      generationModelLoaded: data?.generationModelLoaded === true,
+      generationModel: typeof data?.generationModel === "string" ? data.generationModel.slice(0, 100) : null,
+      generationModelStatus: data?.generationModelStatus && typeof data.generationModelStatus === "object"
+        ? data.generationModelStatus
+        : null
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      reachable: false,
+      generationModelLoaded: false,
+      error: error?.name === "AbortError" ? "Python health check timed out." : "Python service is unreachable."
     };
   } finally {
     clearTimeout(timer);
