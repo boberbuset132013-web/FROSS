@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Python Brain 0.4 HTTP adapter. Standard library only."""
+"""FROSS Python Brain 0.5 HTTP adapter. Standard library only."""
 from __future__ import annotations
 
 import hmac
@@ -11,14 +11,14 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
-if not (ROOT / "fross_brain_v04.py").exists():
+if not (ROOT / "fross_brain_v05.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-import fross_brain_v04 as brain  # noqa: E402
+import fross_brain_v05 as brain  # noqa: E402
 
 MAX_BODY = 256 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Brain 0.4"
+ENGINE_NAME = "FROSS Python Brain 0.5"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -32,7 +32,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Brain/0.4"
+    server_version = "FROSS-Python-Brain/0.5"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log the prompt, chat history, auth header, or saved notes.
@@ -42,7 +42,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/health", "/"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
-        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.4"})
+        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.5"})
 
     def do_POST(self) -> None:
         if self.path != "/chat":
@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             reply = brain.quick_reply(message, is_creator=False, mode=mode)
-            kind = "python-rule-v04"
+            kind = "python-rule-v05"
             trace = [
                 "Нормализовать запрос и исправить известные опечатки",
                 "Проверить локальные правила и безопасный вычислитель",
@@ -117,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
                     is_creator=False, knowledge=knowledge
                 )
                 kind = str(result.get("kind", "python-no-match"))
-                if kind == "no-match-v04":
+                if kind == "no-match-v05":
                     respond(self, 200, {
                         "handled": False, "engine": ENGINE_NAME, "kind": kind,
                         "trace": trace,
