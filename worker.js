@@ -817,7 +817,6 @@ async function handleFrossApi(request, env) {
     ? { reply: quickReply, kind: "local-rule-v04", sources: [] }
     : frossThink({ message: correctedQuery, history, results, knowledge, mode, isCreator });
   const reply = localResult.reply;
-  const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
     sources: (localResult.sources?.length ? localResult.sources : results).slice(0, 8).map(({ title, url, snippet, source, score }) => ({
@@ -827,8 +826,9 @@ async function handleFrossApi(request, env) {
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
       resultsFound: results.length, providerErrors: remote.error ? [remote.error] : [], aiUsed: false,
-      engine: "FROSS Local Brain 0.4",
-      kind: localResult.kind || "local-rule-v03",
+      engine: "FROSS Local Brain 0.4 local fallback",
+      remoteBrainConfigured: remote.configured,
+      kind: localResult.kind || "local-rule-v04",
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       note: "Ответ сформирован собственным правиловым движком FROSS; готовая языковая модель не вызывается."
     }
