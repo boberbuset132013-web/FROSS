@@ -1,6 +1,6 @@
 # FROSS 1.0
 
-FROSS is a Russian-language experimental assistant with Google/email sign-in, saved chat history, web search, a rule-based local reasoning engine, and a 60-user-message limit per chat.
+FROSS is a Russian-language experimental assistant with Google/email sign-in, saved chat history, a local rule-based reasoning engine, limited code templates, and creator-only private learning memory.
 
 ## Main files
 - [Web interface](public/index.html)
