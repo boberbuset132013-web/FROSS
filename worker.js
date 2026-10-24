@@ -426,10 +426,10 @@ async function frossApiGuard(path, request, handler) {
   } catch (error) {
     const errorId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
     const diagnostic = String(error?.message || error || "Unknown error")
-      .replace(/Bearer\\s+\\S+/gi, "Bearer [redacted]")
+      .replace(/Bearer\s+\\S+/gi, "Bearer [redacted]")
       .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[redacted]")
       .replace(/[A-Za-z0-9_-]{40,}/g, "[redacted]")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .slice(0, 200);
     console.error("[FROSS API]", errorId, path, error?.stack || error);
     return frossJson({
@@ -719,8 +719,8 @@ function frossBuildKnowledgeKeywords(topic, title, text) {
   return [...weights.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([word]) => word);
 }
 function frossBuildKnowledgeKeyPoints(topic, title, text, limit = 5) {
-  const sentences = String(text || "").replace(/\\s+/g, " ")
-    .split(/(?<=[.!?])\\s+|\\s+•\\s+|\\s+;\\s+/)
+  const sentences = String(text || "").replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+|\s+•\s+|\s+;\s+/)
     .map(value => value.trim()).filter(value => value.length >= 45);
   if (!sentences.length) return String(text || "").trim() ? [String(text).trim().slice(0, 280)] : [];
   const focus = [...new Set([...frossKnowledgeTokens(topic), ...frossKnowledgeTokens(title)])];
@@ -752,7 +752,7 @@ async function handleFrossTrain(request, env) {
   const search = await frossRunSearch(topic, "reasoning");
   const candidates = search.results.slice(0, 8);
   const notes = await Promise.all(candidates.map(async item => {
-    const url = typeof item.url === "string" && /^https?:\\/\\//i.test(item.url) ? item.url.slice(0, 700) : "";
+    const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
     const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
     return {
@@ -884,7 +884,7 @@ async function handleFrossApi(request, env) {
     kind: frossClean(note?.kind || "source-note").slice(0, 40),
     topic: frossClean(note?.topic || "").slice(0, 180),
     title: frossClean(note?.title || "").slice(0, 260),
-    url: typeof note?.url === "string" && /^https?:\\/\\//i.test(note.url) ? note.url.slice(0, 700) : "",
+    url: typeof note?.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
     snippet: frossClean(note?.snippet || "").slice(0, 3200),
     summary: frossClean(note?.summary || "").slice(0, 900),
     keyPoints: Array.isArray(note?.keyPoints) ? note.keyPoints.slice(0, 5).map(value => frossClean(value).slice(0, 300)) : [],
