@@ -65,7 +65,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             respond(self, 400, {"handled": False, "error": "Expected a JSON object."})
             return
-        message = str(body.get("message", "")).strip()[:4000]
+        message = str(body.get("message", "")).strip()[:30000]
         if not message:
             respond(self, 400, {"handled": False, "error": "Message is required."})
             return
@@ -74,12 +74,12 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(history, list):
             history = []
         context_parts = []
-        for item in history[-6:]:
+        for item in history[-10:]:
             if not isinstance(item, dict):
                 continue
             role = "FROSS" if item.get("role") == "assistant" else "Пользователь"
-            context_parts.append(role + ": " + str(item.get("content", ""))[:700])
-        context = "\n".join(context_parts)[:3000]
+            context_parts.append(role + ": " + str(item.get("content", ""))[:1600])
+        context = "\n".join(context_parts)[:10000]
 
         # Shell is deliberately not used: the user message is passed as one argv value.
         try:
@@ -121,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
         ]
         respond(self, 200, {
             "handled": True,
-            "reply": answer[:16000],
+            "reply": answer[:25000],
             "engine": ENGINE_NAME,
             "kind": "cpp-algorithm-v05",
             "trace": trace,
