@@ -556,7 +556,11 @@ async function handleFrossIdentity(request, env) {
     isCreator: frossIsCreator(auth, env),
     emailVerified: auth.emailVerified,
     engine: "FROSS Local Brain 0.4",
-    learningEnabled: frossIsCreator(auth, env)
+    learningEnabled: frossIsCreator(auth, env),
+    brainRoutes: {
+      pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+      cppReady: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
+    }
   }, 200, request);
 }
 
@@ -662,6 +666,61 @@ function frossShouldSearch(query) {
   return false;
 }
 
+async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000) {
+  if (typeof endpoint !== "string" || !endpoint.trim()) return { configured: false, handled: false };
+  if (typeof token !== "string" || token.length < 24) {
+    return { configured: true, handled: false, error: "Brain service token is not configured." };
+  }
+  let url;
+  try {
+    url = new URL(endpoint);
+    if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+      return { configured: true, handled: false, error: "Brain service URL must be HTTPS without credentials." };
+    }
+  } catch {
+    return { configured: true, handled: false, error: "Invalid brain service URL." };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return { configured: true, handled: false, error: "Brain service returned HTTP " + response.status + "." };
+    }
+    const data = await response.json();
+    if (data?.handled !== true || typeof data.reply !== "string" || !data.reply.trim()) {
+      return { configured: true, handled: false, error: "Brain service did not handle this request." };
+    }
+    return {
+      configured: true,
+      handled: true,
+      reply: data.reply.slice(0, 16000),
+      engine: typeof data.engine === "string" ? data.engine.slice(0, 80) : "FROSS external brain",
+      kind: typeof data.kind === "string" ? data.kind.slice(0, 80) : "remote-brain",
+      trace: Array.isArray(data.trace) ? data.trace.slice(0, 7).map(item => String(item).slice(0, 120)) : [],
+      sources: Array.isArray(data.sources) ? data.sources.slice(0, 8).filter(item => item && typeof item === "object") : []
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      handled: false,
+      error: error?.name === "AbortError" ? "Brain service timeout." : "Brain service is unreachable."
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleFrossApi(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/chat." }, 405, request);
@@ -686,7 +745,10 @@ async function handleFrossApi(request, env) {
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
-  const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+  const history = Array.isArray(body.history) ? body.history.slice(-8).map(item => ({
+    role: item?.role === "assistant" ? "assistant" : "user",
+    content: frossClean(item?.content || "").slice(0, 4000)
+  })) : [];
   const knowledge = Array.isArray(body.knowledge) ? body.knowledge.slice(0, 40).map(note => ({
     topic: frossClean(note?.topic || "").slice(0, 180),
     title: frossClean(note?.title || "").slice(0, 260),
@@ -695,22 +757,66 @@ async function handleFrossApi(request, env) {
     source: frossClean(note?.source || "").slice(0, 80),
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
+
+  // Personal notes first, so both external brains can benefit from saved knowledge.
+  const localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
+  if (localMemory.kind === "saved-memory-v04") {
+    return frossJson({
+      name: FROSS_PROFILE.name,
+      reply: localMemory.reply,
+      mode,
+      steps: localMemory.trace?.slice(0, mode === "reasoning" ? 7 : 4) || frossSteps(mode),
+      sources: (localMemory.sources || []).slice(0, 8).map(({ title, url, snippet, source, score }) => ({ title, url, snippet, source, score })),
+      quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
+      diagnostics: { engine: "FROSS personal knowledge", aiUsed: false, kind: localMemory.kind, remoteBrain: false }
+    }, 200, request);
+  }
+
+  // Normal mode -> Python HTTP service. Reasoning mode -> C++ HTTP service.
+  // If a service is not configured or cannot handle the prompt, fall back locally.
+  const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
+  const remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
+    message: correctedQuery,
+    mode,
+    history,
+    knowledge: knowledge.slice(0, 24)
+  });
+  if (remote.handled) {
+    return frossJson({
+      name: FROSS_PROFILE.name,
+      reply: remote.reply,
+      mode,
+      steps: remote.trace.length ? remote.trace.slice(0, mode === "reasoning" ? 7 : 4) : frossSteps(mode),
+      sources: remote.sources.map(({ title, url, snippet, source, score }) => ({
+        title: String(title || "").slice(0, 260),
+        url: typeof url === "string" && /^https?:\/\//i.test(url) ? url.slice(0, 700) : "",
+        snippet: String(snippet || "").slice(0, 3200),
+        source: String(source || "").slice(0, 80),
+        score: Number((Number(score) || 0).toFixed(3))
+      })),
+      quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
+      diagnostics: {
+        engine: remote.engine,
+        aiUsed: false,
+        kind: remote.kind,
+        remoteBrain: true,
+        note: "Ответ сформирован самописным Python/C++ алгоритмическим движком."
+      }
+    }, 200, request);
+  }
+
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
   let results = [];
   let providerErrors = [];
-  let localMemory = null;
-  if (!quickReply) {
-    localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
-    if (localMemory.kind !== "saved-memory-v04" && frossShouldSearch(correctedQuery)) {
-      const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
-      results = search.results;
-      providerErrors = search.errors;
-    }
+  if (!quickReply && frossShouldSearch(correctedQuery)) {
+    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
+    results = search.results;
+    providerErrors = search.errors;
   }
   const localResult = quickReply
     ? { reply: quickReply, kind: "local-rule-v04", sources: [] }
-    : localMemory?.kind === "saved-memory-v04" ? localMemory
     : frossThink({ message: correctedQuery, history, results, knowledge, mode, isCreator });
+  const reply = localResult.reply;
   const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
@@ -720,7 +826,7 @@ async function handleFrossApi(request, env) {
     profile: { description: FROSS_PROFILE.description, traits: FROSS_PROFILE.traits, style: FROSS_PROFILE.style, rules: FROSS_PROFILE.rules },
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
-      resultsFound: results.length, providerErrors, aiUsed: false,
+      resultsFound: results.length, providerErrors: remote.error ? [remote.error] : [], aiUsed: false,
       engine: "FROSS Local Brain 0.4",
       kind: localResult.kind || "local-rule-v03",
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
