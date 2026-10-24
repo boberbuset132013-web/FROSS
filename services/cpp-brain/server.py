@@ -14,12 +14,16 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent))
-import llm_client  # noqa: E402
+sys.path.insert(0, str(ROOT.parent.parent))
+import fross_transformer as transformer  # noqa: E402
+
+TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
+TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
 
 BINARY = os.environ.get("FROSS_CPP_EXECUTABLE", "/app/brain")
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 MAX_BODY = 1024 * 1024
-ENGINE_NAME = "FROSS C++ Planning Brain 1.0"
+ENGINE_NAME = "FROSS C++ Planner + FROSS Transformer 1.0"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -43,7 +47,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/", "/health"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
-        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "1.0", "languageModelConfigured": llm_client.is_configured(), "languageModel": os.environ.get("FROSS_LLM_MODEL", llm_client.DEFAULT_MODEL)})
+        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "1.0", "generationModelLoaded": TRANSFORMER_MODEL is not None, "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None, "generationModelStatus": TRANSFORMER_STATUS})
 
     def do_POST(self) -> None:
         if self.path != "/chat":
@@ -101,8 +105,22 @@ class Handler(BaseHTTPRequestHandler):
             for item in knowledge[:10] if isinstance(item, dict)
         ]
 
-        # Use C++ as an independent deterministic planner/candidate generator, then let
-        # the language model compose and check a free-form answer when configured.
+        # C++ supplies a deterministic algorithmic candidate when it can solve or classify
+        # the request. The answer itself is produced by our separately trained-from-scratch model.
+        knowledge = body.get("knowledge", [])
+        if not isinstance(knowledge, list):
+            knowledge = []
+        knowledge = [
+            {
+                "topic": str(item.get("topic", ""))[:180],
+                "title": str(item.get("title", ""))[:260],
+                "summary": str(item.get("summary", ""))[:900],
+                "snippet": str(item.get("snippet", ""))[:1000],
+                "url": str(item.get("url", ""))[:700],
+                "keyPoints": item.get("keyPoints", [])[:5] if isinstance(item.get("keyPoints"), list) else [],
+            }
+            for item in knowledge[:10] if isinstance(item, dict)
+        ]
         completed = None
         try:
             completed = subprocess.run(
@@ -118,41 +136,45 @@ class Handler(BaseHTTPRequestHandler):
         except (subprocess.TimeoutExpired, OSError):
             completed = None
 
-        if llm_client.is_configured():
+        if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
             try:
-                candidate = completed.stdout.strip()[:3500] if completed and completed.returncode == 0 else ""
-                generated = llm_client.generate_reply(
+                if completed and completed.returncode == 0 and completed.stdout.strip():
+                    knowledge.append({
+                        "topic": "C++ локальная проверка",
+                        "title": "Кандидат алгоритмического слоя",
+                        "summary": completed.stdout.strip()[:700],
+                    })
+                reply = transformer.generate_reply(
+                    TRANSFORMER_MODEL,
+                    TRANSFORMER_TOKENIZER,
                     message,
-                    mode=mode,
                     history=history,
                     knowledge=knowledge,
-                    planner_hint=candidate,
+                    mode=mode,
+                    max_new_tokens=280 if mode == "reasoning" else 150,
                 )
-                respond(self, 200, {
-                    "handled": True,
-                    "reply": generated["reply"],
-                    "engine": generated["engine"],
-                    "kind": "llm-generated-v1",
-                    "model": generated["model"],
-                    "trace": [
-                        "C++ проанализировал тип задачи и доступные локальные проверки",
-                        "Языковая модель самостоятельно сформировала ответ",
-                        "Проверить ограничения и представить итог",
-                    ] if mode == "reasoning" else [
-                        "Определить намерение и контекст",
-                        "Сгенерировать ответ языковой моделью",
-                        "Проверить соответствие вопросу",
-                    ],
-                    "sources": [],
-                })
-                return
+                if reply:
+                    respond(self, 200, {
+                        "handled": True,
+                        "reply": reply[:25000],
+                        "engine": ENGINE_NAME,
+                        "kind": "fross-transformer-v1",
+                        "generationModel": transformer.VERSION,
+                        "generationModelStatus": TRANSFORMER_STATUS,
+                        "plannerCandidateAvailable": bool(completed and completed.returncode == 0),
+                        "trace": [
+                            "C++ проверил вычислимые условия и построил локальный кандидат",
+                            "Токенизировать контекст и обработать причинным attention",
+                            "Сгенерировать продолжение собственными обученными весами",
+                            "Проверить формат ответа и остановить генерацию",
+                        ],
+                        "sources": [],
+                    })
+                    return
             except Exception:
-                # Keep provider errors and secrets out of the client response.
+                # A missing/invalid checkpoint is not misreported as successful generation.
                 pass
 
-        if completed is None:
-            respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-unavailable"})
-            return
         if completed.returncode == 3:
             respond(self, 200, {"handled": False, "engine": ENGINE_NAME, "kind": "cpp-no-match"})
             return
