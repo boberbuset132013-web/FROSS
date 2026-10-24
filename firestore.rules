@@ -23,7 +23,7 @@ service cloud.firestore {
         && request.resource.data.url.size() <= 700
         && (request.resource.data.url == '' || request.resource.data.url.matches('https?://.*'))
         && request.resource.data.snippet is string
-        && request.resource.data.snippet.size() <= 1300
+        && request.resource.data.snippet.size() <= 3200
         && request.resource.data.source is string
         && request.resource.data.source.size() <= 80
         && request.resource.data.score is number
