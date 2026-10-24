@@ -30,6 +30,16 @@ static std::string trim(std::string s) {
     return s.substr(a, b - a + 1);
 }
 
+static std::string lastAssistantMessage(const std::string &context) {
+    const std::string marker = "fross: ";
+    const size_t startMarker = context.rfind(marker);
+    if (startMarker == std::string::npos) return "";
+    const size_t start = startMarker + marker.size();
+    size_t end = context.find("\nПользователь:", start);
+    if (end == std::string::npos) end = context.size();
+    return trim(context.substr(start, end - start));
+}
+
 class Parser {
     const std::string &s; size_t p = 0;
     void spaces() { while (p < s.size() && (s[p] == ' ' || s[p] == '\t')) ++p; }
@@ -153,9 +163,22 @@ int main(int argc, char **argv) {
     const std::string context = argc >= 4 ? lowerAscii(trim(argv[3])) : "";
     if (q.empty()) return 3;
     std::string answer, approach;
-    if (!context.empty() && any(q, {"почему?", "почему", "подробнее", "расскажи подробнее", "продолжи", "а как", "а почему", "объясни подробнее"})) {
-        answer = "Похоже, ты уточняешь предыдущий ответ. Я учитываю контекст этого чата, но уточни, какую именно часть нужно раскрыть, чтобы не выдумывать детали.";
-        approach = "сопоставить короткий вопрос с историей чата и избежать необоснованных предположений.";
+    if (!context.empty() && any(q, {"почему?", "почему", "а почему", "подробнее", "расскажи подробнее", "продолжи", "продолжай", "а как", "объясни подробнее", "что это значит", "а если"})) {
+        const std::string previous = lastAssistantMessage(context);
+        if (any(q, {"подробнее", "расскажи подробнее", "продолжи", "продолжай", "объясни подробнее"})) {
+            answer = "Продолжу предыдущую тему. Последний ответ был: " + previous.substr(0, 260) +
+                     ". Могу разложить его на шаги, привести пример или объяснить отдельный пункт. Укажи, что полезнее.";
+        } else if (any(q, {"почему?", "почему", "а почему"}) && any(previous, {"потому что", "так как", "поскольку", "поэтому", "из-за"})) {
+            answer = "В предыдущем ответе причина была указана здесь: " + previous.substr(0, 360) +
+                     ". Если ты спрашиваешь о другом тезисе, назови его, чтобы я связал объяснение с нужной частью.";
+        } else if (any(q, {"а если"})) {
+            answer = "Давай проверим другой вариант. Предыдущий ответ: " + previous.substr(0, 220) +
+                     ". Напиши условие, которое хочешь изменить, и я сравню результат.";
+        } else {
+            answer = "Связываю вопрос с предыдущим ответом: " + previous.substr(0, 300) +
+                     ". Уточни, к какому утверждению относится вопрос, и я объясню именно его без догадок.";
+        }
+        approach = "сопоставить короткое уточнение с последним ответом и явно использовать доступный контекст чата.";
     } else if (any(q, {"привет", "здравствуй", "хай", "hello", "hi"})) {
         answer = "Привет! Я на связи. Что разберём?";
         approach = "распознать приветствие и ответить локально.";
@@ -166,7 +189,7 @@ int main(int argc, char **argv) {
         answer = "Автор проекта FROSS: [@Spamton_BigShot_hahaha](https://t.me/Spamton_BigShot_hahaha).";
         approach = "проверить сохранённые сведения о проекте.";
     } else if (any(q, {"твоя модель", "какая у тебя модель", "ты просто гуглишь"})) {
-        answer = "Я — FROSS C++ Reasoning Brain 0.5. Это самописный алгоритмический движок, а не обученная нейросеть. Я использую локальные правила и безопасные алгоритмы.";
+        answer = "Я — FROSS C++ Reasoning Brain 0.6. Это самописный алгоритмический движок, а не обученная нейросеть. Я использую локальные правила и безопасные алгоритмы.";
         approach = "объяснить устройство движка без преувеличений.";
     } else if (calculate(q, answer)) {
         approach = "разобрать арифметику с учётом скобок и приоритета операций.";
