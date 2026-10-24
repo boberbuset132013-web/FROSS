@@ -46,6 +46,30 @@ jobs:
         run: node --input-type=module --check < fross-brain.js
       - name: Check Worker syntax
         run: node --input-type=module --check < worker.js
+      - name: Check learning pipeline and message limits
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          worker = Path("worker.js").read_text(encoding="utf-8")
+          page = Path("public/index.html").read_text(encoding="utf-8")
+          rules = Path("firestore.rules").read_text(encoding="utf-8")
+          wrangler = Path("wrangler.jsonc").read_text(encoding="utf-8")
+          character = Path("FROSS_CHARACTER.md").read_text(encoding="utf-8")
+          assert "const collected = await Promise.all(" in worker
+          assert "return collected.filter(note =>" in worker
+          assert "const notes = await Promise.all(candidates.map(async item => {" not in worker
+          assert "const FROSS_MAX_MESSAGE_LENGTH = 30000;" in worker
+          assert "const FROSS_MAX_REPLY_LENGTH = 25000;" in worker
+          assert "const history = frossLimitHistory(body.history);" in worker
+          assert "function frossLimitHistory(history" in worker
+          assert 'maxlength="30000"' in page
+          assert "history=recentChatContext(activeMessages,5)" in page
+          assert "request.resource.data.content.size() <= 30000" in rules
+          assert "request.resource.data.content.size() <= 25000" in rules
+          assert '"crons": ["0 3 * * *"]' in wrangler
+          assert "25 000 символов" in character and "30 000 символов" in character
+          print("Learning pipeline, scheduled study, history window and character limits passed.")
+          PY
       - name: Check browser JavaScript syntax
         run: |
           python - <<'PY'
