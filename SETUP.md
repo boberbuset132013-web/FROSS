@@ -13,8 +13,8 @@
 
 ## 2. FROSS 1.1 с Brain 0.6: распределённая схема
 Сайт остаётся на JavaScript, но может передавать запросы в отдельные сервисы:
-- обычный режим → `FROSS Python Brain 0.6` (`services/python-brain/server.py`, использует `fross_brain_v05.py`);
-- режим «Рассуждение» → `FROSS C++ Reasoning Brain 0.6` (`services/cpp-brain/main.cpp`, HTTP-обёртка находится в `services/cpp-brain/server.py`);
+- обычный режим → `FROSS Python Brain 0.5` (`services/python-brain/server.py`, использует `fross_brain_v05.py`);
+- режим «Рассуждение» → `FROSS C++ Reasoning Brain 0.5` (`services/cpp-brain/main.cpp`, HTTP-обёртка находится в `services/cpp-brain/server.py`);
 - если сервис не настроен, недоступен или не понимает запрос, Worker использует локальный JavaScript-движок и при необходимости поиск.
 
 Это собственные алгоритмы, правила, вычислитель и шаблоны — не готовая языковая модель. C++-ответы включают более подробный разбор задачи, но это не скрытое рассуждение обученной нейросети.
