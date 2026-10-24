@@ -463,7 +463,7 @@ async function frossVerifyFirebaseToken(request) {
     if (header.alg !== "RS256" || !header.kid) return null;
     const projectId = typeof claims.aud === "string" ? claims.aud : "";
     const now = Math.floor(Date.now() / 1000);
-    if (!projectId || !claims.sub || claims.iss !== "https://securetoken.google.com/" + projectId) return null;
+    if (!projectId || projectId !== "fross-ca5d6" || !claims.sub || claims.iss !== "https://securetoken.google.com/" + projectId) return null;
     if (!Number.isFinite(claims.exp) || claims.exp <= now || !Number.isFinite(claims.iat) || claims.iat > now + 60) return null;
     if (typeof claims.sub !== "string" || claims.sub.length > 128) return null;
     const keys = await frossGetFirebaseJwks();
@@ -599,6 +599,14 @@ async function handleFrossTrain(request, env) {
   }, 200, request);
 }
 
+function frossShouldSearch(query) {
+  const q = frossClean(frossCorrectText(query)).toLowerCase().replace(/ё/g, "е");
+  if (/\b(найди|поищи|поиск|в интернете|источник|источники|ссылки|актуальн|последние новости|новости|сегодня|сейчас|курс валют|цена|сколько стоит|обзор источников)\b/.test(q)) return true;
+  if (/^(кто|что|где|когда|почему|как|сколько|зачем|какой|какая|какие|какое|чем|откуда|куда|есть ли)\b/.test(q)) return true;
+  if (/\b(что такое|кто такой|кто такая|как работает|почему происходит|расскажи про|объясни|определение|история .*|сравни .* с )/.test(q)) return true;
+  return false;
+}
+
 async function handleFrossApi(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/chat." }, 405, request);
@@ -638,7 +646,7 @@ async function handleFrossApi(request, env) {
   let localMemory = null;
   if (!quickReply) {
     localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
-    if (localMemory.kind !== "saved-memory-v04") {
+    if (localMemory.kind !== "saved-memory-v04" && frossShouldSearch(correctedQuery)) {
       const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
       results = search.results;
       providerErrors = search.errors;
@@ -651,7 +659,7 @@ async function handleFrossApi(request, env) {
   const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
-    sources: results.slice(0, 8).map(({ title, url, snippet, source, score }) => ({
+    sources: (localResult.sources?.length ? localResult.sources : results).slice(0, 8).map(({ title, url, snippet, source, score }) => ({
       title, url, snippet, source, score: Number((score || 0).toFixed(3))
     })),
     profile: { description: FROSS_PROFILE.description, traits: FROSS_PROFILE.traits, style: FROSS_PROFILE.style, rules: FROSS_PROFILE.rules },
