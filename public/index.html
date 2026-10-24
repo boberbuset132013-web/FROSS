@@ -291,6 +291,7 @@ async function refreshCreatorAccess(){
   try{
     const data=await frossApiPost("/api/identity",{});
     isCreator=data.isCreator===true;
+    $("creatorUnlockForm").classList.toggle("hidden",isCreator);
     pythonBrainReady=data.brainRoutes?.pythonReady===true;
     cppBrainReady=data.brainRoutes?.cppReady===true;
     if(isCreator){
