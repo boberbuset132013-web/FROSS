@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Local Brain 0.2 — Python reference implementation.
+"""FROSS Local Brain 0.3 — Python reference implementation.
 
 The deployed Cloudflare Worker runs the matching JavaScript implementation
 because Cloudflare Workers do not execute ordinary Python modules. This
@@ -8,9 +8,10 @@ ranking. It does not call a hosted language-model API or use eval/exec.
 """
 from __future__ import annotations
 import re
+from difflib import SequenceMatcher
 from typing import Any
 
-VERSION = "FROSS Local Brain 0.2"
+VERSION = "FROSS Local Brain 0.3"
 
 DEFINITIONS: list[tuple[tuple[str, ...], str]] = [
     (("html", "хтмл"), "HTML описывает структуру веб-страницы. CSS отвечает за оформление, а JavaScript — за поведение."),
@@ -29,8 +30,56 @@ DEFINITIONS: list[tuple[tuple[str, ...], str]] = [
 def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").lower().replace("ё", "е")).strip()
 
+
+TYPO_ALIASES = {
+    "созрдайтель": "создатель", "создатиль": "создатель", "создител": "создатель",
+    "создательь": "создатель", "разроботчик": "разработчик", "разработчк": "разработчик",
+    "привте": "привет", "привит": "привет", "превет": "привет", "приве": "привет",
+    "фрос": "фросс", "фроссс": "фросс", "фросса": "фросс",
+    "памаги": "помоги", "помаги": "помоги", "пачему": "почему", "почиму": "почему",
+    "сколька": "сколько", "скока": "сколько", "обесни": "объясни", "обьясни": "объясни",
+    "програма": "программа", "програмирование": "программирование",
+    "интелект": "интеллект", "алгаритм": "алгоритм", "неправельно": "неправильно",
+}
+TYPO_VOCABULARY = [
+    "создатель", "создателя", "создателем", "создатели", "создали", "создал", "автор",
+    "разработчик", "разработчика", "владелец", "сделал", "привет", "здравствуй",
+    "здравствуйте", "фросс", "почему", "помоги", "объясни", "расскажи", "посчитать",
+    "вычисли", "математика", "пример", "программа", "программирование", "переменная",
+    "функция", "массив", "алгоритм", "нейросеть", "искусственный", "интеллект",
+    "ошибка", "исправить", "неправильно", "сообщение", "приветствие", "вопрос",
+    "поиск", "источник", "python", "javascript", "html", "css", "сайт", "чат",
+    "удалить", "настройка", "объяснение", "версия", "мышление", "умеешь", "умеет",
+]
+
+
+def correct_word(word: str) -> str:
+    if word in TYPO_ALIASES:
+        return TYPO_ALIASES[word]
+    if len(word) < 6 or len(word) > 24 or not re.fullmatch(r"[a-zа-я]+", word):
+        return word
+    limit = 2 if len(word) >= 9 else 1
+    options: list[tuple[float, str]] = []
+    for candidate in TYPO_VOCABULARY:
+        if abs(len(candidate) - len(word)) > limit:
+            continue
+        ratio = SequenceMatcher(None, word, candidate).ratio()
+        if ratio >= (0.80 if len(word) >= 9 else 0.86):
+            options.append((ratio, candidate))
+    options.sort(reverse=True)
+    if not options:
+        return word
+    if len(options) > 1 and options[0][0] - options[1][0] < 0.035:
+        return word
+    return options[0][1]
+
+
+def correct_text(text: str) -> str:
+    return re.sub(r"[a-zа-я]+", lambda match: correct_word(match.group(0)), normalize(text))
+
+
 def clean_intent(text: str) -> tuple[str, str]:
-    q = re.sub(r"[!?.,;:()\[\]{}]+", " ", normalize(text))
+    q = re.sub(r"[!?.,;:()\[\]{}]+", " ", correct_text(text))
     q = re.sub(r"\s+", " ", q).strip()
     stripped = re.sub(r"(fross|фросс|ботик|бот)", " ", q, flags=re.I)
     return q, re.sub(r"\s+", " ", stripped).strip()
@@ -145,7 +194,7 @@ def quick_reply(message: str, is_creator: bool = False, mode: str = "normal") ->
         return "Я на связи. Могу посчитать выражение, объяснить базовую тему или найти материалы."
     if stripped in {"кто ты", "ты кто", "как тебя зовут", "что ты такое"}:
         return f"Я {VERSION} — самописный движок на правилах, безопасном калькуляторе, шаблонах и поисковой сводке. Это не готовая языковая модель."
-    if re.search(r"(кто создал fross|кто создатель fross|кто автор fross|кто тебя создал)", q):
+    if re.search(r"(кто|назови|скажи|подскажи).{0,45}(создател|создал|автор|разработчик|владелец|сделал)|(кто сделал тебя|кто тебя создал|кто создал фросс|кто автор фросс)", q):
         return "Автор проекта FROSS: https://t.me/Spamton_BigShot_hahaha"
     if re.search(r"(моя почта|мой email|какая у меня почта|назови мой email|мой адрес электронной почты|почт[ауеы].{0,35}(автор|создател|владельц))", q):
         return "Я могу распознать подтверждённый аккаунт создателя, но не вывожу личную почту в сообщениях. Публичный контакт: @Spamton_BigShot_hahaha."
@@ -193,7 +242,7 @@ def think(message: str, history: list[dict[str, Any]] | None = None,
         return {"reply": direct, "kind": "local-rule-v02",
                 "trace": ["Нормализовать запрос", "Распознать намерение", "Ответить локальным правилом"], "sources": []}
 
-    words = {w for w in re.findall(r"[a-zа-яё0-9]{2,}", normalize(message))
+    words = {w for w in re.findall(r"[a-zа-яё0-9]{2,}", normalize(correct_text(message)))
              if w not in {"что", "как", "где", "когда", "для", "это", "the", "and", "with"}}
     ranked: list[tuple[float, dict[str, Any]]] = []
     for item in results:
@@ -250,6 +299,9 @@ if __name__ == "__main__":
     class BrainTests(unittest.TestCase):
         def test_greeting_with_bot_name(self):
             self.assertIn("Привет!", quick_reply("привет фросс") or "")
+        def test_creator_typo(self):
+            self.assertEqual(correct_text("кто созрдайтель фросса?"), "кто создатель фросс?")
+            self.assertIn("@Spamton_BigShot_hahaha", quick_reply("кто созрдайтель фросса?") or "")
         def test_creator_greeting(self):
             self.assertIn("создатель FROSS", quick_reply("Привет, ФРОСС!", is_creator=True) or "")
         def test_math_precedence(self):
