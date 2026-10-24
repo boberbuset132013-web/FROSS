@@ -10,9 +10,12 @@ service cloud.firestore {
     match /users/{userId}/knowledge/{noteId} {
       allow get, list: if signedInAs(userId);
 
+      // Structured knowledge records live in Firestore. Older notes without
+      // schemaVersion/summary/keywords remain readable and can still be deleted.
       allow create, update: if signedInAs(userId)
         && request.resource.data.keys().hasOnly([
-          'topic', 'title', 'url', 'snippet', 'source', 'score', 'savedAt'
+          'schemaVersion', 'kind', 'topic', 'title', 'url', 'snippet',
+          'summary', 'keyPoints', 'keywords', 'source', 'score', 'savedAt'
         ])
         && request.resource.data.topic is string
         && request.resource.data.topic.size() >= 2
@@ -24,9 +27,21 @@ service cloud.firestore {
         && (request.resource.data.url == '' || request.resource.data.url.matches('https?://.*'))
         && request.resource.data.snippet is string
         && request.resource.data.snippet.size() <= 3200
+        && (!request.resource.data.keys().hasAny(['schemaVersion']) ||
+            (request.resource.data.schemaVersion is int && request.resource.data.schemaVersion == 2))
+        && (!request.resource.data.keys().hasAny(['kind']) ||
+            (request.resource.data.kind is string && request.resource.data.kind.size() <= 40))
+        && (!request.resource.data.keys().hasAny(['summary']) ||
+            (request.resource.data.summary is string && request.resource.data.summary.size() <= 900))
+        && (!request.resource.data.keys().hasAny(['keyPoints']) ||
+            (request.resource.data.keyPoints is list && request.resource.data.keyPoints.size() <= 5))
+        && (!request.resource.data.keys().hasAny(['keywords']) ||
+            (request.resource.data.keywords is list && request.resource.data.keywords.size() <= 24))
         && request.resource.data.source is string
         && request.resource.data.source.size() <= 80
         && request.resource.data.score is number
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 1
         && request.resource.data.savedAt is timestamp;
 
       allow delete: if signedInAs(userId);
