@@ -1566,7 +1566,7 @@ async function handleFrossApi(request, env) {
   const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
   const localKnowledgeMiss = localMemory.kind === "no-match-v05";
   const llmConfigured = typeof env.FROSS_LLM_API_KEY === "string" && env.FROSS_LLM_API_KEY.trim().length > 0;
-  const conversationalCandidate = !quickReply && frossLikelyConversationIntent(correctedQuery);
+  const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
   // With a language model configured, browse only on an explicit request for web/fresh information.
   // The old broad automatic search remains a fallback when no generator is configured.
   const shouldSearch = !quickReply && !conversationalCandidate && (
@@ -1582,7 +1582,7 @@ async function handleFrossApi(request, env) {
   }
   // Generative route: let the language model compose a new answer from the user's intent,
   // recent conversation and relevant saved/web material. Rules remain a safe fallback.
-  if (llmConfigured && !quickReply) {
+  if (llmConfigured && !conversationalCandidate) {
     const generated = await frossGenerateWithModel({
       message: correctedQuery, history, knowledge: allKnowledge, results, mode, env
     });
