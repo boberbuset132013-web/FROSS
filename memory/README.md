@@ -3,6 +3,7 @@
 The project separates two kinds of memory:
 
 - `memory/knowledge/` in this public GitHub repository is the **shared, public knowledge library**. The creator-only training endpoint writes one JSON file per topic and updates `index.json`. FROSS can retrieve relevant entries from this library for later answers.
+- A daily Cloudflare Cron Trigger searches public documentation and examples for beginner JavaScript and Python topics and refreshes the shared library. This requires a `FROSS_GITHUB_TOKEN` Cloudflare Secret with Contents read/write access.
 - Firebase Cloud Firestore `users/{uid}/knowledge` remains the **private per-account memory** used by the signed-in user's training panel.
 
 Do not put chats, passwords, access tokens, personal details, or private notes into the GitHub library. Every commit under this folder is public and part of the repository history.
