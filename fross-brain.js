@@ -269,9 +269,9 @@ function frossComposeExplanation(query, notes, mode = "normal") {
       note.snippet || note.content || ""
     ];
     for (const field of fields) {
-      for (const raw of String(field || "").replace(/\s+/g, " ").split(/(?<=[.!?])\s+|\\n+|\\s+•\\s+/)) {
+      for (const raw of String(field || "").replace(/\s+/g, " ").split(/(?<=[.!?])\s+|\n+|\s+•\s+/)) {
         let sentence = raw.trim().replace(/^[-•\d.)\s]+/, "");
-        if (sentence.length < 35 || sentence.length > 420) continue;
+        if (sentence.length < 22 || sentence.length > 420) continue;
         if (!/[.!?]$/.test(sentence)) sentence += ".";
         const normalized = normalize(sentence).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
         if (!normalized || candidates.some(item => item.normalized === normalized)) continue;
