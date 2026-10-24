@@ -58,7 +58,7 @@ export default {
       ok: true,
       worker: "FROSS",
       version: "1.1",
-      brainVersion: "0.6",
+      brainVersion: "1.0",
       creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
       githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
@@ -1349,7 +1349,12 @@ function frossLikelyConversationIntent(message) {
 
 function frossShouldSearchExplicit(query) {
   const q = frossClean(frossCorrectText(query)).toLowerCase().replace(/ё/g, "е");
-  return /\\b(найди|поищи|в интернете|поиск|источник|источники|ссылки|актуальн|последние новости|новости|сегодня|прямо сейчас|на данный момент|курс валют|цена сегодня|сколько стоит сейчас|свежие данные|свежую информацию|текущая версия|последняя версия|обзор источников)\\b/.test(q);
+  // String matching is deliberate here: JavaScript's default \\b does not treat Cyrillic as word characters.
+  return ["найди", "поищи", "в интернете", "поиск", "источник", "источники", "ссылки",
+    "актуальн", "последние новости", "новости", "сегодня", "прямо сейчас", "на данный момент",
+    "курс валют", "цена сегодня", "сколько стоит сейчас", "свежие данные",
+    "свежую информацию", "текущая версия", "последняя версия", "обзор источников"]
+    .some(term => q.includes(term));
 }
 
 function frossShouldSearch(query) {
