@@ -730,7 +730,7 @@ async function handleFrossCreatorUnlock(request, env) {
   if (diff !== 0) return frossJson({ error: "Пароль создателя неверный." }, 403, request);
   const token = await frossCreateCreatorToken(auth, env);
   if (!token) return frossJson({ error: "Не удалось создать сессию создателя." }, 503, request);
-  return frossJson({ ok: true, isCreator: true, creatorToken: token, expiresInSeconds: 43200 }, 200, request);
+  return frossJson({ ok: true, isCreator: true, creatorToken: token, expiresInSeconds: 2592000 }, 200, request);
 }
 async function handleFrossIdentity(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
