@@ -1332,6 +1332,19 @@ async function handleFrossTrain(request, env) {
   }, 200, request);
 }
 
+function frossLikelyConversationIntent(message) {
+  const q = frossClean(frossCorrectText(message)).toLowerCase().replace(/ё/g, "е")
+    .replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!q || q.length > 180) return false;
+  if (/^(приветик|привет|здравствуй|спасибо|спасибо большое|благодарю|спс|пасиб|пока|до встречи|до свидания|увидимся|как дела|как ты|что нового|чем занимаешься|что делаешь|ты тут|ты здесь|ау|что ты умеешь|кто ты|как тебя зовут|давай поговорим|поговорим|мне скучно|хочу поболтать|хочу пообщаться|расскажи что-нибудь|у меня идея|есть идея|у меня есть идея|готово|получилось|заработало|да|ага|угу|ок|окей|ладно|хорошо|понятно|нет|неа|не надо|не нужно|не хочу|не то|не так|ты не понял|я про другое|не работает|ничего не работает|не получается|снова ошибка|опять ошибка|у меня ошибка|подробнее|расскажи подробнее|объясни подробнее|продолжи|продолжай|почему|а почему|как так|а если|что это значит|помнишь|ты помнишь|о чем мы говорили|что я говорил раньше)(\s*)$/.test(q)) return true;
+  if (/^(можно|можешь|расскажи|объясни).{0,60}(поподробнее|подробнее|чуть больше|ещё|еще|примером)$/.test(q)) return true;
+  if (/^(я хочу|хочу|собираюсь|я собираюсь).{0,110}(создать|сделать|разработать|построить|запустить|придумать|свой проект)/.test(q)) return true;
+  if (/^(у меня|у меня есть|есть|я придумал|я придумала).{0,70}(идея|задумка|мысль)/.test(q)) return true;
+  if (/^(я имел в виду|я имела в виду|я хотел сказать|я хотела сказать|я не это просил|я не это просила|ты меня неправильно понял)/.test(q)) return true;
+  if (/^(мне грустно|мне плохо морально|я расстроен|я расстроена|мне обидно|мне неприятно|я устал|я устала|я злюсь|я переживаю)/.test(q)) return true;
+  return false;
+}
+
 function frossShouldSearch(query) {
   const q = frossClean(frossCorrectText(query)).toLowerCase().replace(/ё/g, "е");
   if (/\b(найди|поищи|поиск|в интернете|источник|источники|ссылки|актуальн|последние новости|новости|сегодня|сейчас|курс валют|цена|сколько стоит|обзор источников)\b/.test(q)) return true;
@@ -1449,7 +1462,8 @@ async function handleFrossApi(request, env) {
   // If FROSS reports no match, automatically search the web instead of stopping at memory.
   const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
   const localKnowledgeMiss = localMemory.kind === "no-match-v05";
-  const shouldSearch = !quickReply && (frossShouldSearch(correctedQuery) || localKnowledgeMiss);
+  const conversationalCandidate = !quickReply && frossLikelyConversationIntent(correctedQuery);
+  const shouldSearch = !quickReply && !conversationalCandidate && (frossShouldSearch(correctedQuery) || localKnowledgeMiss);
   let results = [];
   let providerErrors = [];
   if (shouldSearch) {
@@ -1457,7 +1471,7 @@ async function handleFrossApi(request, env) {
     results = search.results;
     providerErrors = search.errors;
   }
-  if (localMemory.kind === "saved-memory-v06" && !shouldSearch) {
+  if (localMemory.kind === "saved-memory-v06" && !shouldSearch && !conversationalCandidate) {
     return frossJson({
       name: FROSS_PROFILE.name,
       reply: localMemory.reply,
