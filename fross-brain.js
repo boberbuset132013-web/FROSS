@@ -187,9 +187,9 @@ function parseMath(text) {
 }
 
 function quickReply({ message, isCreator = false, mode = "normal" }) {
-  const raw = normalize(message);
+  const raw = normalize(frossCorrectText(message));
   const q = raw.replace(/[!?.,;:()[\]{}]+/g, " ").replace(/\s+/g, " ").trim();
-  const noBotName = q.replace(/(fross|фросс|ботик|бот)/g, " ").replace(/\s+/g, " ").trim();
+  const noBotName = q.split(/\s+/).filter(word => !["fross", "фросс", "ботик", "бот"].includes(word)).join(" ").trim();
 
   if (/^(эй\s+)?(привет|здравствуй|здравствуйте|хай|хей|hello|hi|доброе утро|добрый вечер)$/.test(noBotName)) {
     return isCreator
@@ -200,9 +200,9 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
   if (/^(пока|до свидания|увидимся)$/.test(noBotName)) return "До встречи! Возвращайся, когда понадобится разобраться с задачей.";
   if (/^(как дела|что нового|ты здесь|ты тут|ты на связи|ау)$/.test(noBotName)) return "Я на связи. Могу посчитать выражение, объяснить базовую тему или найти материалы в интернете.";
   if (/^(кто ты|ты кто|как тебя зовут|что ты такое)$/.test(noBotName)) {
-    return "Я FROSS Local Brain 0.2 — самописный движок на JavaScript с правилами, безопасным калькулятором, простыми шаблонами и поисковой сводкой. Я не использую готовую языковую модель, поэтому честно скажу, когда моих правил недостаточно.";
+    return "Я FROSS Local Brain 0.3 — самописный движок на JavaScript с правилами, безопасным калькулятором, простыми шаблонами и поисковой сводкой. Я не использую готовую языковую модель, поэтому честно скажу, когда моих правил недостаточно.";
   }
-  if (/(кто создал fross|кто создатель fross|кто автор fross|кто сделал тебя|кто тебя создал)/.test(q)) {
+  if (/(кто|назови|скажи|подскажи).{0,45}(создател|создал|автор|разработчик|владелец|сделал)/.test(q) || /(кто сделал тебя|кто тебя создал|кто создал фросс|кто автор фросс)/.test(q)) {
     return "Автор проекта FROSS: [@Spamton_BigShot_hahaha](https://t.me/Spamton_BigShot_hahaha).";
   }
   if (/(моя почта|мой email|мой e-mail|какая у меня почта|назови мой email|какой у меня email|мой адрес электронной почты|почт[ауеы].{0,35}(автор|создател|владельц)|email.{0,35}(автор|создател|владельц)|адрес.{0,30}электронной почты)/.test(q)) {
@@ -214,7 +214,7 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
     return "Я умею выполнять арифметические выражения, объяснять несколько базовых технических понятий, выдавать некоторые шаблоны кода и собирать краткие сводки найденных страниц. Для открытых вопросов я использую поиск, но пока не могу свободно генерировать любой ответ как большая языковая модель.";
   }
   if (/(что такое fross local brain|что за версия мышления|версия твоего мышления|какая у тебя версия)/.test(q)) {
-    return "Сейчас у меня FROSS Local Brain 0.2. Я определяю тип запроса, пробую локальные правила и вычисления, а если этого недостаточно — сопоставляю заголовки и фрагменты результатов поиска. Это собственный алгоритмический движок, не обученная нейросеть.";
+    return "Сейчас у меня FROSS Local Brain 0.3. Я определяю тип запроса, пробую локальные правила и вычисления, а если этого недостаточно — сопоставляю заголовки и фрагменты результатов поиска. Это собственный алгоритмический движок, не обученная нейросеть.";
   }
 
   const math = parseMath(message);
@@ -227,7 +227,7 @@ function quickReply({ message, isCreator = false, mode = "normal" }) {
     return "**Ответ: " + result + "**\n\nВычислено локально.";
   }
 
-  const asksDefinition = /(что такое|объясни|расскажи|определение|что означает|что значит)/.test(q);
+  const asksDefinition = /(что такое|объясни|расскажи|определение|что означает|что значит|расскажи про|объяснение)/.test(q);
   const definition = asksDefinition && DEFINITIONS.find(item => item.keys.some(key =>
     key.length <= 2 ? q.split(/\s+/).includes(key) : q.includes(key)
   ));
@@ -270,15 +270,16 @@ export function frossQuickResponse(options) {
 }
 
 export function frossThink({ message, history = [], results = [], mode = "normal", isCreator = false } = {}) {
-  const direct = quickReply({ message, isCreator, mode });
-  if (direct) return { reply: direct, kind: "local-rule-v02", sources: [], trace: ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
+  const correctedMessage = frossCorrectText(message);
+  const direct = quickReply({ message: correctedMessage, isCreator, mode });
+  if (direct) return { reply: direct, kind: "local-rule-v03", sources: [], trace: ["Нормализовал запрос", "Распознал тип задачи", "Ответил локальным правилом"] };
 
   if (results.length) {
-    const queryWords = [...new Set(normalize(message).match(/[a-zа-яё0-9]{2,}/g) || [])]
+    const queryWords = [...new Set(normalize(correctedMessage).match(/[a-zа-яё0-9]{2,}/g) || [])]
       .filter(word => !["что", "как", "где", "когда", "для", "это", "the", "and", "with"].includes(word));
     const scoreItem = item => {
-      const title = normalize(item.title || "");
-      const text = normalize((item.title || "") + " " + (item.snippet || ""));
+      const title = normalize(frossCorrectText(item.title || ""));
+      const text = normalize(frossCorrectText((item.title || "") + " " + (item.snippet || "")));
       let titleHits = 0, hits = 0;
       for (const word of queryWords) {
         if (title.includes(word)) titleHits++;
@@ -302,7 +303,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
     const top = (relevant.length ? relevant : unique).slice(0, mode === "reasoning" ? 4 : 3);
     const lines = [];
     lines.push(mode === "reasoning"
-      ? "Я использовал локальную процедуру FROSS 0.2: выделил слова запроса, сравнил их с заголовками и фрагментами, убрал дубликаты и отсортировал результаты."
+      ? "Я использовал локальную процедуру FROSS 0.3: выделил слова запроса, сравнил их с заголовками и фрагментами, убрал дубликаты и отсортировал результаты."
       : "Вот наиболее подходящие найденные материалы по совпадению с запросом.");
     top.forEach((item, index) => {
       const snippet = String(item.snippet || "Поисковик не предоставил краткого описания.").slice(0, 480);
@@ -319,7 +320,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
     });
     return {
       reply: lines.join("\n"),
-      kind: "search-summary-v02",
+      kind: "search-summary-v03",
       sources: top,
       trace: mode === "reasoning"
         ? ["Нормализовать запрос", "Выделить ключевые термины", "Сопоставить заголовки и фрагменты", "Оценить релевантность", "Убрать дубликаты", "Проверить слабые совпадения", "Сформировать сводку и оговорки"]
@@ -331,7 +332,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
   if (/(^|\s)(а почему|почему|а как|а если|что значит это|расскажи подробнее|продолжи)(\s|[?!.,]|$)/i.test(String(message || "")) && lastAssistant) {
     return {
       reply: "Похоже, ты уточняешь предыдущую тему, но я не смог определить, к какой детали относится вопрос. Укажи фразу, которую нужно разобрать, — так я смогу точнее ответить.",
-      kind: "context-fallback-v02",
+      kind: "context-fallback-v03",
       sources: [],
       trace: ["Проверить историю текущего чата", "Не удалось связать уточнение с конкретной деталью", "Запросить узкое уточнение"]
     };
@@ -339,7 +340,7 @@ export function frossThink({ message, history = [], results = [], mode = "normal
 
   return {
     reply: "Я пока не нашёл достаточно надёжных данных и не хочу выдумывать ответ. Мой движок 0.2 работает на локальных правилах и поисковых фрагментах, поэтому иногда ему не хватает контекста. Попробуй переформулировать запрос или уточнить желаемый результат.",
-    kind: "no-match-v02",
+    kind: "no-match-v03",
     sources: [],
     trace: ["Нормализовать запрос", "Проверить локальные правила", "Недостаточно надёжных совпадений", "Честно сообщить об ограничении"]
   };
