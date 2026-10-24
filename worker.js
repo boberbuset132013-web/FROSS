@@ -1,4 +1,4 @@
-import { frossQuickResponse, frossThink } from "./fross-brain.js";
+import { frossQuickResponse, frossThink, frossCorrectText } from "./fross-brain.js";
 
 // ================= КОНФИГУРАЦИЯ =================
 const BOT_UPDATE_FORWARD_URL = "";
@@ -112,7 +112,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Local Brain 0.2 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
+  description: "FROSS Local Brain 0.3 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -553,27 +553,28 @@ async function handleFrossApi(request, env) {
   const isCreator = Boolean(creatorEmail && auth.emailVerified && auth.email && auth.email === creatorEmail);
   const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""), message);
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
+  const correctedQuery = frossCorrectText(message);
   const safetyReply = frossSafetyReply(message);
   if (safetyReply) return frossJson({
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-    diagnostics: { engine: "FROSS Local Brain 0.2", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+    diagnostics: { engine: "FROSS Local Brain 0.3", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
   const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
-  const quickReply = frossQuickResponse({ message, isCreator, mode });
+  const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
   let results = [];
   let providerErrors = [];
   if (!quickReply) {
-    const search = await frossRunSearch(frossAddContext(message, history), mode);
+    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
     results = search.results;
     providerErrors = search.errors;
   }
   const localResult = quickReply
     ? { reply: quickReply, kind: "local-rule", sources: [] }
-    : frossThink({ message, history, results, mode, isCreator });
+    : frossThink({ message: correctedQuery, history, results, mode, isCreator });
   const reply = localResult.reply;
   return frossJson({
     name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
@@ -584,8 +585,9 @@ async function handleFrossApi(request, env) {
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
       resultsFound: results.length, providerErrors, aiUsed: false,
-      engine: "FROSS Local Brain 0.2",
-      kind: localResult.kind || "local-rule",
+      engine: "FROSS Local Brain 0.3",
+      kind: localResult.kind || "local-rule-v03",
+      correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       note: "Ответ сформирован собственным правиловым движком FROSS; готовая языковая модель не вызывается."
     }
   }, 200, request);
