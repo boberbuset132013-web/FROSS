@@ -10,7 +10,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parent
+if not (ROOT / "fross_brain_v04.py").exists():
+    ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import fross_brain_v04 as brain  # noqa: E402
 
