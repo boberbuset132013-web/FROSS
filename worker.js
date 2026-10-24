@@ -1483,7 +1483,7 @@ async function handleFrossApi(request, env) {
     : frossThink({ message: correctedQuery, history, results, knowledge: allKnowledge, mode, isCreator });
   const reply = localResult.reply;
   return frossJson({
-    name: FROSS_PROFILE.name, reply, mode, steps: frossSteps(mode),
+    name: FROSS_PROFILE.name, reply, mode, steps: localResult.trace?.slice(0, mode === "reasoning" ? 7 : 4) || frossSteps(mode),
     sources: (localResult.sources?.length ? localResult.sources : results).slice(0, 8).map(({ title, url, snippet, source, score }) => ({
       title, url, snippet, source, score: Number((score || 0).toFixed(3))
     })),
