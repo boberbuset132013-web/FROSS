@@ -13,38 +13,30 @@
 
 ## 2. FROSS Transformer 1.0 — собственная генеративная модель
 
-В FROSS не используются готовые языковые модели, скачанные веса или удалённые генеративные API. Модель написана в `fross_transformer.py` на PyTorch и обучается с нуля на оригинальном корпусе `data/fross_corpus.jsonl`.
+FROSS использует собственный decoder-only Transformer из `fross_transformer.py`. Готовые языковые модели, скачанные веса и внешние LLM API не подключаются. BPE-токенизатор строится по своему корпусу, веса инициализируются случайно и обучаются через cross-entropy, backpropagation и AdamW. В модели есть causal multi-head self-attention (Query/Key/Value), embeddings, feed-forward слои, residual connections и LayerNorm.
 
-- **Токенизатор:** собственный BPE строит объединения символов и частых фрагментов только на данных корпуса.
-- **Архитектура:** обучаемые token/position embeddings, decoder-only Transformer, causal multi-head self-attention (Query/Key/Value), feed-forward слои, residual connections, LayerNorm и выходной слой следующего токена.
-- **Обучение:** веса создаются случайно; loss по следующему токену вычисляется через cross-entropy и backpropagation, а AdamW обновляет параметры. Docker-сборка обучает модель на корпусе и сохраняет checkpoint.
-- **Генерация:** Python генерирует текст по токенам с учётом контекста и выбранных заметок. В режиме «Рассуждение» используется больший бюджет генерации. C++ слой не подставляет абзац-ответ: он классифицирует тип задачи, проверяет точную арифметику и передаёт структурированные проверки собственной модели.
-- **Маршрутизация:** JavaScript Worker отправляет обычные запросы в Python, а режим «Рассуждение» — в C++ HTTP-сервис, где также работает модель, обученная с нуля. Если checkpoint отсутствует или не загружается, FROSS сообщает об ошибке генерации, а не притворяется, что сгенерировал ответ.
-- **Поиск:** интернет-поиск запускается по явной просьбе о свежих данных, новостях или источниках. Обычный разговор не должен запускать поиск автоматически.
+**Все ответы сайта — обычный режим и «Рассуждение» — идут в один Python-сервис.** Режим рассуждения использует другой prompt и больший бюджет токенов, но не запускает второй backend. GitHub/Worker обслуживает сайт и API; Python-сервер загружает собственные веса и генерирует ответ. Сохранённые заметки и результаты явного поиска можно передать модели как дополнительный контекст, но это само по себе не меняет веса.
 
-Корпус содержит 166 оригинальных диалогов на момент этой версии. Это небольшой учебный эксперимент, а не аналог большой модели: качество зависит от размера и разнообразия данных и длительности обучения. Чтобы существенно улучшать ответы, нужны дополнительные качественные примеры и проверка на вопросах, которых нет в обучении. Личные чаты не используются для автоматического переобучения.
+На момент этой версии учебный корпус содержит 166 оригинальных диалогов. Это небольшой эксперимент: качество зависит от разнообразия корпуса и вычислительного бюджета. Если генерация не работает, сервис должен сообщить о проблеме с моделью, а не молча подставлять старый шаблон. Личные чаты не используются для автоматического переобучения.
 
-## 3. Подключение Python и C++ сервисов бесплатно
-Проекты сервисов уже находятся в репозитории; файл `render.yaml` описывает два Docker-сервиса с планом Free. Render Free может приостанавливать неактивные сервисы, поэтому первый запрос после перерыва может быть медленнее или перейти на резервный JavaScript-ответ. Подробности: [официальные ограничения Render Free](https://render.com/docs/free).
+## 3. Подключение одного Python-сервиса
 
-1. Открой [Render](https://render.com/) и создай Blueprint, выбрав репозиторий `boberbuset132013-web/FROSS`. Render должен прочитать файл `render.yaml` и предложить `fross-python-brain` и `fross-cpp-brain`. Выбирай **Free** у обоих; не выбирай платный план.
-2. Создай один секретный токен в PowerShell:
+В `render.yaml` настроен один Docker-сервис `fross-python-brain`. Это экономит память: для ответов больше не нужно запускать второй backend.
+
+1. Открой [Render](https://render.com/) и создай Blueprint из репозитория `boberbuset132013-web/FROSS`. В списке должен быть один сервис — `fross-python-brain`. Выбери Free или свой имеющийся план.
+2. Создай длинный случайный токен, например в PowerShell:
    ```powershell
    [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
    ```
-   Вставь одинаковое значение в переменную `FROSS_BRAIN_SERVICE_TOKEN` для обоих Render-сервисов. Токен нельзя публиковать в GitHub, сообщениях чата или коде.
-3. Дождись успешной сборки двух сервисов. В Render открой каждый сервис и скопируй его реальный публичный URL. Проверь, что адреса `/health` открываются и показывают версию 1.0.
-4. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets**. Добавь текстовые переменные:
-   - `FROSS_PYTHON_BRAIN_URL` = URL Python-сервиса с путём `/chat`, например `https://ИМЯ-PYTHON-СЕРВИСА.onrender.com/chat`;
-   - `FROSS_CPP_BRAIN_URL` = URL C++-сервиса с путём `/chat`, например `https://ИМЯ-CPP-СЕРВИСА.onrender.com/chat`.
-   
-   Вместо примеров вставь адреса, которые реально показал Render.
-5. Там же добавь **Secret** с именем `FROSS_BRAIN_SERVICE_TOKEN` и вставь точно такой же токен, как в обоих Render-сервисах. Не сохраняй его в `wrangler.jsonc` или других публичных файлах. Сохрани переменные и выполни новый deploy Worker, если Dashboard не сделал это автоматически.
-6. При сборке обоих Docker-образов модель обучается из случайных весов на локальном корпусе, без загрузки готовых checkpoint. После первого развёртывания проверь `/health` обоих сервисов: `generationModelLoaded` должно быть `true`, а `generationModel` — `FROSS Transformer 1.0`. Если это не так, открой логи Render и проверь шаг обучения в Docker build.
+   Добавь это значение в Render → Environment как `FROSS_BRAIN_SERVICE_TOKEN`. Не публикуй токен в GitHub или чате.
+3. Дождись успешной сборки. При сборке Docker обучает свой Transformer с нуля на `data/fross_corpus.jsonl` и проверяет тестовую генерацию. Открой `/health` по URL сервиса; нужно увидеть `"generationModelLoaded": true` и `"generationModel": "FROSS Transformer 1.0"`.
+4. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets** и добавь:
+   - **Text variable** `FROSS_PYTHON_BRAIN_URL` — HTTPS URL Python-сервиса с путём `/chat`, например `https://ИМЯ-СЕРВИСА.onrender.com/chat`;
+   - **Secret** `FROSS_BRAIN_SERVICE_TOKEN` — точно такое же значение, как в Render.
+5. Удали старую переменную `FROSS_CPP_BRAIN_URL`, если она осталась. Опубликуй новую версию Worker и обнови страницу сайта сочетанием Ctrl+F5.
+6. Открой `https://fross.boberbuset132013.workers.dev/api/health`. В JSON должно быть `"build": "fross-python-transformer-2026-10-24"`, `"pythonBrainConfigured": true`, а внутри `pythonBrainHealth` — `"reachable": true` и `"generationModelLoaded": true`. Если поля отсутствуют, открыта старая версия Worker или публикация не завершилась.
 
-Официальная документация Render: [Blueprints](https://render.com/docs/blueprint-spec), [Free plan и ограничения](https://render.com/docs/free).
-
-При включённых внешних движках текст нового сообщения и последние сообщения текущего чата могут быть переданы в Render-сервис Python или C++, вместе с выбранными заметками памяти. Сервисы настроены не записывать содержимое сообщений в журналы, но всё равно не отправляй в чат пароли, токены, закрытые ключи или другие секреты.
+Официальные страницы: [Render Blueprints](https://render.com/docs/blueprint-spec), [ограничения Render Free](https://render.com/docs/free).
 
 ## 4. Пароль создателя, память и GitHub-база знаний
 1. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets → Add → Secret**. Имя секрета — `FROSS_CREATOR_PASSWORD`; в значение введи новый уникальный пароль длиной не менее 24 символов. Не добавляй пароль в `vars`, GitHub, HTML, JavaScript, `wrangler.jsonc` или README. Если используешь Wrangler CLI, выполни `npx wrangler secret put FROSS_CREATOR_PASSWORD` и введи пароль в приглашении. [Документация Cloudflare Secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
@@ -102,11 +94,12 @@ python tests/test_fross_transformer.py
 
 ## 8. Если не работает
 - Ошибка конфигурации/кнопка Google выключена: проверь `public/firebase-config.js`.
+- Друг не может открыть даже главную страницу и Chrome пишет «Не удаётся получить доступ к сайту»: это происходит до входа Firebase и до генерации ИИ. Сначала открой точный адрес `https://fross.boberbuset132013.workers.dev/api/health`. Если он тоже не открывается ни у кого, в Cloudflare → Workers & Pages → `fross` → Settings → Domains & Routes проверь, что `workers.dev` включён и отображаемый адрес совпадает с отправленной ссылкой; затем выполни Deploy последнего Worker. Если у тебя страница открывается, а у друга — нет, попроси его попробовать другую сеть и прислать точный код Chrome (`ERR_NAME_NOT_RESOLVED`, `ERR_CONNECTION_TIMED_OUT` и т. п.): это поможет отличить DNS от сетевого маршрута. Проверка кода в GitHub сама по себе не подтверждает, что опубликованный адрес доступен извне.
 - `Unexpected token '<'` или сообщение `вернул HTML вместо JSON`: API получил HTML-страницу вместо JSON. Обычно сайт обслуживается старой/не той публикацией или маршруты `/api/*` не попадают в Worker. Проверь `wrangler.jsonc` (в `assets.run_worker_first` должен быть `"/api/*"`), сделай Deploy актуального Worker и обнови сайт через Ctrl+F5. В обычном чате запрос должен идти на `/api/chat`; секрет создателя сам по себе эту ошибку не вызывает.
 - Не получается стать создателем: сначала войди в FROSS и открой `https://fross.boberbuset132013.workers.dev/api/health`. Если `creatorPasswordConfigured` равно `false`, в Cloudflare → Workers & Pages → `fross` → Settings → Variables and Secrets добавь именно **Secret** `FROSS_CREATOR_PASSWORD` длиной не менее 24 символов, сохрани и опубликуй новую версию Worker. Затем обнови сайт через Ctrl+F5 и введи это же значение в окне «Обучение FROSS». Если `creatorPasswordConfigured` равно `true`, проверь, что вводишь точное значение секрета без лишних пробелов. Альтернативная настройка `FROSS_CREATOR_EMAIL` работает только для совпадающего адреса с подтверждённой почтой Firebase. `FROSS_GITHUB_TOKEN` отвечает за запись общей базы знаний и сам по себе не даёт права создателя.
 - `auth/unauthorized-domain`: добавь домен Worker в Firebase Authentication → Authorized domains.
 - `Missing or insufficient permissions`: проверь опубликованные `firestore.rules`.
-- Если ответ слишком короткий или бессвязный: проверь статус `generationModelLoaded`, качество и разнообразие корпуса в `data/fross_corpus.jsonl`, а также validation loss. Добавляй новые оригинальные пары диалогов, затем пересобирай оба Render-сервиса. JavaScript здесь нормализует запрос и маршрутизирует его; сам текст генерируется обученными весами Transformer.
+- Если ответ слишком короткий или бессвязный: проверь `pythonBrainHealth.generationModelLoaded`, качество и разнообразие корпуса в `data/fross_corpus.jsonl`, а также validation loss. Добавляй оригинальные пары диалогов и пересобирай один Python-сервис. JavaScript нормализует запрос и маршрутизирует его; текст генерируется обученными весами Transformer.
 - После изменений дождись завершения автоматического деплоя и обнови страницу сочетанием Ctrl+F5.
 
 
