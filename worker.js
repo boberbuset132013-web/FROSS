@@ -904,7 +904,7 @@ async function handleFrossApi(request, env) {
     providerErrors = search.errors;
   }
   const localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
-  if (localMemory.kind === "saved-memory-v05" && !shouldSearch) {
+  if (localMemory.kind === "saved-memory-v06" && !shouldSearch) {
     return frossJson({
       name: FROSS_PROFILE.name,
       reply: localMemory.reply,
@@ -918,7 +918,7 @@ async function handleFrossApi(request, env) {
 
   // Delegate algorithmic tasks to Python or C++; for questions needing fresh facts,
   // merge saved notes with current search snippets locally so neither source is discarded.
-  if (!shouldSearch || (!results.length && localMemory.kind !== "saved-memory-v05")) {
+  if (!shouldSearch || (!results.length && localMemory.kind !== "saved-memory-v06")) {
     const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
     const remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
       message: correctedQuery,
