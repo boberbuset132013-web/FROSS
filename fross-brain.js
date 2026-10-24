@@ -255,7 +255,7 @@ function generateCodeReply(message) {
   return description + "\n\n" + fence + lang + "\n" + code + "\n" + fence + compileNote;
 }
 
-const FROSS_STOP_WORDS_LOCAL = new Set(["что", "как", "где", "когда", "для", "это", "the", "and", "with", "про", "пожалуйста", "расскажи", "объясни"]);
+const FROSS_STOP_WORDS_LOCAL = new Set(["что", "как", "где", "когда", "для", "это", "такое", "который", "которая", "которые", "это", "того", "его", "она", "они", "оно", "он", "и", "в", "на", "по", "об", "о", "про", "мне", "меня", "пожалуйста", "расскажи", "объясни", "тему", "темы", "работает", "работают", "работал", "работала", "расскажи", "подробнее", "информация", "информацию", "нужно", "хочу", "узнать", "the", "and", "with", "from", "this", "that"]);
 
 function findKnowledgeReply(query, knowledge, mode = "normal") {
   if (!Array.isArray(knowledge) || !knowledge.length) return null;
