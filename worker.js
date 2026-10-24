@@ -1159,7 +1159,8 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled") {
   for (const unit of curriculum) {
     try {
       const search = await frossRunSearch(unit.query, "reasoning");
-      const notes = await frossBuildTrainingNotes(unit.topic, search.results.slice(0, 5));
+      const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 5);
+      const notes = await frossBuildTrainingNotes(unit.topic, candidates);
       if (!notes.length) {
         outcomes.push({ topic: unit.topic, saved: false, noteCount: 0, error: "No suitable public search results", providerErrors: search.errors.slice(0, 3) });
         continue;
@@ -1188,7 +1189,8 @@ async function handleFrossTrain(request, env) {
 
   const searchQuery = frossTrainingSearchQuery(topic);
   const search = await frossRunSearch(searchQuery, "reasoning");
-  const notes = await frossBuildTrainingNotes(topic, search.results.slice(0, 8));
+  const candidates = frossMergeTrainingCandidates(topic, search.results, 8);
+  const notes = await frossBuildTrainingNotes(topic, candidates);
 
   if (!notes.length) return frossJson({
     ok: false, error: "По этой теме не удалось найти подходящих материалов. Попробуй сформулировать тему конкретнее.",
