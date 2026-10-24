@@ -1,4 +1,4 @@
-// FROSS Local Brain 0.5 — original rule-based reasoning engine.
+// FROSS Local Brain 0.6 — compositional, rule-based reasoning engine.
 // It calls no hosted language-model API. Answers come from explicit rules,
 // a safe arithmetic parser, local templates, and summaries of search snippets.
 
@@ -257,6 +257,46 @@ function generateCodeReply(message) {
 
 const FROSS_STOP_WORDS_LOCAL = new Set(["что", "как", "где", "когда", "для", "это", "такое", "который", "которая", "которые", "это", "того", "его", "она", "они", "оно", "он", "и", "в", "на", "по", "об", "о", "про", "мне", "меня", "пожалуйста", "расскажи", "объясни", "тему", "темы", "работает", "работают", "работал", "работала", "расскажи", "подробнее", "информация", "информацию", "нужно", "хочу", "узнать", "the", "and", "with", "from", "this", "that"]);
 
+function frossComposeExplanation(query, notes, mode = "normal") {
+  const stop = FROSS_STOP_WORDS_LOCAL;
+  const queryWords = [...new Set((normalize(frossCorrectText(query)).match(/[a-zа-яё0-9+#]{3,}/g) || [])
+    .filter(word => !stop.has(word)))];
+  const candidates = [];
+  for (const note of (Array.isArray(notes) ? notes : []).slice(0, 6)) {
+    const fields = [
+      ...(Array.isArray(note.keyPoints) ? note.keyPoints : []),
+      note.summary || "",
+      note.snippet || note.content || ""
+    ];
+    for (const field of fields) {
+      for (const raw of String(field || "").replace(/\s+/g, " ").split(/(?<=[.!?])\s+|\\n+|\\s+•\\s+/)) {
+        let sentence = raw.trim().replace(/^[-•\d.)\s]+/, "");
+        if (sentence.length < 35 || sentence.length > 420) continue;
+        if (!/[.!?]$/.test(sentence)) sentence += ".";
+        const normalized = normalize(sentence).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        if (!normalized || candidates.some(item => item.normalized === normalized)) continue;
+        const words = new Set((normalized.match(/[a-zа-яё0-9+#]{3,}/g) || []).filter(word => !stop.has(word)));
+        const hits = queryWords.filter(word => words.has(word)).length;
+        const relevance = queryWords.length ? hits / queryWords.length : 0;
+        candidates.push({ sentence, normalized, relevance, length: sentence.length });
+      }
+    }
+  }
+  const selected = candidates
+    .sort((a, b) => b.relevance - a.relevance || Math.min(b.length, 240) - Math.min(a.length, 240))
+    .slice(0, mode === "reasoning" ? 4 : 3);
+  if (!selected.length) return "";
+  const parts = selected.map((item, index) => {
+    const sentence = item.sentence.charAt(0).toLowerCase() + item.sentence.slice(1);
+    if (index === 0) return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+    if (/^(это|также|кроме того|например|поэтому|однако|при этом)\b/i.test(sentence)) return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+    if (index === 1) return "Кроме того, " + sentence;
+    if (index === 2) return "На практике это означает, что " + sentence.replace(/[.!?]+$/, "") + ".";
+    return "Ещё один важный момент: " + sentence;
+  });
+  return parts.join(" ");
+}
+
 function findKnowledgeReply(query, knowledge, mode = "normal") {
   if (!Array.isArray(knowledge) || !knowledge.length) return null;
   const terms = value => new Set(
@@ -281,9 +321,11 @@ function findKnowledgeReply(query, knowledge, mode = "normal") {
   }).sort((a, b) => b.score - a.score);
   const matches = ranked.filter(item => item.score >= 0.40).slice(0, mode === "reasoning" ? 4 : 3);
   if (!matches.length) return null;
+  const synthesis = frossComposeExplanation(query, matches.map(item => item.note), mode);
   const lines = [mode === "reasoning"
-    ? "Сначала проверил личную базу знаний FROSS и выбрал самые подходящие материалы."
-    : "Нашёл подходящие материалы в личной базе знаний FROSS:"];
+    ? "FROSS 0.6 проверил личную память, сравнил несколько заметок и объединил подходящие тезисы в связное объяснение."
+    : "Нашёл подходящие материалы в личной базе знаний FROSS. Вот связное объяснение по нескольким заметкам:"];
+  if (synthesis) lines.push("**Объяснение простыми словами:** " + synthesis);
   for (const [index, item] of matches.entries()) {
     const note = item.note;
     const title = String(note.title || note.topic || "Заметка");
@@ -465,7 +507,7 @@ export function frossThink({ message, history = [], results = [], knowledge = []
   }
 
   return {
-    reply: "Я пока не нашёл достаточно надёжных данных и не хочу выдумывать ответ. Мой движок 0.4 работает на локальных правилах и поисковых фрагментах, поэтому иногда ему не хватает контекста. Попробуй переформулировать запрос или уточнить желаемый результат.",
+    reply: "Я пока не нашёл достаточно надёжных данных и не хочу выдумывать ответ. Мой движок 0.6 использует локальные правила, сохранённые знания и поисковые фрагменты, поэтому иногда ему не хватает контекста. Попробуй переформулировать запрос или уточнить желаемый результат.",
     kind: "no-match-v05",
     sources: [],
     trace: ["Нормализовать запрос", "Проверить локальные правила", "Недостаточно надёжных совпадений", "Честно сообщить об ограничении"]
