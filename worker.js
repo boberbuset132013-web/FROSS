@@ -703,6 +703,283 @@ async function frossReadPublicPageExcerpt(value) {
   }
 }
 
+
+const FROSS_GITHUB_OWNER = "boberbuset132013-web";
+const FROSS_GITHUB_REPO = "FROSS";
+const FROSS_GITHUB_BRANCH = "main";
+const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
+let frossGithubIndexCache = null;
+let frossGithubIndexCacheUntil = 0;
+const frossGithubTopicCache = new Map();
+
+function frossGithubApiUrl(path, ref = "") {
+  const safePath = path.split("/").map(part => encodeURIComponent(part)).join("/");
+  const base = "https://api.github.com/repos/" + FROSS_GITHUB_OWNER + "/" + FROSS_GITHUB_REPO + "/contents/" + safePath;
+  return ref ? base + "?ref=" + encodeURIComponent(ref) : base;
+}
+function frossGithubRawUrl(path) {
+  return "https://raw.githubusercontent.com/" + FROSS_GITHUB_OWNER + "/" + FROSS_GITHUB_REPO + "/" + FROSS_GITHUB_BRANCH + "/" +
+    path.split("/").map(part => encodeURIComponent(part)).join("/");
+}
+function frossGithubSlug(topic) {
+  const map = {
+    а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"i",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",
+    у:"u",ф:"f",х:"kh",ц:"ts",ч:"ch",ш:"sh",щ:"shch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya"
+  };
+  const value = String(topic || "").toLowerCase().replace(/ё/g, "е").split("").map(char => map[char] ?? char).join("");
+  return value.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "topic";
+}
+function frossEncodeBase64Utf8(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+  }
+  return btoa(binary);
+}
+function frossDecodeBase64Utf8(value) {
+  const binary = atob(String(value || "").replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+function frossGithubToken(env) {
+  return typeof env.FROSS_GITHUB_TOKEN === "string" ? env.FROSS_GITHUB_TOKEN.trim() : "";
+}
+async function frossGithubReadContents(path, token) {
+  const response = await fetch(frossGithubApiUrl(path, FROSS_GITHUB_BRANCH), {
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "FROSS-Knowledge-Worker",
+      ...(token ? { "Authorization": "Bearer " + token } : {})
+    },
+    cf: { cacheTtl: 30, cacheEverything: true }
+  });
+  if (response.status === 404) return { ok: true, exists: false, sha: "", text: "" };
+  if (!response.ok) return { ok: false, exists: false, error: "GitHub GET " + path + " returned HTTP " + response.status + "." };
+  const data = await response.json();
+  if (typeof data.content !== "string") return { ok: false, exists: false, error: "GitHub returned no text content for " + path + "." };
+  try {
+    return { ok: true, exists: true, sha: String(data.sha || ""), text: frossDecodeBase64Utf8(data.content) };
+  } catch {
+    return { ok: false, exists: true, error: "Could not decode GitHub file " + path + "." };
+  }
+}
+async function frossGithubPutContents(path, content, token, message, sha = "") {
+  const body = {
+    message,
+    content: frossEncodeBase64Utf8(content),
+    branch: FROSS_GITHUB_BRANCH,
+    ...(sha ? { sha } : {})
+  };
+  const response = await fetch(frossGithubApiUrl(path), {
+    method: "PUT",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "FROSS-Knowledge-Worker",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    return { ok: false, error: "GitHub save " + path + " returned HTTP " + response.status + (details ? ": " + frossClean(details).slice(0, 150) : "") };
+  }
+  const data = await response.json();
+  return { ok: true, sha: data.content?.sha || "", commit: data.commit?.html_url || "" };
+}
+function frossUniqueStrings(values, limit, maxLength = 300) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values || []) {
+    const cleaned = frossClean(value).slice(0, maxLength);
+    const key = cleaned.toLowerCase();
+    if (!cleaned || seen.has(key)) continue;
+    seen.add(key);
+    result.push(cleaned);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+async function frossSaveKnowledgeToGitHub(topic, notes, env) {
+  const token = frossGithubToken(env);
+  if (!token) {
+    return {
+      configured: false, saved: false, public: true,
+      message: "GitHub-синхронизация не настроена: добавь Secret FROSS_GITHUB_TOKEN в Cloudflare."
+    };
+  }
+  const slug = frossGithubSlug(topic);
+  const topicPath = "memory/knowledge/" + slug + ".json";
+  const topicRead = await frossGithubReadContents(topicPath, token);
+  if (!topicRead.ok) return { configured: true, saved: false, public: true, message: topicRead.error };
+  const indexRead = await frossGithubReadContents(FROSS_GITHUB_INDEX_PATH, token);
+  if (!indexRead.ok) return { configured: true, saved: false, public: true, message: indexRead.error };
+
+  let previous = null;
+  if (topicRead.exists) {
+    try { previous = JSON.parse(topicRead.text); }
+    catch { return { configured: true, saved: false, public: true, message: "Существующий файл базы знаний не является корректным JSON: " + topicPath };
+  }
+  let index = { schemaVersion: 1, updatedAt: "", topics: [] };
+  if (indexRead.exists) {
+    try {
+      const parsed = JSON.parse(indexRead.text);
+      if (Array.isArray(parsed.topics)) index = { ...index, ...parsed, topics: parsed.topics };
+    } catch {
+      return { configured: true, saved: false, public: true, message: "Индекс базы знаний повреждён. Исправь memory/knowledge/index.json." };
+    }
+  }
+
+  const existingItems = Array.isArray(previous?.items) ? previous.items : [];
+  const combined = [...existingItems, ...notes];
+  const byKey = new Map();
+  for (const note of combined) {
+    const key = note.url ? "url:" + note.url.toLowerCase() : "title:" + String(note.title || "").toLowerCase();
+    byKey.set(key, {
+      schemaVersion: 2,
+      kind: "source-note",
+      topic: frossClean(note.topic || topic).slice(0, 180),
+      title: frossClean(note.title || "Источник").slice(0, 260),
+      url: typeof note.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
+      snippet: frossClean(note.snippet || "").slice(0, 3200),
+      summary: frossClean(note.summary || "").slice(0, 900),
+      keyPoints: Array.isArray(note.keyPoints) ? frossUniqueStrings(note.keyPoints, 5, 300) : [],
+      keywords: Array.isArray(note.keywords) ? frossUniqueStrings(note.keywords, 24, 40) : [],
+      source: frossClean(note.source || "web search").slice(0, 80),
+      score: Number(Math.max(0, Math.min(1, Number(note.score) || 0)).toFixed(4))
+    });
+  }
+  const items = [...byKey.values()].slice(-48);
+  const timestamp = new Date().toISOString();
+  const summary = frossUniqueStrings(items.map(note => note.summary || note.snippet), 4, 900).join(" ").slice(0, 2400);
+  const keyPoints = frossUniqueStrings(items.flatMap(note => note.keyPoints || []), 12, 300);
+  const keywords = frossUniqueStrings(items.flatMap(note => note.keywords || []), 48, 40);
+  const topicDoc = {
+    schemaVersion: 1, kind: "knowledge-topic", visibility: "public", slug, topic,
+    createdAt: previous?.createdAt || timestamp, updatedAt: timestamp,
+    summary, keyPoints, keywords, sourceCount: items.length, items
+  };
+  const topicSave = await frossGithubPutContents(
+    topicPath, JSON.stringify(topicDoc, null, 2), token,
+    "FROSS knowledge: update " + topic.slice(0, 70),
+    topicRead.sha
+  );
+  if (!topicSave.ok) return { configured: true, saved: false, public: true, path: topicPath, message: topicSave.error };
+
+  const indexEntry = {
+    slug, path: topicPath, topic,
+    summary: summary.slice(0, 900),
+    keyPoints: keyPoints.slice(0, 8),
+    keywords: keywords.slice(0, 32),
+    sourceCount: items.length,
+    updatedAt: timestamp
+  };
+  index.topics = Array.isArray(index.topics) ? index.topics.filter(entry => entry.slug !== slug) : [];
+  index.topics.unshift(indexEntry);
+  index.topics = index.topics.slice(0, 300);
+  index.schemaVersion = 1;
+  index.updatedAt = timestamp;
+  const indexSave = await frossGithubPutContents(
+    FROSS_GITHUB_INDEX_PATH, JSON.stringify(index, null, 2), token,
+    "FROSS knowledge: update topic index",
+    indexRead.sha
+  );
+  if (!indexSave.ok) {
+    return { configured: true, saved: false, public: true, path: topicPath, message: "Материалы записаны в " + topicPath + ", но индекс не обновлён: " + indexSave.error };
+  }
+  frossGithubIndexCache = null;
+  frossGithubIndexCacheUntil = 0;
+  frossGithubTopicCache.clear();
+  return { configured: true, saved: true, public: true, path: topicPath, indexPath: FROSS_GITHUB_INDEX_PATH, commitUrl: indexSave.commit, message: "Учебные материалы сохранены в публичную базу знаний GitHub." };
+}
+async function frossReadGithubKnowledgeIndex() {
+  if (frossGithubIndexCache && Date.now() < frossGithubIndexCacheUntil) return frossGithubIndexCache;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1800);
+  try {
+    const response = await fetch(frossGithubRawUrl(FROSS_GITHUB_INDEX_PATH), {
+      signal: controller.signal,
+      headers: { "Accept": "application/json", "User-Agent": "FROSS-Knowledge-Worker" },
+      cf: { cacheTtl: 90, cacheEverything: true }
+    });
+    if (!response.ok) {
+      if (frossGithubIndexCache) return frossGithubIndexCache;
+      return [];
+    }
+    const data = await response.json();
+    frossGithubIndexCache = Array.isArray(data.topics) ? data.topics : [];
+    frossGithubIndexCacheUntil = Date.now() + 90000;
+    return frossGithubIndexCache;
+  } catch {
+    return frossGithubIndexCache || [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function frossLoadGithubKnowledge(query) {
+  const queryTerms = [...new Set(frossKnowledgeTokens(query))];
+  if (!queryTerms.length) return [];
+  const index = await frossReadGithubKnowledgeIndex();
+  const ranked = index.map(entry => {
+    const words = new Set(frossKnowledgeTokens([
+      entry.topic || "", entry.summary || "",
+      ...(Array.isArray(entry.keyPoints) ? entry.keyPoints : []),
+      ...(Array.isArray(entry.keywords) ? entry.keywords : [])
+    ].join(" ")));
+    const matches = queryTerms.filter(term => words.has(term)).length;
+    const topicMatches = queryTerms.filter(term => frossKnowledgeTokens(entry.topic || "").includes(term)).length;
+    return { entry, score: matches / queryTerms.length + topicMatches / queryTerms.length * 0.8 };
+  }).filter(item => item.score >= 0.18).sort((a, b) => b.score - a.score).slice(0, 3);
+  const allNotes = [];
+  for (const { entry } of ranked) {
+    const path = String(entry.path || "");
+    if (!/^memory\/knowledge\/[a-z0-9-]+\.json$/.test(path)) continue;
+    const cached = frossGithubTopicCache.get(path);
+    let document = cached?.until > Date.now() ? cached.document : null;
+    if (!document) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1800);
+      try {
+        const response = await fetch(frossGithubRawUrl(path), {
+          signal: controller.signal,
+          headers: { "Accept": "application/json", "User-Agent": "FROSS-Knowledge-Worker" },
+          cf: { cacheTtl: 90, cacheEverything: true }
+        });
+        if (response.ok) {
+          document = await response.json();
+          frossGithubTopicCache.set(path, { document, until: Date.now() + 90000 });
+        }
+      } catch {
+        document = null;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    if (!document || !Array.isArray(document.items)) continue;
+    for (const note of document.items.slice(-48)) {
+      allNotes.push({
+        schemaVersion: 2,
+        kind: "github-source-note",
+        topic: frossClean(note.topic || document.topic || entry.topic || "").slice(0, 180),
+        title: frossClean(note.title || "").slice(0, 260),
+        url: typeof note.url === "string" && /^https?:\/\//i.test(note.url) ? note.url.slice(0, 700) : "",
+        snippet: frossClean(note.snippet || "").slice(0, 3200),
+        summary: frossClean(note.summary || document.summary || entry.summary || "").slice(0, 900),
+        keyPoints: Array.isArray(note.keyPoints) ? note.keyPoints.slice(0, 5).map(point => frossClean(point).slice(0, 300)) :
+          (Array.isArray(document.keyPoints) ? document.keyPoints.slice(0, 5) : []),
+        keywords: Array.isArray(note.keywords) ? note.keywords.slice(0, 24).map(word => frossClean(word).slice(0, 40)) :
+          (Array.isArray(document.keywords) ? document.keywords.slice(0, 24) : []),
+        source: frossClean(note.source || "GitHub knowledge").slice(0, 80),
+        score: Number(Math.max(0, Math.min(1, Number(note.score) || 0)).toFixed(4))
+      });
+    }
+  }
+  return allNotes;
+}
+
 function frossKnowledgeTokens(value) {
   const ignored = new Set([
     "это","как","для","что","или","при","его","ее","они","она","оно","the","and","for","with","from","are","was",
@@ -770,6 +1047,8 @@ async function handleFrossTrain(request, env) {
     };
   })).filter(note => note.title && (note.snippet || note.url));
 
+  const githubStorage = await frossSaveKnowledgeToGitHub(topic, notes, env);
+
   if (!notes.length) return frossJson({
     ok: false, error: "По этой теме не удалось найти подходящих материалов. Попробуй сформулировать тему конкретнее.",
     providerErrors: search.errors
@@ -781,6 +1060,7 @@ async function handleFrossTrain(request, env) {
     topic,
     notes,
     count: notes.length,
+    githubStorage,
     providerErrors: search.errors,
     notice: "FROSS попробовал прочитать публичные страницы и, если сайт не разрешил загрузку, сохранил поисковые фрагменты. Это заметки, а не дообучение модели; проверь источники и удали неточные записи."
   }, 200, request);
@@ -892,6 +1172,9 @@ async function handleFrossApi(request, env) {
     source: frossClean(note?.source || "").slice(0, 80),
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
+  const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
+  const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
+
   // v0.5: gather fresh web material for information queries even when personal notes match,
   // then combine the two sources instead of stopping at the first memory hit.
   const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
@@ -903,7 +1186,7 @@ async function handleFrossApi(request, env) {
     results = search.results;
     providerErrors = search.errors;
   }
-  const localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
+  const localMemory = frossThink({ message: correctedQuery, history, knowledge: allKnowledge, results: [], mode, isCreator });
   if (localMemory.kind === "saved-memory-v06" && !shouldSearch) {
     return frossJson({
       name: FROSS_PROFILE.name,
@@ -924,7 +1207,7 @@ async function handleFrossApi(request, env) {
       message: correctedQuery,
       mode,
       history,
-      knowledge: knowledge.slice(0, 24)
+      knowledge: allKnowledge.slice(0, 24)
     });
     if (remote.handled) {
       return frossJson({
