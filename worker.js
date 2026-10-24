@@ -94,7 +94,7 @@ function corsPreflight() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Telegram-Bot-Api-Secret-Token",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Telegram-Bot-Api-Secret-Token, X-FROSS-CREATOR-TOKEN",
       "Access-Control-Max-Age": "86400",
     },
   });
@@ -424,7 +424,7 @@ function frossJson(data, status = 200, request) {
       "Access-Control-Allow-Origin": origin,
       "Vary": "Origin",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-FROSS-CREATOR-TOKEN"
     }
   });
 }
