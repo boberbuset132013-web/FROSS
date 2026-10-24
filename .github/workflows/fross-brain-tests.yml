@@ -85,7 +85,11 @@ jobs:
           assert not Path("services/llm_client.py").exists()
           assert "SpeechRecognition" in page and 'recognition.lang="ru-RU"' in page
           assert "Речь распознана. Проверь текст перед отправкой." in page
-          assert "function frossComposeExplanation(query, notes, mode = \"normal\")" in Path("fross-brain.js").read_text(encoding="utf-8")
+          brain_js = Path("fross-brain.js").read_text(encoding="utf-8")
+          assert "export function frossCorrectText(text)" in brain_js
+          assert "export function frossThink" not in brain_js
+          assert "function quickReply" not in brain_js
+          assert "frossQuickResponse" not in worker and "frossThink" not in worker
           assert "saveMemoryBtn" in page and "exportMemoryBtn" not in page
           assert "https://docs.python.org/3/tutorial/" in worker
           assert "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide" in worker
@@ -120,82 +124,19 @@ jobs:
           Path("/tmp/fross-browser.mjs").write_text(html[start:end], encoding="utf-8")
           PY
           node --check /tmp/fross-browser.mjs
-      - name: Check structured knowledge retrieval priority
+      - name: Check JavaScript has no canned-response brain
         run: |
           node --input-type=module <<'JS'
           import assert from "node:assert/strict";
           import { readFileSync } from "node:fs";
-          const source = readFileSync("fross-brain.js", "utf8");
-          const brain = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
-          const knowledge = [{
-            schemaVersion: 2,
-            kind: "source-note",
-            topic: "Основы Python",
-            title: "Основы Python: переменные и функции",
-            snippet: "Python хранит значения в переменных и позволяет объединять действия в функции.",
-            summary: "Python хранит данные в переменных и использует функции для повторного использования кода.",
-            keyPoints: ["Переменная хранит значение.", "Функция объединяет действия в отдельный блок."],
-            keywords: ["python", "переменная", "функция", "синтаксис"],
-            source: "test",
-            score: 0.9,
-            url: "https://example.test/python"
-          }];
-          const learned = brain.frossThink({ message: "Основы Python", knowledge });
-          assert.equal(learned.kind, "saved-memory-v06");
-          assert.match(learned.reply, /данные в переменных/);
-          assert.match(learned.reply, /Объяснение простыми словами/);
-          const explanation = learned.reply.split("Объяснение простыми словами:**")[1]?.split("\n\n")[0] || "";
-          assert.ok((explanation.match(/[.!?](?:\s|$)/g) || []).length >= 2, "Brain 0.6 should connect multiple sentences from saved notes");
-          const greeting = brain.frossThink({ message: "Привет", knowledge });
-          assert.equal(greeting.kind, "local-rule-v05");
-          const followup = brain.frossThink({
-            message: "подробнее",
-            history: [
-              { role: "user", content: "Как создать сайт?" },
-              { role: "assistant", content: "Сначала определи цель сайта. Затем создай HTML-разметку и добавь CSS-оформление." }
-            ]
-          });
-          assert.match(followup.reply, /продолжу предыдущую мысль/i);
-          assert.match(followup.reply, /HTML-разметку/i);
-          const correction = brain.frossThink({ message: "не это" , history: [{ role: "assistant", content: "Предыдущий ответ." }] });
-          assert.match(correction.reply, /неверно истолковал/i);
-          const errorHelp = brain.frossThink({ message: "не работает" });
-          assert.match(errorHelp.reply, /точный текст ошибки/i);
-          const whyMath = brain.frossThink({
-            message: "почему?",
-            history: [
-              { role: "user", content: "сколько будет (2+3)*4" },
-              { role: "assistant", content: "Ответ: 20. Вычислено локально." }
-            ]
-          });
-          assert.match(whyMath.reply, /Приоритет такой/i);
-          const remembers = brain.frossThink({
-            message: "помнишь?",
-            history: [
-              { role: "user", content: "Я делаю игру в Roblox." },
-              { role: "assistant", content: "Можно начать с прототипа." }
-            ]
-          });
-          assert.match(remembers.reply, /Я делаю игру в Roblox/i);
-          const project = brain.frossThink({ message: "я хочу создать игру на Roblox" });
-          assert.match(project.reply, /самой первой версии/i);
-          const smallTalk = brain.frossThink({ message: "давай поговорим" });
-          assert.match(smallTalk.reply, /Какая тема сейчас интереснее/i);
-          const howAreYou = brain.frossQuickResponse({ message: "как у тебя дела" });
-          assert.match(howAreYou, /готов помогать/i);
-          assert.match(howAreYou, /А у тебя как дела/i);
-          const otherSmallTalk = brain.frossQuickResponse({ message: "что у тебя нового?" });
-          assert.match(otherSmallTalk, /готов помогать/i);
-          const irrelevantSearch = brain.frossThink({
-            message: "объясни термин Kubernetes",
-            results: [{
-              title: "Как дома, как дела?",
-              snippet: "Художественный фильм о жизни в Тбилиси.",
-              url: "https://example.test/film",
-              score: 0
-            }]
-          });
-          assert.equal(irrelevantSearch.kind, "no-match-v05");
-          assert.match(irrelevantSearch.reply, /не буду выдавать случайный результат/i);
-          console.log("Knowledge retrieval, conversational context, small-talk variants and irrelevant-search rejection passed.");
+          const brainSource = readFileSync("fross-brain.js", "utf8");
+          const workerSource = readFileSync("worker.js", "utf8");
+          const brain = await import("data:text/javascript;base64," + Buffer.from(brainSource).toString("base64"));
+          assert.equal(brain.frossCorrectText("Привте ФРОСС"), "привет фросс");
+          assert.equal(typeof brain.frossThink, "undefined");
+          assert.equal(typeof brain.frossQuickResponse, "undefined");
+          assert.doesNotMatch(brainSource, /DEFINITIONS|function quickReply|export function frossThink/);
+          assert.doesNotMatch(workerSource, /frossQuickResponse|frossThink|quickReply/);
+          assert.match(workerSource, /generationModel: "FROSS Transformer 1.0"/);
+          console.log("JavaScript brain only normalizes requests; replies must come from the trained Transformer.");
           JS
