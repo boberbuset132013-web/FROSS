@@ -742,7 +742,7 @@ async function handleFrossIdentity(request, env) {
     ok: true,
     isCreator,
     emailVerified: auth.emailVerified,
-    engine: "FROSS Local Brain 0.5",
+    engine: "FROSS Local Brain 0.6",
     learningEnabled: isCreator,
     brainRoutes: {
       pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
@@ -1291,7 +1291,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Local Brain 0.5",
+    engine: "FROSS Local Brain 0.6",
     topic,
     notes,
     count: notes.length,
@@ -1391,7 +1391,7 @@ async function handleFrossApi(request, env) {
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-    diagnostics: { engine: "FROSS Local Brain 0.5", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+    diagnostics: { engine: "FROSS Local Brain 0.6", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
@@ -1493,7 +1493,7 @@ async function handleFrossApi(request, env) {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS Local Brain 0.5 local fallback",
+      engine: "FROSS Local Brain 0.6 local fallback",
       remoteBrainConfigured: remote.configured,
       kind: localResult.kind || "local-rule-v05",
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
