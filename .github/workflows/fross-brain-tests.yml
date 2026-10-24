@@ -145,5 +145,17 @@ jobs:
             ]
           });
           assert.match(whyMath.reply, /Приоритет такой/i);
-          console.log("Knowledge ranking, context-aware follow-ups, correction and error-help passed.");
+          const remembers = brain.frossThink({
+            message: "помнишь?",
+            history: [
+              { role: "user", content: "Я делаю игру в Roblox." },
+              { role: "assistant", content: "Можно начать с прототипа." }
+            ]
+          });
+          assert.match(remembers.reply, /Я делаю игру в Roblox/i);
+          const project = brain.frossThink({ message: "я хочу создать игру на Roblox" });
+          assert.match(project.reply, /самой первой версии/i);
+          const smallTalk = brain.frossThink({ message: "давай поговорим" });
+          assert.match(smallTalk.reply, /Какая тема сейчас интереснее/i);
+          console.log("Knowledge ranking, contextual follow-ups, context recall, casual chat and error-help passed.");
           JS
