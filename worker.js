@@ -336,27 +336,6 @@ async function frossSearchWikipedia(query) {
   }
 }
 
-function frossSmallTalk(query) {
-  const text = query.trim().toLowerCase();
-
-  if (/^(привет|здравствуй|здравствуйте|хай|hello|hi|доброе утро|добрый вечер)[!. ]*$/.test(text)) {
-    return "Привет! Я FROSS. Могу помочь разобраться в вопросе или поискать сведения в интернете.";
-  }
-  if (/^(кто ты|ты кто|как тебя зовут)[?!. ]*$/.test(text)) {
-    return "Я FROSS — поисковый помощник. Анализирую вопрос, ищу материалы в нескольких источниках и стараюсь отделять факты от предположений.";
-  }
-  if (/^(как дела|что нового)[?!. ]*$/.test(text)) {
-    return "Работаю штатно и готов помочь. Что хочешь узнать?";
-  }
-  if (/^(спасибо|благодарю)[!. ]*$/.test(text)) {
-    return "Пожалуйста! Если хочешь, можем разобраться дальше.";
-  }
-  if (/^(пока|до свидания)[!. ]*$/.test(text)) {
-    return "До встречи! Я FROSS — возвращайся, когда понадобится помощь.";
-  }
-  return null;
-}
-
 function frossAddContext(query, history) {
   const refersBack =
     /\b(он|она|это|этот|эта|там|тогда|его|её|они|такой|такая|тот|предыдущий|предыдущая)\b/i.test(query) ||
@@ -371,32 +350,6 @@ function frossAddContext(query, history) {
   }).filter(Boolean);
 
   return recent.length ? `${query}\nКонтекст разговора:\n${recent.join("\n")}` : query;
-}
-
-function frossBuildReply(query, results, mode) {
-  const smallTalk = frossSmallTalk(query);
-  if (smallTalk) return smallTalk;
-
-  if (!results.length) {
-    return "Я не смог получить результаты поиска. Возможно, источники временно недоступны или блокируют автоматические запросы. Попробуй переформулировать вопрос или повторить попытку позже.";
-  }
-
-  const top = results.slice(0, 4);
-  const lines = ["Я нашёл несколько материалов, которые могут помочь. Вот краткая сводка поисковых фрагментов:"];
-
-  top.forEach((item, index) => {
-    lines.push(`${index + 1}. **${item.title}**\n${item.snippet || "Поисковик не предоставил описание страницы."}`);
-  });
-
-  lines.push("");
-  lines.push("**Предварительный вывод:** это сводка найденных фрагментов, а не гарантия полной проверки фактов.");
-
-  if (mode === "reasoning") {
-    lines.push("**Дополнительная проверка:** результаты сопоставлены по ключевым словам, а дубликаты удалены. Это алгоритмическая оценка, а не человеческое рассуждение.");
-  }
-
-  lines.push("", "**Источники:**", ...top.map(item => `- [${item.title}](${item.url})`));
-  return lines.join("\n");
 }
 
 function frossSteps(mode) {
