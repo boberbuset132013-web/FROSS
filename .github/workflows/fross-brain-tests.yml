@@ -6,6 +6,10 @@ on:
     paths:
       - "fross-brain.js"
       - "worker.js"
+      - "public/**"
+      - "firestore.rules"
+      - "SETUP.md"
+      - "wrangler.jsonc"
       - "fross_brain_v05.py"
       - "services/**"
       - "render.yaml"
@@ -42,3 +46,18 @@ jobs:
         run: node --input-type=module --check < fross-brain.js
       - name: Check Worker syntax
         run: node --input-type=module --check < worker.js
+      - name: Check browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path("public/index.html").read_text(encoding="utf-8")
+          start = html.find('<script type="module">')
+          if start < 0:
+              raise SystemExit("Could not find the browser module script")
+          start += len('<script type="module">')
+          end = html.find("</script>", start)
+          if end < 0:
+              raise SystemExit("Could not find the closing script tag")
+          Path("/tmp/fross-browser.mjs").write_text(html[start:end], encoding="utf-8")
+          PY
+          node --check /tmp/fross-browser.mjs
