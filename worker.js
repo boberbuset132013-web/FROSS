@@ -660,7 +660,8 @@ async function handleFrossApi(request, env) {
     results = search.results;
     providerErrors = search.errors;
   }
-  let reply = smallTalk;
+  const creatorGreeting = isCreator && /^(привет|здравствуй|здравствуйте|хай|hello|hi|доброе утро|добрый вечер)[!. ]*$/i.test(message.trim());
+  let reply = creatorGreeting ? "Привет, создатель FROSS! Что будем улучшать сегодня?" : smallTalk;
   let aiUsed = false;
   if (!reply) {
     try {
