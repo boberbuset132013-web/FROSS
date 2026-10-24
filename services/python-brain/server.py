@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             respond(self, 400, {"handled": False, "error": "Expected a JSON object."})
             return
 
-        raw_message = str(body.get("message", ""))[:4000].strip()
+        raw_message = str(body.get("message", ""))[:30000].strip()
         if not raw_message:
             respond(self, 400, {"handled": False, "error": "Message is required."})
             return
@@ -85,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         history = [
             {"role": "assistant" if item.get("role") == "assistant" else "user",
              "content": str(item.get("content", ""))[:1600]}
-            for item in history[-8:] if isinstance(item, dict)
+            for item in history[-10:] if isinstance(item, dict)
         ]
         knowledge = body.get("knowledge", [])
         if not isinstance(knowledge, list):
@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             respond(self, 200, {
                 "handled": True,
-                "reply": reply[:16000],
+                "reply": reply[:25000],
                 "engine": ENGINE_NAME,
                 "kind": kind,
                 "trace": trace,
