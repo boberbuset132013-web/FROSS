@@ -49,6 +49,7 @@ export default {
 
     // 3. FROSS API в том же Worker — до фильтра Telegram-путей
     if (path === "/api/identity") return handleFrossIdentity(request, env);
+    if (path === "/api/creator-unlock") return handleFrossCreatorUnlock(request, env);
     if (path === "/api/train") return handleFrossTrain(request, env);
 
     if (path === "/api/chat") {
@@ -115,7 +116,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Local Brain 0.4 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
+  description: "FROSS Local Brain 0.5 — самописный алгоритмический помощник с локальными правилами, вычислителем и поисковым ранжированием.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -541,22 +542,82 @@ function frossSafetyReply(query) {
   return null;
 }
 
-function frossIsCreator(auth, env) {
-  const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
-  return Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email === creatorEmail);
+function frossBase64UrlEncode(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
-
+function frossBase64UrlDecode(value) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+}
+async function frossCreatorSigningKey(env) {
+  const secret = typeof env.FROSS_CREATOR_PASSWORD === "string" ? env.FROSS_CREATOR_PASSWORD : "";
+  if (secret.length < 24) return null;
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+async function frossCreateCreatorToken(auth, env) {
+  const key = await frossCreatorSigningKey(env);
+  if (!key) return null;
+  const payload = frossBase64UrlEncode(new TextEncoder().encode(JSON.stringify({
+    uid: auth.uid,
+    exp: Date.now() + 12 * 60 * 60 * 1000,
+    version: "0.5"
+  })));
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return payload + "." + frossBase64UrlEncode(new Uint8Array(signature));
+}
+async function frossHasCreatorToken(auth, env, request) {
+  const token = request?.headers?.get("X-FROSS-CREATOR-TOKEN") || "";
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const key = await frossCreatorSigningKey(env);
+  if (!key) return false;
+  try {
+    const valid = await crypto.subtle.verify("HMAC", key, frossBase64UrlDecode(parts[1]), new TextEncoder().encode(parts[0]));
+    if (!valid) return false;
+    const payload = JSON.parse(new TextDecoder().decode(frossBase64UrlDecode(parts[0])));
+    return payload.uid === auth?.uid && Number(payload.exp) > Date.now() && payload.version === "0.5";
+  } catch { return false; }
+}
+async function frossIsCreator(auth, env, request) {
+  const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
+  const emailAllowed = Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email.toLowerCase() === creatorEmail);
+  return emailAllowed || await frossHasCreatorToken(auth, env, request);
+}
+async function handleFrossCreatorUnlock(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/creator-unlock." }, 405, request);
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ error: "Сначала войди в аккаунт FROSS." }, 401, request);
+  let body;
+  try { body = await request.json(); } catch { return frossJson({ error: "Некорректный JSON." }, 400, request); }
+  const expected = typeof env.FROSS_CREATOR_PASSWORD === "string" ? env.FROSS_CREATOR_PASSWORD : "";
+  const supplied = typeof body?.password === "string" ? body.password : "";
+  if (expected.length < 24) return frossJson({ error: "Пароль создателя ещё не настроен. Добавь Secret FROSS_CREATOR_PASSWORD в Cloudflare." }, 503, request);
+  // Compare equal-length UTF-8 buffers without an early exit on differing bytes.
+  const a = new TextEncoder().encode(expected);
+  const b = new TextEncoder().encode(supplied);
+  let diff = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) diff |= (a[i % Math.max(1, a.length)] || 0) ^ (b[i % Math.max(1, b.length)] || 0);
+  if (diff !== 0) return frossJson({ error: "Пароль создателя неверный." }, 403, request);
+  const token = await frossCreateCreatorToken(auth, env);
+  if (!token) return frossJson({ error: "Не удалось создать сессию создателя." }, 503, request);
+  return frossJson({ ok: true, isCreator: true, creatorToken: token, expiresInSeconds: 43200 }, 200, request);
+}
 async function handleFrossIdentity(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
+  const isCreator = await frossIsCreator(auth, env, request);
   return frossJson({
     ok: true,
-    isCreator: frossIsCreator(auth, env),
+    isCreator,
     emailVerified: auth.emailVerified,
-    engine: "FROSS Local Brain 0.4",
-    learningEnabled: frossIsCreator(auth, env),
+    engine: "FROSS Local Brain 0.5",
+    learningEnabled: isCreator,
     brainRoutes: {
       pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
       cppReady: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
@@ -619,7 +680,7 @@ async function handleFrossTrain(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  if (!frossIsCreator(auth, env)) return frossJson({ error: "Режим обучения доступен только подтверждённому аккаунту создателя." }, 403, request);
+  if (!await frossIsCreator(auth, env, request)) return frossJson({ error: "Режим обучения доступен только создателю. Введи пароль создателя в окне обучения." }, 403, request);
 
   let body;
   try { body = await request.json(); }
@@ -649,7 +710,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Local Brain 0.4",
+    engine: "FROSS Local Brain 0.5",
     topic,
     notes,
     count: notes.length,
@@ -732,7 +793,7 @@ async function handleFrossApi(request, env) {
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Войди через Google, чтобы пользоваться FROSS." }, 401, request);
   // Private creator email is held as a Cloudflare secret, never added to the public code or brain inputs.
-  const isCreator = frossIsCreator(auth, env);
+  const isCreator = await frossIsCreator(auth, env, request);
   const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""), message);
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
   const correctedQuery = frossCorrectText(message);
@@ -741,7 +802,7 @@ async function handleFrossApi(request, env) {
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-    diagnostics: { engine: "FROSS Local Brain 0.4", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+    diagnostics: { engine: "FROSS Local Brain 0.5", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
@@ -758,9 +819,19 @@ async function handleFrossApi(request, env) {
     score: Number(Math.max(0, Math.min(1, Number(note?.score) || 0)).toFixed(4))
   })) : [];
 
-  // Personal notes first, so both external brains can benefit from saved knowledge.
+  // v0.5: gather fresh web material for information queries even when personal notes match,
+  // then combine the two sources instead of stopping at the first memory hit.
+  const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
+  const shouldSearch = !quickReply && frossShouldSearch(correctedQuery);
+  let results = [];
+  let providerErrors = [];
+  if (shouldSearch) {
+    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
+    results = search.results;
+    providerErrors = search.errors;
+  }
   const localMemory = frossThink({ message: correctedQuery, history, knowledge, results: [], mode, isCreator });
-  if (localMemory.kind === "saved-memory-v04") {
+  if (localMemory.kind === "saved-memory-v04" && !shouldSearch) {
     return frossJson({
       name: FROSS_PROFILE.name,
       reply: localMemory.reply,
@@ -768,53 +839,48 @@ async function handleFrossApi(request, env) {
       steps: localMemory.trace?.slice(0, mode === "reasoning" ? 7 : 4) || frossSteps(mode),
       sources: (localMemory.sources || []).slice(0, 8).map(({ title, url, snippet, source, score }) => ({ title, url, snippet, source, score })),
       quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-      diagnostics: { engine: "FROSS personal knowledge", aiUsed: false, kind: localMemory.kind, remoteBrain: false }
+      diagnostics: { engine: "FROSS personal knowledge", aiUsed: false, kind: localMemory.kind, remoteBrain: false, version: "0.5" }
     }, 200, request);
   }
 
-  // Normal mode -> Python HTTP service. Reasoning mode -> C++ HTTP service.
-  // If a service is not configured or cannot handle the prompt, fall back locally.
-  const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
-  const remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
-    message: correctedQuery,
-    mode,
-    history,
-    knowledge: knowledge.slice(0, 24)
-  });
-  if (remote.handled) {
-    return frossJson({
-      name: FROSS_PROFILE.name,
-      reply: remote.reply,
+  // Delegate algorithmic tasks to Python or C++; for questions needing fresh facts,
+  // merge saved notes with current search snippets locally so neither source is discarded.
+  if (!shouldSearch || (!results.length && localMemory.kind !== "saved-memory-v04")) {
+    const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
+    const remote = await frossCallBrainService(selectedEndpoint, env.FROSS_BRAIN_SERVICE_TOKEN, {
+      message: correctedQuery,
       mode,
-      steps: remote.trace.length ? remote.trace.slice(0, mode === "reasoning" ? 7 : 4) : frossSteps(mode),
-      sources: remote.sources.map(({ title, url, snippet, source, score }) => ({
-        title: String(title || "").slice(0, 260),
-        url: typeof url === "string" && /^https?:\/\//i.test(url) ? url.slice(0, 700) : "",
-        snippet: String(snippet || "").slice(0, 3200),
-        source: String(source || "").slice(0, 80),
-        score: Number((Number(score) || 0).toFixed(3))
-      })),
-      quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
-      diagnostics: {
-        engine: remote.engine,
-        aiUsed: false,
-        kind: remote.kind,
-        remoteBrain: true,
-        note: "Ответ сформирован самописным Python/C++ алгоритмическим движком."
-      }
-    }, 200, request);
+      history,
+      knowledge: knowledge.slice(0, 24)
+    });
+    if (remote.handled) {
+      return frossJson({
+        name: FROSS_PROFILE.name,
+        reply: remote.reply,
+        mode,
+        steps: remote.trace.length ? remote.trace.slice(0, mode === "reasoning" ? 7 : 4) : frossSteps(mode),
+        sources: remote.sources.map(({ title, url, snippet, source, score }) => ({
+          title: String(title || "").slice(0, 260),
+          url: typeof url === "string" && /^https?:\/\//i.test(url) ? url.slice(0, 700) : "",
+          snippet: String(snippet || "").slice(0, 3200),
+          source: String(source || "").slice(0, 80),
+          score: Number((Number(score) || 0).toFixed(3))
+        })),
+        quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
+        diagnostics: {
+          engine: remote.engine,
+          aiUsed: false,
+          kind: remote.kind,
+          remoteBrain: true,
+          version: "0.5",
+          note: "Ответ сформирован самописным Python/C++ алгоритмическим движком."
+        }
+      }, 200, request);
+    }
   }
 
-  const quickReply = frossQuickResponse({ message: correctedQuery, isCreator, mode });
-  let results = [];
-  let providerErrors = [];
-  if (!quickReply && frossShouldSearch(correctedQuery)) {
-    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
-    results = search.results;
-    providerErrors = search.errors;
-  }
   const localResult = quickReply
-    ? { reply: quickReply, kind: "local-rule-v04", sources: [] }
+    ? { reply: quickReply, kind: "local-rule-v05", sources: [] }
     : frossThink({ message: correctedQuery, history, results, knowledge, mode, isCreator });
   const reply = localResult.reply;
   return frossJson({
@@ -826,9 +892,9 @@ async function handleFrossApi(request, env) {
     quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: {
       resultsFound: results.length, providerErrors: remote.error ? [remote.error] : [], aiUsed: false,
-      engine: "FROSS Local Brain 0.4 local fallback",
+      engine: "FROSS Local Brain 0.5 local fallback",
       remoteBrainConfigured: remote.configured,
-      kind: localResult.kind || "local-rule-v04",
+      kind: localResult.kind || "local-rule-v05",
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       note: "Ответ сформирован собственным правиловым движком FROSS; готовая языковая модель не вызывается."
     }
