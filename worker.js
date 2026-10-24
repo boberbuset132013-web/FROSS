@@ -13,7 +13,10 @@ const MAX_RETRY_AFTER_MS = 5000;
 
 // FROSS: ограничиваем время каждого поискового запроса.
 const FROSS_FETCH_TIMEOUT_MS = 4500;
-const FROSS_MAX_QUERY_LENGTH = 400;
+const FROSS_MAX_MESSAGE_LENGTH = 30000;
+const FROSS_MAX_REPLY_LENGTH = 25000;
+const FROSS_MAX_SEARCH_QUERY_LENGTH = 400;
+const FROSS_MAX_HISTORY_USER_MESSAGES = 5;
 const FROSS_MAX_RESULTS_PER_PROVIDER = 5;
 
 // Заголовки, которые нельзя прокидывать дальше
@@ -27,6 +30,9 @@ const STRIP_HEADERS = new Set([
 
 // ================= ОСНОВНОЙ ОБРАБОТЧИК =================
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(frossAutoStudyProgramming(env, controller?.cron || "scheduled"));
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -56,7 +62,11 @@ export default {
       creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
       githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
-      cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
+      cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+      autoStudyConfigured: frossGithubToken(env).length >= 20,
+      maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
+      maxAssistantMessageChars: FROSS_MAX_REPLY_LENGTH,
+      chatMemoryUserMessages: FROSS_MAX_HISTORY_USER_MESSAGES
     }, 200, request));
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
     if (path === "/api/creator-unlock") return frossApiGuard(path, request, () => handleFrossCreatorUnlock(request, env));
@@ -128,6 +138,9 @@ const FROSS_PROFILE = Object.freeze({
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
     "Сначала пойми цель пользователя, затем дай полезный и конкретный ответ.",
+    "Максимальная длина одного ответа FROSS — 25 000 символов; максимальная длина одного сообщения пользователя — 30 000 символов.",
+    "Для контекста диалога используй не более последних пяти сообщений пользователя и соответствующих ответов, если они есть.",
+    "Регулярно изучай основы JavaScript и Python: синтаксис, переменные, функции, коллекции и проверяемые примеры кода. Общие материалы сохраняй в публичную базу знаний, личную информацию — только в приватной памяти.",
     "Будь любознательным исследователем: сравнивай варианты, замечай детали и проверяй важные утверждения.",
     "Если запрос большой, разбей его на понятные шаги и помоги начать с первого.",
     "Не бойся сказать прямо, если идея не сработает; объясни почему и предложи лучший путь.",
@@ -347,6 +360,25 @@ async function frossSearchWikipedia(query) {
   }
 }
 
+function frossLimitHistory(history, maxUserMessages = FROSS_MAX_HISTORY_USER_MESSAGES) {
+  const cleaned = (Array.isArray(history) ? history : []).slice(-60).map(item => ({
+    role: item?.role === "assistant" ? "assistant" : "user",
+    content: frossClean(item?.content || "").slice(0, 4000)
+  }));
+  let userCount = 0;
+  let startIndex = cleaned.length;
+  for (let index = cleaned.length - 1; index >= 0; index--) {
+    if (cleaned[index].role === "user") {
+      if (userCount >= maxUserMessages) break;
+      userCount++;
+      startIndex = index;
+    } else if (userCount < maxUserMessages) {
+      startIndex = index;
+    }
+  }
+  return cleaned.slice(startIndex);
+}
+
 function frossAddContext(query, history) {
   const refersBack =
     /\b(он|она|это|этот|эта|там|тогда|его|её|они|такой|такая|тот|предыдущий|предыдущая)\b/i.test(query) ||
@@ -354,7 +386,7 @@ function frossAddContext(query, history) {
 
   if (!refersBack || !history.length) return query;
 
-  const recent = history.slice(-6).map(item => {
+  const recent = history.slice(-10).map(item => {
     const role = item?.role === "assistant" ? "FROSS" : "Пользователь";
     const content = frossClean(item?.content || "").slice(0, 250);
     return content ? `${role}: ${content}` : "";
@@ -385,6 +417,8 @@ function frossSteps(mode) {
 }
 
 async function frossRunSearch(query, mode) {
+  query = frossClean(query).slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  if (!query) return { results: [], errors: ["Поисковый запрос пуст после ограничения длины."] };
   const providers = [frossSearchDuckDuckGo, frossSearchBing, frossSearchWikipedia];
   const firstPass = await Promise.allSettled(providers.map(provider => provider(query)));
   let allResults = [];
@@ -447,7 +481,10 @@ async function frossApiGuard(path, request, handler) {
 
 function frossJson(data, status = 200, request) {
   const origin = request?.headers?.get("Origin") || "*";
-  return new Response(JSON.stringify(data), {
+  const output = data && typeof data === "object" && typeof data.reply === "string" && data.reply.length > FROSS_MAX_REPLY_LENGTH
+    ? { ...data, reply: data.reply.slice(0, FROSS_MAX_REPLY_LENGTH) }
+    : data;
+  return new Response(JSON.stringify(output), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -555,7 +592,7 @@ async function frossGetChatQuota(request, auth, chatId, messageId, expectedMessa
   if (messageFields.role?.stringValue !== "user" || messageFields.state?.stringValue !== "pending") {
     return { ok: false, status: 409, error: "Это сообщение уже обработано. Отправь новое сообщение." };
   }
-  if (frossClean(messageFields.content?.stringValue || "").slice(0, FROSS_MAX_QUERY_LENGTH) !== expectedMessage) {
+  if (frossClean(messageFields.content?.stringValue || "").slice(0, FROSS_MAX_MESSAGE_LENGTH) !== expectedMessage) {
     return { ok: false, status: 409, error: "Текст запроса не совпадает с сохранённым сообщением." };
   }
   return { ok: true, count, status };
