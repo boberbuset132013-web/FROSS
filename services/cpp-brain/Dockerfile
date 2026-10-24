@@ -9,6 +9,7 @@ ENV FROSS_CPP_EXECUTABLE=/app/fross-cpp-brain
 WORKDIR /app
 COPY --from=builder /fross-cpp-brain /app/fross-cpp-brain
 COPY fross_brain_v05.py /app/fross_brain_v05.py
+COPY services/llm_client.py /app/llm_client.py
 COPY services/cpp-brain/server.py /app/server.py
 EXPOSE 10000
 CMD ["python", "/app/server.py"]
