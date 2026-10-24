@@ -6,12 +6,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <utility>
-#include <initializer_list>
 
-static std::string lowerAscii(std::string value) {
-    // Lowercase ASCII plus Russian UTF-8 (А-Я and Ё). The old byte-only
-    // implementation missed uppercase Cyrillic words such as "Привет".
+static std::string lowerUtf8(std::string value) {
     for (size_t i = 0; i < value.size(); ++i) {
         unsigned char u = static_cast<unsigned char>(value[i]);
         if (u >= 'A' && u <= 'Z') {
@@ -20,14 +16,14 @@ static std::string lowerAscii(std::string value) {
         }
         if (u == 0xD0 && i + 1 < value.size()) {
             unsigned char next = static_cast<unsigned char>(value[i + 1]);
-            if (next == 0x81) { // Ё -> ё
+            if (next == 0x81) {
                 value[i] = static_cast<char>(0xD1);
                 value[i + 1] = static_cast<char>(0x91);
                 ++i;
-            } else if (next >= 0x90 && next <= 0x9F) { // А-П -> а-п
+            } else if (next >= 0x90 && next <= 0x9F) {
                 value[i + 1] = static_cast<char>(next + 0x20);
                 ++i;
-            } else if (next >= 0xA0 && next <= 0xAF) { // Р-Я -> р-я
+            } else if (next >= 0xA0 && next <= 0xAF) {
                 value[i] = static_cast<char>(0xD1);
                 value[i + 1] = static_cast<char>(next - 0x20);
                 ++i;
@@ -36,53 +32,92 @@ static std::string lowerAscii(std::string value) {
     }
     return value;
 }
-static bool has(const std::string &s, const std::string &part) {
-    return s.find(part) != std::string::npos;
-}
-static bool any(const std::string &s, const std::vector<std::string> &parts) {
-    for (const auto &part : parts) if (has(s, part)) return true;
-    return false;
-}
+
 static std::string trim(std::string s) {
-    auto a = s.find_first_not_of(" \t\r\n");
+    const auto a = s.find_first_not_of(" \t\r\n");
     if (a == std::string::npos) return "";
-    auto b = s.find_last_not_of(" \t\r\n");
+    const auto b = s.find_last_not_of(" \t\r\n");
     return s.substr(a, b - a + 1);
 }
 
-static std::string lastAssistantMessage(const std::string &context) {
-    const std::string marker = "fross: ";
-    const size_t startMarker = context.rfind(marker);
-    if (startMarker == std::string::npos) return "";
-    const size_t start = startMarker + marker.size();
-    size_t end = context.find("\nПользователь:", start);
-    if (end == std::string::npos) end = context.size();
-    return trim(context.substr(start, end - start));
+static bool contains(const std::string &s, const std::string &part) {
+    return s.find(part) != std::string::npos;
 }
 
-class Parser {
-    const std::string &s; size_t p = 0;
+static bool containsAny(const std::string &s, const std::vector<std::string> &parts) {
+    for (const auto &part : parts) if (contains(s, part)) return true;
+    return false;
+}
+
+static std::string jsonEscape(const std::string &s) {
+    std::ostringstream out;
+    for (unsigned char ch : s) {
+        switch (ch) {
+            case '"': out << "\\\""; break;
+            case '\\': out << "\\\\"; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (ch < 0x20) {
+                    const char *hex = "0123456789abcdef";
+                    out << "\\u00" << hex[ch >> 4] << hex[ch & 0x0f];
+                } else out << static_cast<char>(ch);
+        }
+    }
+    return out.str();
+}
+
+class ArithmeticParser {
+    const std::string &s;
+    size_t p = 0;
     void spaces() { while (p < s.size() && (s[p] == ' ' || s[p] == '\t')) ++p; }
     bool take(char c) { spaces(); if (p < s.size() && s[p] == c) { ++p; return true; } return false; }
     double primary() {
         spaces();
-        if (take('(')) { double v = expression(); if (!take(')')) throw std::runtime_error("paren"); return v; }
-        spaces(); size_t start = p;
+        if (take('(')) {
+            double v = expression();
+            if (!take(')')) throw std::runtime_error("paren");
+            return v;
+        }
+        spaces();
+        const size_t start = p;
         while (p < s.size() && ((s[p] >= '0' && s[p] <= '9') || s[p] == '.')) ++p;
         if (p == start) throw std::runtime_error("number");
-        double v = std::strtod(s.substr(start, p - start).c_str(), nullptr);
-        if (!std::isfinite(v) || std::abs(v) > 1e100) throw std::runtime_error("range");
-        return v;
+        char *end = nullptr;
+        const double value = std::strtod(s.substr(start, p - start).c_str(), &end);
+        if (!std::isfinite(value) || std::abs(value) > 1e100) throw std::runtime_error("range");
+        return value;
     }
-    double power() { double a = primary(); if (take('^')) { double b = unary(); if (std::abs(b) > 100) throw std::runtime_error("exponent"); double v=std::pow(a,b); if(!std::isfinite(v)||std::abs(v)>1e100)throw std::runtime_error("range"); return v; } return a; }
-    double unary() { if (take('+')) return unary(); if (take('-')) return -unary(); return power(); }
+    double power() {
+        double a = primary();
+        if (take('^')) {
+            double b = unary();
+            if (std::abs(b) > 100) throw std::runtime_error("exponent");
+            const double v = std::pow(a, b);
+            if (!std::isfinite(v) || std::abs(v) > 1e100) throw std::runtime_error("range");
+            return v;
+        }
+        return a;
+    }
+    double unary() {
+        if (take('+')) return unary();
+        if (take('-')) return -unary();
+        return power();
+    }
     double term() {
         double v = unary();
         for (;;) {
             if (take('*')) v *= unary();
-            else if (take('/')) { double b = unary(); if (b == 0) throw std::runtime_error("zero"); v /= b; }
-            else if (take('%')) { double b = unary(); if (b == 0) throw std::runtime_error("zero"); v = std::fmod(v, b); }
-            else break;
+            else if (take('/')) {
+                const double b = unary();
+                if (b == 0) throw std::runtime_error("zero");
+                v /= b;
+            } else if (take('%')) {
+                const double b = unary();
+                if (b == 0) throw std::runtime_error("zero");
+                v = std::fmod(v, b);
+            } else break;
             if (!std::isfinite(v) || std::abs(v) > 1e100) throw std::runtime_error("range");
         }
         return v;
@@ -98,136 +133,118 @@ class Parser {
         return v;
     }
 public:
-    explicit Parser(const std::string &text) : s(text) {}
-    double run() { double v = expression(); spaces(); if (p != s.size()) throw std::runtime_error("tail"); return v; }
+    explicit ArithmeticParser(const std::string &text) : s(text) {}
+    double run() { const double value = expression(); spaces(); if (p != s.size()) throw std::runtime_error("tail"); return value; }
 };
 
-static bool calculate(std::string q, std::string &answer) {
-    bool prefixed = false;
-    for (const std::string prefix : {"сколько будет", "сколько получится", "посчитай", "вычисли", "реши", "calculate"}) {
-        if (q.rfind(prefix, 0) == 0) { q = trim(q.substr(prefix.size())); prefixed = true; break; }
+static bool extractCalculation(std::string q, std::string &candidate, std::string &problem) {
+    q = trim(q);
+    for (const std::string prefix : {"сколько будет", "сколько получится", "посчитай", "вычисли", "рассчитай", "calculate"}) {
+        if (q.rfind(prefix, 0) == 0) { q = trim(q.substr(prefix.size())); break; }
     }
     while (!q.empty() && (q.back() == '?' || q.back() == '!' || q.back() == '.' || q.back() == ' ')) q.pop_back();
-    bool digit = false;
-    for (unsigned char c : q) {
-        if (c >= '0' && c <= '9') { digit = true; continue; }
-        if (std::string(" \t.()+-*/%^").find(static_cast<char>(c)) != std::string::npos) continue;
+    bool hasDigit = false;
+    for (unsigned char ch : q) {
+        if (ch >= '0' && ch <= '9') { hasDigit = true; continue; }
+        if (std::string(" \t.()+-*/%^").find(static_cast<char>(ch)) != std::string::npos) continue;
         return false;
     }
-    if (!digit || (!prefixed && q.find_first_of("+-*/%^()") == std::string::npos)) return false;
+    if (!hasDigit || q.find_first_of("+-*/%^()") == std::string::npos) return false;
     try {
-        double value = Parser(q).run();
-        std::ostringstream out; out << std::setprecision(12) << value;
-        answer = "Ответ: **" + out.str() + "**\n\nВычислено локальным безопасным парсером с проверкой приоритета операций.";
+        const double value = ArithmeticParser(q).run();
+        std::ostringstream out;
+        out << std::setprecision(12) << value;
+        candidate = out.str();
+        problem.clear();
         return true;
     } catch (const std::exception &e) {
-        if (std::string(e.what()) == "zero") { answer = "Делить на ноль нельзя: результат не определён."; return true; }
-        return false;
+        problem = e.what();
+        candidate.clear();
+        return true;
     }
 }
 
-static std::string definition(const std::string &q) {
-    const std::pair<const char *, const char *> entries[] = {
-        {"python", "Python — язык программирования с читаемым синтаксисом, часто используемый для автоматизации, веб-сервисов и анализа данных."},
-        {"питон", "Python — язык программирования с читаемым синтаксисом, часто используемый для автоматизации, веб-сервисов и анализа данных."},
-        {"c++", "C++ — компилируемый язык с высокой производительностью и контролем ресурсов, используемый в системном ПО и игровых движках."},
-        {"javascript", "JavaScript — язык для веб-интерактивности и серверных задач. Он не равен Java."},
-        {"html", "HTML описывает структуру веб-страницы; CSS отвечает за оформление, а JavaScript — за интерактивность."},
-        {"css", "CSS — язык оформления веб-страниц: цвета, шрифты, отступы, сетки и адаптивность."},
-        {"алгоритм", "Алгоритм — конечная последовательность чётких шагов с определёнными входами и ожидаемым результатом."},
-        {"переменная", "Переменная — именованное значение, которое программа может читать или менять."},
-        {"функция", "Функция — отдельный блок кода для конкретной задачи; она может принимать аргументы и возвращать значение."},
-        {"нейросеть", "Нейросеть — вычислительная модель с обучаемыми параметрами. Самописные правила этого движка не являются нейросетью."},
-        {"искусственный интеллект", "Искусственный интеллект — широкая область методов для автоматизации задач. Система правил может быть полезной, но не равна обученной языковой модели."},
-        {"база данных", "База данных — организованное хранилище информации с операциями чтения и изменения записей."},
-        {"api", "API — интерфейс, описывающий, как программы обмениваются запросами и ответами."},
-        {"http", "HTTP — протокол веб-обмена; HTTPS добавляет защиту соединения через TLS."},
-        {"dns", "DNS сопоставляет доменные имена с сетевой информацией, например IP-адресами."},
-        {"firestore", "Cloud Firestore — облачная документная база Firebase; правила доступа должны ограничивать данные владельцем аккаунта."},
-        {"cloudflare", "Cloudflare предоставляет CDN, DNS, защитные сервисы и Workers для выполнения JavaScript на серверной стороне."}
-    };
-    for (const auto &entry : entries) if (has(q, entry.first)) return entry.second;
-    return "";
+static std::string classify(const std::string &q) {
+    if (containsAny(q, {"посчитай", "вычисли", "сколько будет", "сколько получится", "calculate"}) ||
+        (q.find_first_of("0123456789") != std::string::npos &&
+         q.find_first_of("+-*/%^") != std::string::npos &&
+         !containsAny(q, {"версия", "код", "ошибка", "номер"}))) return "calculation";
+    if (containsAny(q, {"ошибка", "не работает", "не запускается", "падает", "traceback", "debug", "исправь"})) return "debugging";
+    if (containsAny(q, {"код", "программ", "напиши", "создай", "разработай", "c++", "python", "javascript"})) return "code";
+    if (containsAny(q, {"план", "по шагам", "с чего начать", "как создать", "как сделать проект"})) return "planning";
+    if (containsAny(q, {"объясни", "что такое", "почему", "как работает", "расскажи", "объяснение", "сравни"})) return "explanation";
+    if (containsAny(q, {"привет", "здравствуйте", "добрый день", "как дела", "спасибо", "пока"})) return "conversation";
+    return "general";
 }
 
-static std::string codeReply(const std::string &q, bool &matched) {
-    matched = true;
-    const std::string fence(3, static_cast<char>(96));
-    bool cpp = any(q, {"c++", "cpp", "си плюс плюс"});
-    bool py = any(q, {"python", "питон", "пайтон"});
-    bool fib = any(q, {"фибоначчи", "fibonacci"});
-    bool fact = any(q, {"факториал", "factorial"});
-    bool calc = any(q, {"калькулятор", "сложи два числа", "арифметик"});
-    std::string code, desc, lang;
-    if (cpp) {
-        lang = "cpp";
-        if (fib) { desc = "Первые 10 чисел Фибоначчи."; code = "#include <iostream>\nint main() {\n    long long a = 0, b = 1;\n    for (int i = 0; i < 10; ++i) {\n        std::cout << a << (i == 9 ? '\\n' : ' ');\n        auto next = a + b; a = b; b = next;\n    }\n    return 0;\n}"; }
-        else if (fact) { desc = "Факториал числа от 0 до 20."; code = "#include <iostream>\nint main() {\n    int n; if (!(std::cin >> n) || n < 0 || n > 20) return 1;\n    unsigned long long value = 1;\n    for (int i = 2; i <= n; ++i) value *= static_cast<unsigned long long>(i);\n    std::cout << value << std::endl; return 0;\n}"; }
-        else if (calc) { desc = "Калькулятор C++ с проверкой деления на ноль."; code = "#include <iostream>\nint main() {\n    double a, b; char op; if (!(std::cin >> a >> op >> b)) return 1;\n    if (op == '+') std::cout << a+b;\n    else if (op == '-') std::cout << a-b;\n    else if (op == '*') std::cout << a*b;\n    else if (op == '/' && b != 0) std::cout << a/b;\n    else std::cout << \"Ошибка операции\";\n    return 0;\n}"; }
-        else { desc = "Минимальная программа на C++."; code = "#include <iostream>\nint main() {\n    std::cout << \"Привет, мир!\\n\";\n    return 0;\n}"; }
-    } else if (py || any(q, {"код на", "программа на", "простейший код", "пример кода"})) {
-        lang = "python";
-        if (fib) { desc = "Последовательность Фибоначчи."; code = "def fibonacci(n):\n    result = []\n    a, b = 0, 1\n    for _ in range(max(0, n)):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))"; }
-        else if (fact) { desc = "Факториал с проверкой входных данных."; code = "def factorial(n):\n    if n < 0:\n        raise ValueError('n должно быть неотрицательным')\n    result = 1\n    for i in range(2, n + 1):\n        result *= i\n    return result\n\nprint(factorial(5))"; }
-        else if (calc) { desc = "Калькулятор с проверкой деления на ноль."; code = "def calculate(a, op, b):\n    if op == '+': return a + b\n    if op == '-': return a - b\n    if op == '*': return a * b\n    if op == '/' and b != 0: return a / b\n    raise ValueError('Ошибка операции или деление на ноль')\n\nprint(calculate(8, '+', 4))"; }
-        else { desc = "Минимальная программа на Python."; code = "def main():\n    print('Привет, мир!')\n\nif __name__ == '__main__':\n    main()"; }
-    } else { matched = false; return ""; }
-    return desc + "\n\n" + fence + lang + "\n" + code + "\n" + fence +
-        (cpp ? "\n\nСохрани как main.cpp и собери: g++ main.cpp -std=c++17 -o app." : "");
+static std::vector<std::string> checksFor(const std::string &intent) {
+    if (intent == "calculation") return {
+        "parse arithmetic with operator precedence",
+        "check division by zero and numeric range",
+        "verify the evaluated result before explaining it"
+    };
+    if (intent == "code") return {
+        "identify language and expected interface",
+        "check syntax, dependencies, and input validation",
+        "consider edge cases and propose tests before execution"
+    };
+    if (intent == "debugging") return {
+        "separate observed error text from hypotheses",
+        "ask for a reproducible minimal example when needed",
+        "check the first failing line and boundary conditions"
+    };
+    if (intent == "planning") return {
+        "define the desired outcome and constraints",
+        "split the work into independently testable stages",
+        "identify dependencies, failure cases, and acceptance criteria"
+    };
+    if (intent == "explanation") return {
+        "identify the core concept and prior knowledge",
+        "connect the mechanism to a concrete example",
+        "check for common misconceptions and state limitations"
+    };
+    if (intent == "conversation") return {
+        "recognize social intent",
+        "use recent conversational context if it is relevant"
+    };
+    return {
+        "infer the requested outcome without assuming missing facts",
+        "inspect the supplied context and identify unknowns",
+        "check alternatives and avoid unsupported claims"
+    };
+}
+
+static void printArray(const std::vector<std::string> &items) {
+    std::cout << "[";
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (i) std::cout << ",";
+        std::cout << "\"" << jsonEscape(items[i]) << "\"";
+    }
+    std::cout << "]";
 }
 
 int main(int argc, char **argv) {
     if (argc < 3) return 2;
-    const std::string mode = argv[1];
-    const std::string q = lowerAscii(trim(argv[2]));
-    const std::string context = argc >= 4 ? lowerAscii(trim(argv[3])) : "";
-    if (q.empty()) return 3;
-    std::string answer, approach;
-    if (!context.empty() && any(q, {"почему?", "почему", "а почему", "подробнее", "расскажи подробнее", "продолжи", "продолжай", "а как", "объясни подробнее", "что это значит", "а если"})) {
-        const std::string previous = lastAssistantMessage(context);
-        if (any(q, {"подробнее", "расскажи подробнее", "продолжи", "продолжай", "объясни подробнее"})) {
-            answer = "Продолжу предыдущую тему. Последний ответ был: " + previous.substr(0, 260) +
-                     ". Могу разложить его на шаги, привести пример или объяснить отдельный пункт. Укажи, что полезнее.";
-        } else if (any(q, {"почему?", "почему", "а почему"}) && any(previous, {"потому что", "так как", "поскольку", "поэтому", "из-за"})) {
-            answer = "В предыдущем ответе причина была указана здесь: " + previous.substr(0, 360) +
-                     ". Если ты спрашиваешь о другом тезисе, назови его, чтобы я связал объяснение с нужной частью.";
-        } else if (any(q, {"а если"})) {
-            answer = "Давай проверим другой вариант. Предыдущий ответ: " + previous.substr(0, 220) +
-                     ". Напиши условие, которое хочешь изменить, и я сравню результат.";
-        } else {
-            answer = "Связываю вопрос с предыдущим ответом: " + previous.substr(0, 300) +
-                     ". Уточни, к какому утверждению относится вопрос, и я объясню именно его без догадок.";
-        }
-        approach = "сопоставить короткое уточнение с последним ответом и явно использовать доступный контекст чата.";
-    } else if (any(q, {"привет", "здравствуй", "хай", "hello", "hi"})) {
-        answer = "Привет! Я на связи. Что разберём?";
-        approach = "распознать приветствие и ответить локально.";
-    } else if (any(q, {"спасибо", "благодарю", "спс"})) {
-        answer = "Пожалуйста! Продолжим, когда понадобится.";
-        approach = "распознать благодарность.";
-    } else if (any(q, {"кто создатель", "кто создал фросс", "кто автор fross", "кто тебя создал"})) {
-        answer = "Автор проекта FROSS: [@Spamton_BigShot_hahaha](https://t.me/Spamton_BigShot_hahaha).";
-        approach = "проверить сохранённые сведения о проекте.";
-    } else if (any(q, {"твоя модель", "какая у тебя модель", "ты просто гуглишь"})) {
-        answer = "Я — FROSS C++ Planning Brain 1.0. Это самописный алгоритмический движок, а не обученная нейросеть. Я использую локальные правила и безопасные алгоритмы.";
-        approach = "объяснить устройство движка без преувеличений.";
-    } else if (calculate(q, answer)) {
-        approach = "разобрать арифметику с учётом скобок и приоритета операций.";
-    } else if (any(q, {"создай", "напиши", "сделай", "сгенерируй", "код на", "программа на", "пример кода", "простейший код"}) &&
-               any(q, {"код", "программ", "python", "питон", "c++", "фибоначчи", "факториал", "калькулятор"})) {
-        bool matched = false; answer = codeReply(q, matched); if (!matched) return 3;
-        approach = "определить язык и задачу, выбрать шаблон и проверить типичные граничные условия.";
-    } else if (any(q, {"что такое", "объясни", "расскажи про", "определение", "как работает", "что означает"})) {
-        answer = definition(q); if (answer.empty()) return 3;
-        approach = "сопоставить термин с локальной базой определений.";
-    } else if (any(q, {"составь план", "помоги спланировать", "как создать сайт", "как разработать сайт"})) {
-        answer = "План:\n1. Определить цель и пользователей.\n2. Выбрать функции первой версии.\n3. Спроектировать экраны и данные.\n4. Собрать небольшой прототип.\n5. Проверить ошибки и мобильный экран.\n6. Опубликовать и улучшать по обратной связи.";
-        approach = "разбить задачу на этапы и проверки.";
-    } else return 3;
+    const std::string query = trim(argv[2]);
+    if (query.empty()) return 3;
+    const std::string normalized = lowerUtf8(query);
+    const std::string intent = classify(normalized);
+    const std::vector<std::string> checks = checksFor(intent);
+    std::string candidate, calculationProblem;
+    const bool hasCalculation = intent == "calculation" && extractCalculation(normalized, candidate, calculationProblem);
 
-    if (mode == "reasoning") {
-        answer = "Разбор задачи:\n1. **Цель:** понять желаемый результат.\n2. **Подход:** " + approach + "\n3. **Проверка:** учесть ограничения и не запускать произвольный код из сообщения.\n\n" + answer;
-    }
-    std::cout << answer;
+    // Machine-readable planning data only. The C++ layer does not fabricate a user-facing
+    // prose answer; the trained FROSS Transformer generates that answer in the service.
+    std::cout << "{\"engine\":\"FROSS C++ Planner 1.0\","
+              << "\"intent\":\"" << jsonEscape(intent) << "\","
+              << "\"checks\":";
+    printArray(checks);
+    std::cout << ",\"candidateResult\":";
+    if (hasCalculation && calculationProblem.empty()) std::cout << "\"" << jsonEscape(candidate) << "\"";
+    else std::cout << "null";
+    std::cout << ",\"calculationIssue\":";
+    if (hasCalculation && !calculationProblem.empty()) std::cout << "\"" << jsonEscape(calculationProblem) << "\"";
+    else std::cout << "null";
+    std::cout << ",\"queryLength\":" << query.size() << "}";
     return 0;
 }
