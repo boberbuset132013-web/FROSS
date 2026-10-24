@@ -58,8 +58,6 @@ class Handler(BaseHTTPRequestHandler):
             "generationModel": TRANSFORMER.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
             "neuralModelLoaded": NEURAL_MODEL is not None,
-                        "generationModelLoaded": TRANSFORMER_MODEL is not None,
-                        "generationModelStatus": TRANSFORMER_STATUS,
             "neuralModelVersion": neural.VERSION if NEURAL_MODEL is not None else None,
             "neuralIntentCount": len(NEURAL_MODEL.labels) if NEURAL_MODEL is not None else 0,
             "neuralTrainingAccuracy": round(NEURAL_MODEL.train_accuracy, 3) if NEURAL_MODEL is not None else None,
