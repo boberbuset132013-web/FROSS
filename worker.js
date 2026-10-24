@@ -59,10 +59,11 @@ export default {
       worker: "FROSS",
       version: "1.1",
       brainVersion: "1.0",
+      build: "fross-python-transformer-2026-10-24",
       creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
       githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
       pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
-      cppBrainConfigured: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+      cppBrainConfigured: false,
       autoStudyConfigured: frossGithubToken(env).length >= 20,
       maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
       maxAssistantMessageChars: FROSS_MAX_REPLY_LENGTH,
@@ -747,7 +748,7 @@ async function handleFrossIdentity(request, env) {
     learningEnabled: isCreator,
     brainRoutes: {
       pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
-      cppReady: Boolean(env.FROSS_CPP_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN)
+      allModesUsePython: true
     }
   }, 200, request);
 }
@@ -1486,13 +1487,11 @@ async function handleFrossApi(request, env) {
   }
   // Saved knowledge is included in the prompt of our own trained model.
 
-  // Delegate algorithmic tasks to Python or C++; for questions needing fresh facts,
-  // merge saved notes with current search snippets locally so neither source is discarded.
-  // Keep the default result outside the conditional: the final diagnostics also read it
-  // on web-search paths where the external brain is intentionally skipped.
+  // All generation modes use the Python Transformer service. Reasoning mode changes
+  // the prompt and token budget, but never switches to a second backend.
   let remote = { configured: false, handled: false, error: "" };
   {
-    const selectedEndpoint = mode === "reasoning" ? env.FROSS_CPP_BRAIN_URL : env.FROSS_PYTHON_BRAIN_URL;
+    const selectedEndpoint = env.FROSS_PYTHON_BRAIN_URL;
     const modelKnowledge = [
       ...allKnowledge.slice(0, shouldSearch ? 18 : 24),
       ...(shouldSearch ? results.slice(0, 6) : [])
@@ -1532,8 +1531,8 @@ async function handleFrossApi(request, env) {
   }
 
   const unavailableReply = remote.configured
-    ? "Собственная генеративная модель FROSS сейчас не смогла создать ответ. Проверь /health соответствующего Render-сервиса и его checkpoint; шаблонным ответом я это не подменяю."
-    : "Собственная модель FROSS ещё не подключена к Worker. Настрой FROSS_PYTHON_BRAIN_URL и FROSS_CPP_BRAIN_URL вместе с FROSS_BRAIN_SERVICE_TOKEN, затем опубликуй Worker.";
+    ? "Python-сервис получил запрос, но собственная модель не выдала ответ. Проверь /health Python-сервиса: generationModelLoaded должно быть true, а в логах не должно быть ошибки checkpoint или генерации."
+    : "Python-модель ещё не подключена к Worker. Укажи FROSS_PYTHON_BRAIN_URL (полный HTTPS-адрес с путём /chat) и FROSS_BRAIN_SERVICE_TOKEN в настройках Worker, затем опубликуй его.";
   return frossJson({
     name: FROSS_PROFILE.name,
     reply: unavailableReply,
@@ -1552,7 +1551,8 @@ async function handleFrossApi(request, env) {
       generationModelStatus: remote.modelStatus || null,
       webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
-      note: "Генерация не была подтверждена, поэтому ответ не заменён шаблоном."
+      backend: "python",
+      note: "Активный генеративный маршрут — собственный Python Transformer; готовые языковые API не используются."
     }
   }, 200, request);
 }
