@@ -134,7 +134,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Local Brain 0.6 — алгоритмический помощник с композицией связанных предложений, личной памятью, вычислителем и поисковым ранжированием.",
+  description: "FROSS Transformer 1.0 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -743,7 +743,7 @@ async function handleFrossIdentity(request, env) {
     ok: true,
     isCreator,
     emailVerified: auth.emailVerified,
-    engine: "FROSS Local Brain 0.6",
+    engine: "FROSS Transformer 1.0",
     learningEnabled: isCreator,
     brainRoutes: {
       pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
@@ -1321,7 +1321,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Local Brain 0.6",
+    engine: "FROSS Transformer 1.0",
     topic,
     notes,
     count: notes.length,
