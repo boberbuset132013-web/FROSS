@@ -14,15 +14,17 @@ ROOT = Path(__file__).resolve().parent
 if not (ROOT / "fross_brain_v05.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "services"))
 import fross_brain_v05 as brain  # noqa: E402
 import fross_neural_brain as neural  # noqa: E402
+import llm_client  # noqa: E402
 
 NEURAL_MODEL_PATH = os.environ.get("FROSS_NEURAL_MODEL_PATH", str(ROOT / "fross-neural-model.npz"))
 NEURAL_MODEL, NEURAL_MODEL_STATUS = neural.load_or_train(NEURAL_MODEL_PATH)
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Brain 0.6"
+ENGINE_NAME = "FROSS Python Generative Brain 1.0"
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -49,7 +51,9 @@ class Handler(BaseHTTPRequestHandler):
         respond(self, 200, {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "0.6",
+            "version": "1.0",
+            "languageModelConfigured": llm_client.is_configured(),
+            "languageModel": os.environ.get("FROSS_LLM_MODEL", llm_client.DEFAULT_MODEL),
             "neuralModelLoaded": NEURAL_MODEL is not None,
             "neuralModelVersion": neural.VERSION if NEURAL_MODEL is not None else None,
             "neuralIntentCount": len(NEURAL_MODEL.labels) if NEURAL_MODEL is not None else 0,
@@ -115,6 +119,36 @@ class Handler(BaseHTTPRequestHandler):
         ]
 
         try:
+            # Free-form generation is the primary path when a provider key is configured.
+            # On provider errors the service falls back to the local rules and intent router.
+            if llm_client.is_configured():
+                try:
+                    generated = llm_client.generate_reply(
+                        message, mode=mode, history=history, knowledge=knowledge
+                    )
+                    respond(self, 200, {
+                        "handled": True,
+                        "reply": generated["reply"],
+                        "engine": generated["engine"],
+                        "kind": "llm-generated-v1",
+                        "model": generated["model"],
+                        "trace": [
+                            "Сформировать смысл запроса и учесть контекст",
+                            "Сгенерировать связный ответ языковой моделью",
+                            "Проверить соответствие ответа запросу",
+                        ] if mode == "normal" else [
+                            "Определить цель и ограничения",
+                            "Сопоставить контекст и доступные знания",
+                            "Сгенерировать и проверить решение",
+                            "Сформировать итог без вывода скрытых рассуждений",
+                        ],
+                        "sources": [],
+                    })
+                    return
+                except Exception:
+                    # Never return provider details, keys, or prompts to the client.
+                    pass
+
             reply = brain.quick_reply(message, is_creator=False, mode=mode, history=history)
             kind = "python-rule-v05"
             trace = [
