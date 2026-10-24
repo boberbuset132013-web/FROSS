@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""FROSS Neural Intent Brain 0.1.
+"""FROSS Neural Intent Router 0.2.
 
 A small feed-forward neural network built with NumPy: hashed text features ->
 ReLU hidden layer -> softmax intent classes. It is trained with cross-entropy
 and backpropagation, and its learned weights are saved in an NPZ artifact.
-It classifies conversational intent; it is not a general text generator.
+It classifies intent for routing/fallback. Free-form responses are produced by the configured language-model client; this network is not a text generator.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-VERSION = "FROSS Neural Intent Brain 0.1"
+VERSION = "FROSS Neural Intent Router 0.2"
 FEATURE_COUNT = 384
 HIDDEN_COUNT = 48
 EPOCHS = 300
