@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Python Brain 0.6 HTTP adapter. Standard library only."""
+"""FROSS Python Brain 0.6 HTTP adapter with an optional trained NumPy intent model."""
 from __future__ import annotations
 
 import hmac
@@ -15,6 +15,10 @@ if not (ROOT / "fross_brain_v05.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import fross_brain_v05 as brain  # noqa: E402
+import fross_neural_brain as neural  # noqa: E402
+
+NEURAL_MODEL_PATH = os.environ.get("FROSS_NEURAL_MODEL_PATH", str(ROOT / "fross-neural-model.npz"))
+NEURAL_MODEL, NEURAL_MODEL_STATUS = neural.load_or_train(NEURAL_MODEL_PATH)
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
@@ -42,7 +46,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/health", "/"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
-        respond(self, 200, {"ok": True, "engine": ENGINE_NAME, "version": "0.6"})
+        respond(self, 200, {
+            "ok": True,
+            "engine": ENGINE_NAME,
+            "version": "0.6",
+            "neuralModelLoaded": NEURAL_MODEL is not None,
+            "neuralModelVersion": neural.VERSION if NEURAL_MODEL is not None else None,
+            "neuralIntentCount": len(NEURAL_MODEL.labels) if NEURAL_MODEL is not None else 0,
+            "neuralTrainingAccuracy": round(NEURAL_MODEL.train_accuracy, 3) if NEURAL_MODEL is not None else None,
+        })
 
     def do_POST(self) -> None:
         if self.path != "/chat":
@@ -118,9 +130,34 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 kind = str(result.get("kind", "python-no-match"))
                 if kind == "no-match-v05":
+                    # The neural model is a fallback intent classifier, not a free-form generator.
+                    # Rule answers and saved knowledge keep priority over this prediction.
+                    prediction = NEURAL_MODEL.predict(message) if NEURAL_MODEL is not None else None
+                    neural_reply = neural.build_reply(message, prediction, history) if prediction else None
+                    if neural_reply:
+                        respond(self, 200, {
+                            "handled": True,
+                            "reply": neural_reply[:25000],
+                            "engine": ENGINE_NAME,
+                            "kind": "neural-intent-v01",
+                            "trace": [
+                                "Локальные правила и сохранённые знания не нашли уверенный ответ",
+                                "Нейросеть оценила намерение сообщения",
+                                "Использован ответ-шаблон для распознанного намерения",
+                            ],
+                            "sources": [],
+                            "neural": {
+                                "version": neural.VERSION,
+                                "intent": prediction["intent"],
+                                "confidence": round(float(prediction["confidence"]), 3),
+                                "margin": round(float(prediction["margin"]), 3),
+                            },
+                        })
+                        return
                     respond(self, 200, {
                         "handled": False, "engine": ENGINE_NAME, "kind": kind,
                         "trace": trace,
+                        "neuralModelLoaded": NEURAL_MODEL is not None,
                     })
                     return
                 reply = str(result.get("reply", "")).strip()
