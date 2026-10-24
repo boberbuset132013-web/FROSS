@@ -397,6 +397,12 @@ def generate_reply(
         if title and summary:
             memory_lines.append(f"{title}: {summary}")
     prompt_parts = []
+    if deep:
+        prompt_parts.append(
+            "Режим глубокого ответа: внимательно разбери условия, сравни подходы, "
+            "проверь крайние случаи и противоречия, затем дай ясный результат. "
+            "Не выдавай предположение за проверенный факт."
+        )
     if memory_lines:
         prompt_parts.append("Контекст знаний: " + " ".join(memory_lines))
     prompt_parts.extend(previous)
@@ -415,7 +421,7 @@ def generate_reply(
         prompt_tokens = prompt_tokens[-prompt_budget:]
     token_ids = ([BOS_ID] + prompt_tokens)[-block_size:]
     max_tokens = max_new_tokens if max_new_tokens is not None else (240 if deep else 150)
-    temp = float(temperature if temperature is not None else (0.78 if deep else 0.72))
+    temp = float(temperature if temperature is not None else (0.55 if deep else 0.72))
     temp = max(0.1, min(1.5, temp))
     generated: list[int] = []
     recent_generated: list[int] = []
