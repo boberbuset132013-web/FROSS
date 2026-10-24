@@ -84,7 +84,7 @@ service cloud.firestore {
 
         allow create: if signedInAs(userId)
           && request.resource.data.content is string
-          && request.resource.data.content.size() <= 4000
+          && request.resource.data.content.size() <= 30000
           && request.resource.data.createdAt is timestamp
           && (
             (
@@ -100,6 +100,7 @@ service cloud.firestore {
             ||
             (
               request.resource.data.role == 'assistant'
+              && request.resource.data.content.size() <= 25000
               && getAfter(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
                 .data.userMessageCount ==
                 get(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
