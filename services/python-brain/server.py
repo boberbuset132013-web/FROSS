@@ -26,7 +26,7 @@ TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Transformer Brain 1.1"
+ENGINE_NAME = "FROSS Python Transformer Brain 1.2"
 MAX_REPLY_CHARS = 25000
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
@@ -43,7 +43,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Transformer/1.1"
+    server_version = "FROSS-Python-Transformer/1.2"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -56,7 +56,7 @@ class Handler(BaseHTTPRequestHandler):
         respond(self, 200, {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.1",
+            "version": "1.2",
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=150 if mode == "reasoning" else 112,
+                    max_new_tokens=transformer.MAX_GENERATION_TOKENS,
                 ).strip()
         except Exception as exc:
             # Return only the exception class, never the prompt or internal traceback.
