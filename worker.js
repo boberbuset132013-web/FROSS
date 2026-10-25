@@ -7,6 +7,8 @@ const FROSS_MAX_REPLY_LENGTH = 25000;
 const FROSS_MAX_SEARCH_QUERY_LENGTH = 400;
 const FROSS_MAX_HISTORY_USER_MESSAGES = 5;
 const FROSS_MAX_RESULTS_PER_PROVIDER = 5;
+const FROSS_DEFAULT_PYTHON_BRAIN_URL = "https://fross-python-brain.hostless.app/chat";
+const FROSS_MIN_BRAIN_TOKEN_LENGTH = 16;
 
 // ================= ОСНОВНОЙ ОБРАБОТЧИК =================
 export default {
@@ -35,7 +37,7 @@ export default {
 
     // 3. FROSS API: JSON-ошибки вместо HTML-страниц Cloudflare.
     if (path === "/api/health") return frossApiGuard(path, request, async () => {
-      const pythonBrainHealth = await frossProbePythonHealth(env.FROSS_PYTHON_BRAIN_URL);
+      const pythonBrainHealth = await frossProbePythonHealth(frossPythonBrainUrl(env));
       return frossJson({
         ok: true,
         worker: "FROSS",
@@ -44,7 +46,7 @@ export default {
         build: "fross-python-transformer-2026-10-24",
         creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
-        pythonBrainConfigured: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+        pythonBrainConfigured: frossBrainServiceConfigured(env),
         pythonBrainHealth,
         autoStudyConfigured: frossGithubToken(env).length >= 20,
         maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
@@ -721,7 +723,7 @@ async function handleFrossIdentity(request, env) {
     engine: "FROSS Transformer 1.0",
     learningEnabled: isCreator,
     brainRoutes: {
-      pythonReady: Boolean(env.FROSS_PYTHON_BRAIN_URL && env.FROSS_BRAIN_SERVICE_TOKEN),
+      pythonReady: frossBrainServiceConfigured(env),
       allModesUsePython: true
     }
   }, 200, request);
@@ -1336,9 +1338,22 @@ function frossShouldSearchExplicit(query) {
     .some(term => q.includes(term));
 }
 
+function frossPythonBrainUrl(env) {
+  const configured = typeof env?.FROSS_PYTHON_BRAIN_URL === "string" ? env.FROSS_PYTHON_BRAIN_URL.trim() : "";
+  return configured || FROSS_DEFAULT_PYTHON_BRAIN_URL;
+}
+
+function frossBrainServiceToken(env) {
+  return typeof env?.FROSS_BRAIN_SERVICE_TOKEN === "string" ? env.FROSS_BRAIN_SERVICE_TOKEN.trim() : "";
+}
+
+function frossBrainServiceConfigured(env) {
+  return frossBrainServiceToken(env).length >= FROSS_MIN_BRAIN_TOKEN_LENGTH;
+}
+
 async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000) {
   if (typeof endpoint !== "string" || !endpoint.trim()) return { configured: false, handled: false };
-  if (typeof token !== "string" || token.length < 24) {
+  if (typeof token !== "string" || token.trim().length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
     return { configured: true, handled: false, error: "Brain service token is not configured." };
   }
   let url;
@@ -1518,14 +1533,14 @@ async function handleFrossApi(request, env) {
   // the prompt and token budget, but never switches to a second backend.
   let remote = { configured: false, handled: false, error: "" };
   {
-    const selectedEndpoint = env.FROSS_PYTHON_BRAIN_URL;
+    const selectedEndpoint = frossPythonBrainUrl(env);
     const modelKnowledge = [
       ...allKnowledge.slice(0, shouldSearch ? 18 : 24),
       ...(shouldSearch ? results.slice(0, 6) : [])
     ];
     remote = await frossCallBrainService(
       selectedEndpoint,
-      env.FROSS_BRAIN_SERVICE_TOKEN,
+      frossBrainServiceToken(env),
       { message: correctedQuery, mode, history, knowledge: modelKnowledge },
       mode === "reasoning" ? 52000 : 28000
     );
@@ -1559,7 +1574,7 @@ async function handleFrossApi(request, env) {
 
   const unavailableReply = remote.configured
     ? "Python-сервис получил запрос, но собственная модель не выдала ответ. Проверь /health Python-сервиса: generationModelLoaded должно быть true, а в логах не должно быть ошибки checkpoint или генерации."
-    : "Python-модель ещё не подключена к Worker. Укажи FROSS_PYTHON_BRAIN_URL (полный HTTPS-адрес с путём /chat) и FROSS_BRAIN_SERVICE_TOKEN в настройках Worker, затем опубликуй его.";
+    : "Python-модель ещё не подключена к Worker. Добавь Secret FROSS_BRAIN_SERVICE_TOKEN в Cloudflare и тот же токен в Hostless. Для другого адреса задай FROSS_PYTHON_BRAIN_URL, затем опубликуй Worker.";
   return frossJson({
     name: FROSS_PROFILE.name,
     reply: unavailableReply,
