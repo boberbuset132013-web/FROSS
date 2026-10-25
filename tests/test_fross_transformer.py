@@ -45,7 +45,7 @@ class TransformerTests(unittest.TestCase):
         formatted = transformer._format_record(record)
         self.assertIn("Пользователь: Сделай кнопку синей.", formatted)
         self.assertIn("FROSS: Изменю фон кнопки на синий.", formatted)
-        self.assertTrue(formatted.endswith("FROSS: Добавь синий цвет в :hover, а обычное состояние оставь прежним.\\n"))
+        self.assertTrue(formatted.endswith("FROSS: Добавь синий цвет в :hover, а обычное состояние оставь прежним.\n"))
 
     def test_corpus_loader_preserves_dialogue_history(self) -> None:
         import json
@@ -58,7 +58,7 @@ class TransformerTests(unittest.TestCase):
                 {"history": history, "user": "Исправь только CSS.", "assistant": "Изменю только CSS."},
                 *({"user": f"вопрос {i}", "assistant": f"ответ {i}"} for i in range(7)),
             ]
-            path.write_text("\\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8")
+            path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8")
             loaded = transformer._load_corpus(path)
         self.assertEqual(loaded[0]["history"][0]["content"], "Оставь HTML без изменений.")
         self.assertEqual(loaded[0]["history"][0]["role"], "user")
