@@ -1011,18 +1011,33 @@ function frossBuildKnowledgeKeywords(topic, title, text) {
   return [...weights.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([word]) => word);
 }
 function frossBuildKnowledgeKeyPoints(topic, title, text, limit = 5) {
-  const sentences = String(text || "").replace(/\s+/g, " ")
+  const boilerplate = /^(skip to (main )?content|table of contents|contents|cookie settings|privacy policy|terms of use|all rights reserved|subscribe now|sign in|log in|previous|next|back to top|главная|содержание|войти|регистрация|политика конфиденциальности|все права защищены)[.\s:—-]*$/i;
+  const rawSentences = String(text || "").replace(/\s+/g, " ")
     .split(/(?<=[.!?])\s+|\s+•\s+|\s+;\s+/)
-    .map(value => value.trim()).filter(value => value.length >= 45);
-  if (!sentences.length) return String(text || "").trim() ? [String(text).trim().slice(0, 280)] : [];
+    .map(value => value.replace(/^[•*\-\s]+/, "").trim())
+    .filter(value => value.length >= 45 && value.length <= 900 && !boilerplate.test(value));
+  const unique = new Map();
+  for (const sentence of rawSentences) {
+    const key = sentence.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, " ").trim();
+    if (key && !unique.has(key)) unique.set(key, sentence);
+  }
+  const sentences = [...unique.values()];
+  if (!sentences.length) {
+    const fallback = String(text || "").replace(/\s+/g, " ").trim();
+    return fallback.length >= 45 ? [fallback.slice(0, 280)] : [];
+  }
   const focus = [...new Set([...frossKnowledgeTokens(topic), ...frossKnowledgeTokens(title)])];
   const ranked = sentences.map((sentence, index) => {
     const words = new Set(frossKnowledgeTokens(sentence));
     const hits = focus.filter(word => words.has(word)).length;
     const density = focus.length ? hits / Math.min(focus.length, 8) : 0;
-    return { sentence, index, score: density * 2 + Math.min(sentence.length, 240) / 1200 };
+    const usefulLength = Math.min(sentence.length, 320) / 3200;
+    const listPenalty = /^(copyright|last updated|updated on|version history|последнее обновление|обновлено)\b/i.test(sentence) ? 0.7 : 0;
+    return { sentence, index, score: density * 2.4 + usefulLength - listPenalty };
   }).sort((a, b) => b.score - a.score || a.index - b.index);
-  return ranked.slice(0, limit).sort((a, b) => a.index - b.index).map(item => item.sentence.slice(0, 300));
+  return ranked.slice(0, Math.max(1, Math.min(8, limit)))
+    .sort((a, b) => a.index - b.index)
+    .map(item => item.sentence.slice(0, 300));
 }
 function frossBuildKnowledgeSummary(topic, title, text) {
   return frossBuildKnowledgeKeyPoints(topic, title, text, 3).join(" ").slice(0, 900);
@@ -1094,23 +1109,30 @@ function frossTrainingSeedResources(topic) {
 }
 
 function frossMergeTrainingCandidates(topic, searchResults, limit = 8) {
-  const combined = [
-    ...frossTrainingSeedResources(topic),
-    ...(Array.isArray(searchResults) ? searchResults : [])
-  ];
-  const seen = new Set();
+  const seeded = frossTrainingSeedResources(topic);
+  const searched = (Array.isArray(searchResults) ? searchResults : [])
+    .filter(item => item && typeof item === "object")
+    .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  const combined = [...seeded, ...searched];
+  const seenUrls = new Set();
+  const hostCounts = new Map();
   const result = [];
   for (const item of combined) {
     if (!item || typeof item !== "object" || typeof item.url !== "string") continue;
     try {
       const url = new URL(item.url);
-      if (!["http:", "https:"].includes(url.protocol)) continue;
+      if (!["http:", "https:"].includes(url.protocol) || !url.hostname) continue;
       url.hash = "";
       const normalizedUrl = url.toString();
-      if (seen.has(normalizedUrl)) continue;
-      seen.add(normalizedUrl);
-      result.push({ ...item, url: normalizedUrl });
-      if (result.length >= limit) break;
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      if (seenUrls.has(normalizedUrl) || (hostCounts.get(host) || 0) >= 2) continue;
+      const title = frossClean(item.title || "").slice(0, 260);
+      const snippet = frossClean(item.snippet || "").slice(0, 3200);
+      if (!title && snippet.length < 45) continue;
+      seenUrls.add(normalizedUrl);
+      hostCounts.set(host, (hostCounts.get(host) || 0) + 1);
+      result.push({ ...item, title: title || "Источник без названия", snippet, url: normalizedUrl });
+      if (result.length >= Math.max(1, Math.min(10, limit))) break;
     } catch {
       continue;
     }
@@ -1240,7 +1262,7 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled", onlyUnit = 
   for (const unit of workList) {
     try {
       const search = await frossRunSearch(unit.query, "reasoning");
-      const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 5);
+      const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 7);
       const notes = await frossBuildTrainingNotes(unit.topic, candidates);
       if (!notes.length) {
         outcomes.push({ topic: unit.topic, saved: false, noteCount: 0, error: "No suitable public search results", providerErrors: search.errors.slice(0, 3) });
@@ -1278,7 +1300,7 @@ async function handleFrossAutoStudy(request, env, ctx) {
     const searchResults = Array.isArray(search?.results) ? search.results : [];
     logs.push("Поиск завершён. Найдено исходных результатов: " + searchResults.length + ".");
     if (Array.isArray(search?.errors) && search.errors.length) logs.push("Предупреждения поиска: " + search.errors.slice(0,3).map(value => frossClean(value).slice(0,120)).join(" | "));
-    const candidates = frossMergeTrainingCandidates(unit.topic, searchResults, 5);
+    const candidates = frossMergeTrainingCandidates(unit.topic, searchResults, 7);
     logs.push("Подготовлено источников для обработки: " + candidates.length + ".");
     const notes = await frossBuildTrainingNotes(unit.topic, candidates);
     logs.push("Заметок после обработки источников: " + notes.length + ".");
