@@ -26,7 +26,7 @@ TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Transformer Brain 1.0"
+ENGINE_NAME = "FROSS Python Transformer Brain 1.1"
 MAX_REPLY_CHARS = 25000
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
@@ -43,7 +43,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Transformer/1.0"
+    server_version = "FROSS-Python-Transformer/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -56,7 +56,7 @@ class Handler(BaseHTTPRequestHandler):
         respond(self, 200, {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.0",
+            "version": "1.1",
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=120 if mode == "reasoning" else 96,
+                    max_new_tokens=150 if mode == "reasoning" else 112,
                 ).strip()
         except Exception as exc:
             # Return only the exception class, never the prompt or internal traceback.
@@ -173,12 +173,34 @@ class Handler(BaseHTTPRequestHandler):
             "kind": "fross-transformer-v1",
             "generationModel": transformer.VERSION,
             "generationModelStatus": TRANSFORMER_STATUS,
-            "trace": [
-                "Разбить запрос и контекст на собственные BPE-токены",
-                "Обработать последовательность блоками причинного self-attention",
-                "Предсказать следующий токен обученными весами и повторить цикл",
-                "Сохранить абзацы и форматирование сгенерированного текста",
-            ],
+            "trace": (
+                [
+                    "1/14 — определить цель и ожидаемый результат",
+                    "2/14 — выделить условия и запреты",
+                    "3/14 — учесть историю диалога",
+                    "4/14 — разделить задачу на подзадачи",
+                    "5/14 — отметить известные факты",
+                    "6/14 — определить пробелы в знаниях",
+                    "7/14 — использовать поиск при необходимости",
+                    "8/14 — извлечь факты из источников",
+                    "9/14 — сравнить надёжность источников",
+                    "10/14 — выбрать способ решения",
+                    "11/14 — сформулировать ответ своими словами",
+                    "12/14 — проверить логику и крайние случаи",
+                    "13/14 — проверить ограничения и формат",
+                    "14/14 — выдать вывод и обозначить неопределённость",
+                ]
+                if mode == "reasoning" else
+                [
+                    "1/7 — разобрать точную формулировку",
+                    "2/7 — определить намерение пользователя",
+                    "3/7 — учесть историю и ограничения",
+                    "4/7 — найти нужные факты и пробелы",
+                    "5/7 — проверить термины и источники при необходимости",
+                    "6/7 — сформировать прямой ответ своими словами",
+                    "7/7 — проверить релевантность и формат",
+                ]
+            ),
             "sources": [],
         })
 
