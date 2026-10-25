@@ -708,6 +708,9 @@ const FROSS_GITHUB_BRANCH = "main";
 const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
 const FROSS_AUTO_STUDY_STATE_PATH = "memory/knowledge/auto-study-state.json";
 const FROSS_AUTO_STUDY_COOLDOWN_MS = 15 * 60 * 1000;
+let frossFallbackStudyLastStartedAt = 0;
+let frossFallbackStudyNextTopicIndex = 0;
+let frossFallbackStudyInProgress = false;
 let frossGithubIndexCache = null;
 let frossGithubIndexCacheUntil = 0;
 const frossGithubTopicCache = new Map();
@@ -1114,7 +1117,22 @@ const FROSS_AUTO_STUDY_CURRICULUM = [
 
 async function frossReserveAutoStudyStep(env, requestedTopic = "") {
   const token = frossGithubToken(env);
-  if (token.length < 20) return { ok: false, status: 503, message: "Обучение пока не настроено: добавь Secret FROSS_GITHUB_TOKEN в Cloudflare." };
+  if (token.length < 20) {
+    const cleanTopic = frossClean(requestedTopic || "").slice(0, 180);
+    const now = Date.now();
+    if (frossFallbackStudyInProgress) return { ok: false, status: 429, retryAfterSeconds: 60, message: "Обучение уже выполняется в этом экземпляре сервера. Попробуй ещё раз через минуту." };
+    const elapsed = frossFallbackStudyLastStartedAt ? Math.max(0, now - frossFallbackStudyLastStartedAt) : FROSS_AUTO_STUDY_COOLDOWN_MS;
+    if (elapsed < FROSS_AUTO_STUDY_COOLDOWN_MS) {
+      const retryAfterSeconds = Math.ceil((FROSS_AUTO_STUDY_COOLDOWN_MS - elapsed) / 1000);
+      return { ok: false, status: 429, retryAfterSeconds, message: "Этот экземпляр сервера недавно запускал обучение. Следующий запуск доступен примерно через " + Math.ceil(retryAfterSeconds / 60) + " мин." };
+    }
+    const index = frossFallbackStudyNextTopicIndex % FROSS_AUTO_STUDY_CURRICULUM.length;
+    const unit = cleanTopic.length >= 2 ? { topic: cleanTopic, query: frossTrainingSearchQuery(cleanTopic), custom: true } : FROSS_AUTO_STUDY_CURRICULUM[index];
+    frossFallbackStudyLastStartedAt = now;
+    frossFallbackStudyInProgress = true;
+    if (cleanTopic.length < 2) frossFallbackStudyNextTopicIndex = (index + 1) % FROSS_AUTO_STUDY_CURRICULUM.length;
+    return { ok: true, unit, fallbackMode: true, nextAvailableAt: new Date(now + FROSS_AUTO_STUDY_COOLDOWN_MS).toISOString(), cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000) };
+  }
   const read = await frossGithubReadContents(FROSS_AUTO_STUDY_STATE_PATH, token);
   if (!read.ok) return { ok: false, status: 502, message: "Не удалось проверить очередь обучения в GitHub: " + read.error };
   let state = { nextTopicIndex: 0, lastStartedAt: "" };
@@ -1184,6 +1202,7 @@ async function handleFrossAutoStudy(request, env, ctx) {
   }
   const unit = reservation.unit;
   const logs = ["Старт: " + new Date().toISOString(), "Тема: " + unit.topic, "Интервал общего запуска: " + reservation.cooldownMinutes + " минут."];
+  if (reservation.fallbackMode) logs.push("FROSS_GITHUB_TOKEN не настроен: поиск продолжится, результат сохранится в памяти аккаунта или браузера.");
   console.log("[FROSS public study] started", JSON.stringify({ topic: unit.topic, custom: unit.custom === true }));
   try {
     const search = await frossRunSearch(unit.query, "reasoning");
@@ -1210,6 +1229,8 @@ async function handleFrossAutoStudy(request, env, ctx) {
     logs.push("Ошибка обработки: " + message);
     console.error("[FROSS public study] failed", JSON.stringify({ topic: unit.topic, error: message }));
     return frossJson({ ok: false, error: "Не удалось завершить изучение: " + message, topic: unit.topic, logs, results: [], nextAvailableAt: reservation.nextAvailableAt, cooldownMinutes: reservation.cooldownMinutes }, 502, request);
+  } finally {
+    if (reservation.fallbackMode) frossFallbackStudyInProgress = false;
   }
 }
 
