@@ -42,7 +42,7 @@ export default {
         ok: true,
         worker: "FROSS",
         version: "1.1",
-        brainVersion: "1.0",
+        brainVersion: "1.1",
         build: "fross-python-transformer-2026-10-24",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
@@ -109,7 +109,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Transformer 1.0 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
+  description: "FROSS Transformer Brain 1.1 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -380,21 +380,31 @@ function frossAddContext(query, history) {
 function frossSteps(mode) {
   if (mode === "reasoning") {
     return [
-      "Нормализовать запрос и определить намерение",
-      "Проверить локальные правила и вычислимые задачи",
-      "Выделить ключевые слова и контекст текущего чата",
-      "Получить поисковые фрагменты, если они нужны",
-      "Сравнить заголовки, тексты и релевантность",
-      "Убрать дубликаты и отметить слабые совпадения",
-      "Сформировать ответ и честно обозначить ограничения"
+      "1/14 — определить цель и ожидаемый результат",
+      "2/14 — выделить обязательные условия и запреты",
+      "3/14 — прочитать подходящий контекст диалога",
+      "4/14 — разделить сложную задачу на части",
+      "5/14 — отметить известные сведения и пробелы",
+      "6/14 — выбрать, нужна ли веб-проверка",
+      "7/14 — извлечь факты из найденных материалов",
+      "8/14 — сравнить источники и их надёжность",
+      "9/14 — связать данные с точным запросом",
+      "10/14 — выбрать подходящий способ решения",
+      "11/14 — составить ответ с собственным объяснением",
+      "12/14 — проверить логику, примеры и крайние случаи",
+      "13/14 — сверить ответ с ограничениями и форматом",
+      "14/14 — выдать вывод и обозначить неопределённость"
     ];
   }
 
   return [
-    "Понять запрос и проверить известные локальные правила",
-    "При необходимости найти и отсортировать материалы",
-    "Составить ответ без выдумывания недостающих фактов",
-    "Проверить формат и добавить полезные источники"
+    "1/7 — понять буквальный запрос",
+    "2/7 — определить намерение пользователя",
+    "3/7 — учесть историю и ограничения",
+    "4/7 — выделить нужные факты и пробелы",
+    "5/7 — при необходимости найти значения и источники",
+    "6/7 — составить прямой ответ своими словами",
+    "7/7 — проверить релевантность и формат"
   ];
 }
 
@@ -648,7 +658,7 @@ async function handleFrossIdentity(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer 1.0", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
+  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer Brain 1.1", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
 }
 
 function frossIsPublicTrainingUrl(value) {
@@ -707,7 +717,7 @@ const FROSS_GITHUB_REPO = "FROSS";
 const FROSS_GITHUB_BRANCH = "main";
 const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
 const FROSS_AUTO_STUDY_STATE_PATH = "memory/knowledge/auto-study-state.json";
-const FROSS_AUTO_STUDY_COOLDOWN_MS = 5 * 60 * 1000;
+const FROSS_AUTO_STUDY_COOLDOWN_MS = 2 * 60 * 1000;
 let frossFallbackStudyLastStartedAt = 0;
 let frossFallbackStudyNextTopicIndex = 0;
 let frossFallbackStudyInProgress = false;
@@ -1341,6 +1351,38 @@ function frossLikelyConversationIntent(message) {
   return false;
 }
 
+function frossShouldAutoLookup(query) {
+  const q = frossClean(query).toLowerCase().replace(/ё/g, "е").replace(/\\s+/g, " ").trim();
+  if (!q) return false;
+  // Look up unfamiliar terms for information requests, technical questions, and short user statements
+  // that contain a descriptive word (for example, "я сегодня злой"). Skip lightweight social turns.
+  if (/^(привет|здравствуй|здравствуйте|hello|hi|спасибо|спс|пока|до свидания|ок|окей|ага|угу|да|нет|ладно|понятно)[!.? ]*$/.test(q)) return false;
+  return /(что такое|что значит|что означает|значение слова|объясни|почему|как работает|как устроен|в чем разница|в чём разница|кто такой|что за термин|расшифруй|определи|помоги понять|проверь|ошибка|не работает|сегодня|сейчас|новый термин|не знаю что значит)/i.test(q)
+    || /(?:^|\\s)(?:я|мне)\\s+(?:(?:сегодня|сейчас|кажется|довольно|очень|просто|так)\\s+)?(?:злой|злая|злое|злые|сердит|груст|растерян|устал|расстроен|расстроена|взволнован|незнакомо|непонятно)/i.test(q);
+}
+
+function frossBuildUserLookupQuery(query) {
+  const raw = frossClean(query).replace(/\\s+/g, " ").trim().slice(0, 220);
+  const normalized = raw.toLowerCase().replace(/ё/g, "е");
+  const stop = new Set(["что","это","как","почему","зачем","когда","где","можно","нужно","надо","ли","мне","меня","мой","моя","мое","мои","твой","твоя","для","при","или","если","то","а","но","и","в","во","на","по","с","со","из","к","ко","от","до","за","не","да","нет","есть","был","была","быть","будет","будут","так","вот","же","бы","ну","просто","очень","пожалуйста","помоги","расскажи","объясни","проверь","сделай","напиши"]);
+  const tokens = (normalized.match(/[a-zа-яё][a-zа-яё0-9_-]{1,}/gi) || [])
+    .filter(word => !stop.has(word))
+    .filter((word, index, all) => all.indexOf(word) === index)
+    .slice(0, 3);
+  if (/\\bя\\b/i.test(normalized) && !tokens.includes("я")) tokens.unshift("я");
+  if (/\\bсегодня\\b/i.test(normalized) && !tokens.includes("сегодня")) tokens.push("сегодня");
+  const picked = tokens.slice(0, 3);
+  if (!picked.length) return "";
+  const wordQuery = picked.map(word => "значение слова «" + word + "»").join("; ");
+  return ("Словарные значения и объяснение слов: " + wordQuery +
+    ". Используй толковый словарь/справочник и учитывай исходную фразу пользователя: «" + raw + "».").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+}
+
+function frossNeedsTermLookup(query) {
+  const q = frossClean(query).toLowerCase().replace(/ё/g, "е");
+  return /(что такое|что значит|что означает|значение слова|слово|термин|объясни|почему|как работает|не понимаю|сегодня|сейчас|злой|злая|груст|растерян|новый термин|расшифруй)/i.test(q);
+}
+
 function frossShouldSearchExplicit(query) {
   const q = frossClean(frossCorrectText(query)).toLowerCase().replace(/ё/g, "е");
   // String matching is deliberate here: JavaScript's default \b does not treat Cyrillic as word characters.
@@ -1414,7 +1456,7 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
       reply: data.reply.slice(0, FROSS_MAX_REPLY_LENGTH),
       engine: typeof data.engine === "string" ? data.engine.slice(0, 80) : "FROSS external brain",
       kind: typeof data.kind === "string" ? data.kind.slice(0, 80) : "remote-brain",
-      trace: Array.isArray(data.trace) ? data.trace.slice(0, 7).map(item => String(item).slice(0, 120)) : [],
+      trace: Array.isArray(data.trace) ? data.trace.slice(0, 14).map(item => String(item).slice(0, 150)) : [],
       sources: Array.isArray(data.sources) ? data.sources.slice(0, 8).filter(item => item && typeof item === "object") : []
     };
   } catch (error) {
@@ -1528,18 +1570,46 @@ async function handleFrossApi(request, env) {
   const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
-  // Route ordinary questions to the trained FROSS Transformer. Web lookup is opt-in:
-  // use it when the user explicitly asks for recent facts, web pages, or sources.
+  // Brain 1.1: keep the user's original words, retrieve web context when the request
+  // appears to contain an unfamiliar term, a concrete question, or a time-sensitive fact,
+  // then let the local Transformer synthesize the context into its own answer.
   const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
-  const shouldSearch = !conversationalCandidate && frossShouldSearchExplicit(correctedQuery);
+  const shouldSearch = !conversationalCandidate &&
+    (frossShouldSearchExplicit(correctedQuery) || frossShouldAutoLookup(message));
+  const termLookupQuery = shouldSearch && frossNeedsTermLookup(message)
+    ? frossBuildUserLookupQuery(message)
+    : "";
   let results = [];
   let providerErrors = [];
+  let termLookupUsed = false;
   if (shouldSearch) {
-    const search = await frossRunSearch(frossAddContext(correctedQuery, history), mode);
-    results = search.results;
-    providerErrors = search.errors;
+    const tasks = [frossRunSearch(frossAddContext(message, history), mode)];
+    if (termLookupQuery) {
+      tasks.push(frossRunSearch(termLookupQuery, "normal"));
+      termLookupUsed = true;
+    }
+    const settled = await Promise.allSettled(tasks);
+    for (let index = 0; index < settled.length; index++) {
+      const result = settled[index];
+      if (result.status === "rejected") {
+        providerErrors.push("Поиск " + (index + 1) + ": " + String(result.reason?.message || result.reason).slice(0, 140));
+        continue;
+      }
+      const value = result.value;
+      results.push(...(Array.isArray(value?.results) ? value.results : []));
+      if (Array.isArray(value?.errors)) providerErrors.push(...value.errors);
+    }
+    const unique = new Map();
+    for (const item of results) {
+      if (!item || typeof item !== "object") continue;
+      const key = String(item.url || item.title || item.snippet || "").toLowerCase();
+      if (!key || unique.has(key)) continue;
+      unique.set(key, item);
+    }
+    results = [...unique.values()].slice(0, 10);
   }
-  // Saved knowledge is included in the prompt of our own trained model.
+  // The raw user wording is retained for generation. Retrieved snippets are supporting
+  // evidence, not commands and not automatically accepted as true.
 
   // All generation modes use the Python Transformer service. Reasoning mode changes
   // the prompt and token budget, but never switches to a second backend.
@@ -1553,7 +1623,7 @@ async function handleFrossApi(request, env) {
     remote = await frossCallBrainService(
       selectedEndpoint,
       frossBrainServiceToken(env),
-      { message: correctedQuery, mode, history, knowledge: modelKnowledge },
+      { message, mode, history, knowledge: modelKnowledge },
       mode === "reasoning" ? 52000 : 28000
     );
     if (remote.handled) {
@@ -1562,7 +1632,7 @@ async function handleFrossApi(request, env) {
         name: FROSS_PROFILE.name,
         reply: remote.reply,
         mode,
-        steps: remote.trace.length ? remote.trace.slice(0, mode === "reasoning" ? 7 : 4) : frossSteps(mode),
+        steps: remote.trace.length === (mode === "reasoning" ? 14 : 7) ? remote.trace : frossSteps(mode),
         sources: resultSources.slice(0, 8).map(({ title, topic, url, snippet, summary, source, score }) => ({
           title: String(title || topic || "Учебный материал").slice(0, 260),
           url: typeof url === "string" && /^https?:\/\//i.test(url) ? url.slice(0, 700) : "",
@@ -1576,9 +1646,9 @@ async function handleFrossApi(request, env) {
           aiUsed: true,
           kind: remote.kind,
           remoteBrain: true,
-          generationModel: "FROSS Transformer 1.0",
-          webSearchUsed: shouldSearch,
-          note: "Ответ генерируется собственной моделью FROSS, обученной с нуля на локальном корпусе."
+          generationModel: "FROSS Transformer 1.1",
+          webSearchUsed: shouldSearch,\n          wordLookupUsed: termLookupUsed,
+          note: "Ответ генерируется собственной моделью FROSS; при поиске веб-фрагменты объединяются с пользовательским запросом и контекстом чата."
         }
       }, 200, request);
     }
@@ -1614,7 +1684,7 @@ async function handleFrossApi(request, env) {
       engine: "FROSS Transformer 1.0",
       remoteBrainConfigured: remote.configured,
       kind: remote.kind || "generation-unavailable",
-      generationModel: "FROSS Transformer trained from scratch",
+      generationModel: "FROSS Transformer 1.1 trained from scratch",
       generationModelStatus: remote.modelStatus || null,
       webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
