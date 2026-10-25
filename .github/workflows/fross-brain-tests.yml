@@ -118,6 +118,12 @@ jobs:
           assert 'id="knowledgeBtn"' in page, "All signed-in users should see the shared knowledge button"
           assert "async function frossReserveAutoStudyStep" in worker, "Public knowledge steps must use a server-side reservation"
           assert "FROSS_AUTO_STUDY_COOLDOWN_MS = 15 * 60 * 1000" in worker, "Shared learning must be throttled"
+          assert 'id="publicStudyTopic"' in page and 'id="publicStudyForm"' in page, "Public topic search must be available"
+          assert 'id="publicStudyLogs"' in page and 'id="publicStudyResults"' in page, "Study logs and results must be visible"
+          assert "Стать создателем" not in page and 'id="creatorUnlockForm"' not in page, "Creator UI must be removed"
+          assert 'path === "/api/creator-unlock"' not in worker and "handleFrossCreatorUnlock" not in worker, "Creator password endpoint must be removed"
+          assert "frossTrainingSearchQuery(cleanTopic)" in worker, "Visitor topics must be searched"
+          assert 'const githubStorage = await frossSaveKnowledgeToGitHub(unit.topic, notes, env);' in worker, "Public study must save to the shared library"
           assert 'id="publicKnowledgeBtn"' in page, "Guests must see the no-login knowledge button"
           assert 'publicKnowledgeBtn").addEventListener' in page, "Guest knowledge button must be wired"
           auto_study = worker.split("async function handleFrossAutoStudy(request, env, ctx) {", 1)[1].split("async function handleFrossTrain(request, env) {", 1)[0]
