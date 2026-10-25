@@ -124,6 +124,7 @@ jobs:
           assert "request.resource.data.content.size() <= 30000" in rules
           assert "request.resource.data.content.size() <= 25000" in rules
           assert '"crons": ["0 3 * * *"]' in wrangler
+          assert '"secrets"' in wrangler and '"FROSS_BRAIN_SERVICE_TOKEN"' in wrangler, "Worker deploy must require the Python brain token"
           assert "25 000 символов" in character and "30 000 символов" in character
           print("Learning pipeline, scheduled study, history window and character limits passed.")
           PY
