@@ -90,7 +90,10 @@ jobs:
           assert "frossShouldSearchExplicit(correctedQuery)" in worker
           assert 'generationModel: "FROSS Transformer 1.0"' in worker
           assert not Path("services/llm_client.py").exists()
-          assert "const selectedEndpoint = env.FROSS_PYTHON_BRAIN_URL;" in worker
+          assert "const selectedEndpoint = frossPythonBrainUrl(env);" in worker
+          assert 'const FROSS_DEFAULT_PYTHON_BRAIN_URL = "https://fross-python-brain.hostless.app/chat";' in worker
+          assert "const FROSS_MIN_BRAIN_TOKEN_LENGTH = 16;" in worker
+          assert "function frossBrainServiceConfigured(env)" in worker
           assert "env.FROSS_CPP_BRAIN_URL" not in worker
           assert "async function frossProbePythonHealth" in worker and "pythonBrainHealth" in worker
           assert "ambient-orbs" in page and "orb-green" in page and "orb-violet" in page
