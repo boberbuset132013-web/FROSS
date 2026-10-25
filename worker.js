@@ -42,7 +42,7 @@ export default {
         ok: true,
         worker: "FROSS",
         version: "1.1",
-        brainVersion: "1.1",
+        brainVersion: "1.2",
         build: "fross-python-transformer-2026-10-25",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
@@ -109,7 +109,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Transformer Brain 1.1 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
+  description: "FROSS Transformer Brain 1.2 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -658,7 +658,7 @@ async function handleFrossIdentity(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer Brain 1.1", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
+  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer Brain 1.2", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
 }
 
 function frossIsPublicTrainingUrl(value) {
@@ -1357,7 +1357,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Transformer Brain 1.1",
+    engine: "FROSS Transformer Brain 1.2",
     topic,
     notes,
     count: notes.length,
@@ -1655,16 +1655,16 @@ async function handleFrossApi(request, env) {
     const modelKnowledge = [
       // Put results from this request first: the compact model can consume only a few notes.
       ...(shouldSearch ? results.slice(0, 6) : []),
-      ...allKnowledge.slice(0, shouldSearch ? 18 : 24)
+      ...(shouldSearch ? allKnowledge.slice(0, 18) : [])
     ];
     remote = await frossCallBrainService(
       selectedEndpoint,
       frossBrainServiceToken(env),
       { message, mode, history, knowledge: modelKnowledge },
-      mode === "reasoning" ? 52000 : 28000
+      65000
     );
     if (remote.handled) {
-      const resultSources = remote.sources.length ? remote.sources : modelKnowledge;
+      const resultSources = remote.sources.length ? remote.sources : (shouldSearch ? modelKnowledge : []);
       return frossJson({
         name: FROSS_PROFILE.name,
         reply: remote.reply,
@@ -1683,7 +1683,7 @@ async function handleFrossApi(request, env) {
           aiUsed: true,
           kind: remote.kind,
           remoteBrain: true,
-          generationModel: "FROSS Transformer 1.1",
+          generationModel: "FROSS Transformer 1.2",
           webSearchUsed: shouldSearch,
           wordLookupUsed: termLookupUsed,
           note: "Ответ генерируется собственной моделью FROSS; при поиске веб-фрагменты объединяются с пользовательским запросом и контекстом чата."
@@ -1719,15 +1719,15 @@ async function handleFrossApi(request, env) {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS Transformer Brain 1.1",
+      engine: "FROSS Transformer Brain 1.2",
       remoteBrainConfigured: remote.configured,
       kind: remote.kind || "generation-unavailable",
-      generationModel: "FROSS Transformer 1.1 trained from scratch",
+      generationModel: "FROSS Transformer 1.2 trained from scratch",
       generationModelStatus: remote.modelStatus || null,
       webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       backend: "python",
-      note: "FROSS Brain 1.1 направляет запрос через 7/14-этапный рабочий план; исходные слова пользователя и найденные веб-фрагменты объединяются в контекст одной собственной модели."
+      note: "FROSS Brain 1.2 направляет запрос через 7/14-этапный рабочий план; исходные слова пользователя и найденные веб-фрагменты объединяются в контекст одной собственной модели."
     }
   }, 200, request);
 }
