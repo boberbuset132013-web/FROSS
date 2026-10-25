@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
     "block_size": 320,
     "n_embd": 128,
     "n_head": 4,
-    "n_layer": 3,
+    "n_layer": 4,
     "dropout": 0.08,
 }
 
