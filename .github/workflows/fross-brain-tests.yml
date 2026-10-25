@@ -36,6 +36,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import json
           config = Path("hostless.yaml").read_text(encoding="utf-8")
           assert 'dockerfile_path: "services/python-brain/Dockerfile"' in config, "Hostless Dockerfile path must be relative to the repository root"
           assert 'working_directory: "/"' in config, "Hostless working directory must be the repository root"
@@ -139,7 +140,7 @@ jobs:
           assert 'VERSION = "FROSS Transformer 1.2"' in transformer and '"block_size": 320' in transformer and '"n_layer": 5' in transformer, "Transformer version, context window and depth must match Brain 1.2"
           assert "FROSS Brain 1.2 — обычный рабочий план 7 этапов" in transformer and "FROSS Brain 1.2 — расширенный рабочий план 14 этапов" in transformer, "Model prompt must guide both stage plans"
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
-          assert 'FROSS Python Transformer Brain 1.2' in server and 'max_new_tokens=transformer.MAX_GENERATION_TOKENS' in server, "Python service must match Brain 1.1 and reasoning budget"
+          assert 'FROSS Python Transformer Brain 1.2' in server and 'max_new_tokens=transformer.MAX_GENERATION_TOKENS' in server, "Python service must match Brain 1.2 and 650-token generation budget"
           assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
           assert 'id="autoStudyStopBtn"' in page and "function startAutoStudy()" in page and "function stopAutoStudy()" in page, "Automatic learning must expose Start and Stop"
           assert "FROSS_AUTO_STUDY_STORAGE_KEY" in page and "resumeAutoStudySetting()" in page, "Automatic learning state should resume from browser storage"
@@ -150,6 +151,9 @@ jobs:
           assert "MAX_GENERATION_TOKENS = 650" in transformer and "min(int(max_tokens), MAX_GENERATION_TOKENS)" in transformer, "Generation must support up to 650 new tokens"
           assert "max_new_tokens=transformer.MAX_GENERATION_TOKENS" in server, "Python service must use the shared 650-token cap"
           assert "--steps 3000 --batch-size 4 --block-size 320" in Path("services/python-brain/Dockerfile").read_text(encoding="utf-8"), "Docker build must retrain the updated five-block model"
+          knowledge_index = json.loads(Path("memory/knowledge/index.json").read_text(encoding="utf-8"))
+          assert len(knowledge_index.get("topics", [])) >= 4, "Shared GitHub knowledge index should be initialized"
+          assert Path("memory/knowledge/neural-networks.json").exists() and Path("memory/knowledge/javascript-basics.json").exists(), "Core public knowledge files should exist"
           assert "...(shouldSearch ? allKnowledge.slice(0, 18) : [])" in worker and "shouldSearch ? modelKnowledge : []" in worker, "Chat must not feed or show unrelated saved knowledge when no search is needed"
           assert "2 минуты" in page and "5 минут" not in page, "Learning panel must display the two-minute cadence"
           assert 'Я сегодня злой.' in corpus and 'значение слова «злой»' in corpus, "Corpus should cover contextual word meanings"
