@@ -115,6 +115,9 @@ jobs:
           assert "async function handleFrossAutoStudy" in worker
           assert "frossMergeTrainingCandidates(topic, search.results, 8)" in worker
           assert "autoStudyBtn" in page
+          assert 'id="knowledgeBtn"' in page, "All signed-in users should see the shared knowledge button"
+          assert "async function frossReserveAutoStudyStep" in worker, "Public knowledge steps must use a server-side reservation"
+          assert "FROSS_AUTO_STUDY_COOLDOWN_MS = 15 * 60 * 1000" in worker, "Shared learning must be throttled"
           assert "const FROSS_MAX_MESSAGE_LENGTH = 30000;" in worker
           assert "const FROSS_MAX_REPLY_LENGTH = 25000;" in worker
           assert "const history = frossLimitHistory(body.history);" in worker
