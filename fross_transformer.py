@@ -33,6 +33,25 @@ def _preferred_device() -> torch.device:
     if requested in {"cuda", "gpu"}:
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def configure_runtime_threads() -> int:
+    """Limit PyTorch CPU thread pools for small containers and shared CPU quotas."""
+    try:
+        requested = int(os.environ.get("FROSS_TORCH_THREADS", "1"))
+    except (TypeError, ValueError):
+        requested = 1
+    thread_count = max(1, min(2, requested))
+    try:
+        torch.set_num_threads(thread_count)
+    except RuntimeError:
+        # PyTorch may reject changes after parallel work has already started.
+        pass
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        # This can only be set before PyTorch starts inter-op work.
+        pass
+    return thread_count
 PAD_ID, UNK_ID, BOS_ID, EOS_ID = 0, 1, 2, 3
 SPECIAL_TOKENS = ("<pad>", "<unk>", "<bos>", "<eos>")
 BASE_CHARS = "".join(dict.fromkeys(
@@ -292,7 +311,7 @@ def train_model(
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.set_num_threads(max(1, min(2, int(os.environ.get("FROSS_TORCH_THREADS", "1")))))
+    configure_runtime_threads()
     records = _load_corpus(corpus_path)
     random.shuffle(records)
     val_count = max(2, int(len(records) * 0.1))
@@ -355,6 +374,7 @@ def train_model(
 
 
 def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, BPETokenizer | None, dict[str, Any]]:
+    configure_runtime_threads()
     target = Path(path)
     if not target.is_file():
         return None, None, {"loaded": False, "reason": "checkpoint-missing", "path": str(target)}
