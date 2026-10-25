@@ -145,6 +145,7 @@ jobs:
           assert "FROSS_AUTO_STUDY_STORAGE_KEY" in page and "resumeAutoStudySetting()" in page, "Automatic learning state should resume from browser storage"
           assert "FROSS_AUTO_STUDY_TOPICS" in page and "FROSS_AUTO_STUDY_INTERVAL_MS=120000" in page, "Automatic study must rotate topics at a two-minute interval"
           assert "hostCounts" in worker and "boilerplate" in worker and "frossMergeTrainingCandidates(unit.topic, searchResults, 7)" in worker, "Study notes should filter boilerplate and use diverse sources"
+          assert "sourceText.trim().length < 45" in worker and 'String(note.snippet || "").trim().length >= 45' in worker, "Study notes must contain readable source text, not just links"
           assert "def _response_strategy(message: str)" in transformer and "prompt_parts.append(_response_strategy(message))" in transformer, "Brain 1.1 should route output by user intent"
           assert "2 минуты" in page and "5 минут" not in page, "Learning panel must display the two-minute cadence"
           assert 'Я сегодня злой.' in corpus and 'значение слова «злой»' in corpus, "Corpus should cover contextual word meanings"
