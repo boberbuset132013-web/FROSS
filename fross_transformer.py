@@ -486,11 +486,11 @@ def generate_reply(
         raise ValueError("Message must not be empty.")
     deep = str(mode).lower() in {"reasoning", "deep"}
     previous = []
-    for item in (history if isinstance(history, list) else [])[-6:]:
+    for item in (history if isinstance(history, list) else [])[-8:]:
         if not isinstance(item, dict):
             continue
         role = "FROSS" if item.get("role") == "assistant" else "Пользователь"
-        content = " ".join(str(item.get("content", "")).split())[:180]
+        content = " ".join(str(item.get("content", "")).split())[:360]
         if content:
             previous.append(f"{role}: {content}")
     memory_lines = []
