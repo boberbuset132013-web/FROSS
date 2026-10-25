@@ -17,6 +17,9 @@ if not (ROOT / "fross_transformer.py").exists():
 sys.path.insert(0, str(ROOT))
 
 import fross_transformer as transformer  # noqa: E402
+# Runtime containers may expose many host CPUs despite a small CPU quota.
+# Cap PyTorch's thread pools before the first model load or inference.
+transformer.configure_runtime_threads()
 
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
@@ -141,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=360 if mode == "reasoning" else 180,
+                    max_new_tokens=120 if mode == "reasoning" else 96,
                 ).strip()
         except Exception as exc:
             # Return only the exception class, never the prompt or internal traceback.
