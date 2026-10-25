@@ -70,6 +70,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import json
           worker = Path("worker.js").read_text(encoding="utf-8")
           page = Path("public/index.html").read_text(encoding="utf-8")
           rules = Path("firestore.rules").read_text(encoding="utf-8")
