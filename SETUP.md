@@ -19,24 +19,16 @@ FROSS использует собственный decoder-only Transformer из 
 
 На момент этой версии учебный корпус содержит 166 оригинальных диалогов. Это небольшой эксперимент: качество зависит от разнообразия корпуса и вычислительного бюджета. Если генерация не работает, сервис должен сообщить о проблеме с моделью, а не молча подставлять старый шаблон. Личные чаты не используются для автоматического переобучения.
 
-## 3. Подключение одного Python-сервиса
+## 3. Подключение Python-мозга на Hostless
 
-В `render.yaml` настроен один Docker-сервис `fross-python-brain`. Это экономит память: для ответов больше не нужно запускать второй backend.
+Python-мозг уже собирается как Docker-приложение `fross-python-brain` на Hostless. Worker FROSS по умолчанию использует адрес `https://fross-python-brain.hostless.app/chat`; переменную `FROSS_PYTHON_BRAIN_URL` можно не добавлять, если адрес не менялся.
 
-1. Открой [Render](https://render.com/) и создай Blueprint из репозитория `boberbuset132013-web/FROSS`. В списке должен быть один сервис — `fross-python-brain`. Выбери Free или свой имеющийся план.
-2. Создай длинный случайный токен, например в PowerShell:
-   ```powershell
-   [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
-   ```
-   Добавь это значение в Render → Environment как `FROSS_BRAIN_SERVICE_TOKEN`. Не публикуй токен в GitHub или чате.
-3. Дождись успешной сборки. При сборке Docker обучает свой Transformer с нуля на `data/fross_corpus.jsonl` и проверяет тестовую генерацию. Открой `/health` по URL сервиса; нужно увидеть `"generationModelLoaded": true` и `"generationModel": "FROSS Transformer 1.0"`.
-4. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets** и добавь:
-   - **Text variable** `FROSS_PYTHON_BRAIN_URL` — HTTPS URL Python-сервиса с путём `/chat`, например `https://ИМЯ-СЕРВИСА.onrender.com/chat`;
-   - **Secret** `FROSS_BRAIN_SERVICE_TOKEN` — точно такое же значение, как в Render.
-5. Удали старую переменную `FROSS_CPP_BRAIN_URL`, если она осталась. Опубликуй новую версию Worker и обнови страницу сайта сочетанием Ctrl+F5.
-6. Открой `https://fross.boberbuset132013.workers.dev/api/health`. В JSON должно быть `"build": "fross-python-transformer-2026-10-24"`, `"pythonBrainConfigured": true`, а внутри `pythonBrainHealth` — `"reachable": true` и `"generationModelLoaded": true`. Если поля отсутствуют, открыта старая версия Worker или публикация не завершилась.
-
-Официальные страницы: [Render Blueprints](https://render.com/docs/blueprint-spec), [ограничения Render Free](https://render.com/docs/free).
+1. В Hostless открой приложение `fross-python-brain` → Settings / Environment Variables (или Secrets).
+2. Добавь переменную окружения `FROSS_BRAIN_SERVICE_TOKEN`. В значение помести общий случайный секрет для связи Worker ↔ Python-сервис. Используй минимум 16 символов; предпочтительно 32 или больше. Не добавляй его в GitHub, исходный код или файлы конфигурации. Сохрани настройки и перезапусти/разверни приложение, чтобы переменная попала в runtime.
+3. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets** и добавь **Secret** с точно таким же именем `FROSS_BRAIN_SERVICE_TOKEN` и тем же значением. Не создавай обычную открытую Text variable для секрета.
+4. Если адрес Hostless изменится, добавь Text variable `FROSS_PYTHON_BRAIN_URL` со значением полного HTTPS URL до маршрута `/chat`, например `https://имя-приложения.hostless.app/chat`. При текущем адресе это необязательно, потому что Worker уже содержит безопасный URL по умолчанию.
+5. Выполни **Deploy** Worker в Cloudflare, если он не публикуется автоматически после обновления кода. В Hostless открой `https://fross-python-brain.hostless.app/health`: нужно увидеть `"generationModelLoaded": true` и `"generationModel": "FROSS Transformer 1.0"`.
+6. Проверь `https://fross.boberbuset132013.workers.dev/api/health`. Ожидаются `"pythonBrainConfigured": true`, а внутри `pythonBrainHealth` — `"reachable": true` и `"generationModelLoaded": true`. Если `pythonBrainConfigured` равно `false`, проверь, что одинаковый токен установлен в Hostless и Cloudflare. Никогда не отправляй значение секрета в чат или логи.
 
 ## 4. Пароль создателя, память и GitHub-база знаний
 1. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets → Add → Secret**. Имя секрета — `FROSS_CREATOR_PASSWORD`; в значение введи новый уникальный пароль длиной не менее 24 символов. Не добавляй пароль в `vars`, GitHub, HTML, JavaScript, `wrangler.jsonc` или README. Если используешь Wrangler CLI, выполни `npx wrangler secret put FROSS_CREATOR_PASSWORD` и введи пароль в приглашении. [Документация Cloudflare Secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
@@ -66,7 +58,7 @@ FROSS использует собственный decoder-only Transformer из 
 
 В `fross_transformer.py` находятся токенизатор, decoder-only Transformer, обучение, сохранение checkpoint и пошаговая генерация. Чтобы добавить знания, редактируй `data/fross_corpus.jsonl`: каждая строка должна быть корректным JSON-объектом с непустыми полями `user` и `assistant`. Добавляй оригинальные, разнообразные ответы, а не только короткие определения; не помещай в корпус личные переписки, ключи, пароли или приватные данные.
 
-Python Docker-образ заново строит BPE-токенизатор и обучает модель с нуля на корпусе с фиксированным seed, 600 шагами, batch size 4 и контекстом до 256 токенов. После изменений корпуса дождись новой сборки одного Render-сервиса. Для локальной диагностики используй команды:
+Python Docker-образ заново строит BPE-токенизатор и обучает модель с нуля на корпусе с фиксированным seed, 600 шагами, batch size 4 и контекстом до 256 токенов. После изменений корпуса запусти новую сборку/развёртывание Python-приложения на Hostless: Docker-образ заново обучает модель на корпусе. Для локальной диагностики используй команды:
 
 ```bash
 python fross_transformer.py test --output /tmp/fross-transformer.pt --steps 12 --batch-size 2 --block-size 64 --merges 32
