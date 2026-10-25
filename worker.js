@@ -43,7 +43,7 @@ export default {
         worker: "FROSS",
         version: "1.1",
         brainVersion: "1.1",
-        build: "fross-python-transformer-2026-10-24",
+        build: "fross-python-transformer-2026-10-25",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
         pythonBrainHealth,
