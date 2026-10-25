@@ -684,8 +684,8 @@ async function runAutoStudyCycle(){
   const scheduledAt=Number.isFinite(serverAt)?serverAt:(autoStudyNextAllowedAt||Date.now()+FROSS_AUTO_STUDY_INTERVAL_MS);
   const delay=Math.max(1500,scheduledAt-Date.now()+1200);
   const nextTime=new Date(Date.now()+delay).toLocaleTimeString();
-  $("trainingStatus").textContent=(result?.ok?"Тема «"+(result.topic||topic)+"» завершена.":"Предупреждение при изучении темы «"+topic+"».")+
-    " Автоматическое продолжение примерно в "+nextTime+". Нажми «Стоп», чтобы отключить следующие запуски.";
+  const currentStatus=$("trainingStatus").textContent|| (result?.ok?"Тема «"+(result.topic||topic)+"» завершена.":"Изучение темы завершилось с предупреждением.");
+  $("trainingStatus").textContent=currentStatus+" Автоматическое продолжение примерно в "+nextTime+". Нажми «Стоп», чтобы отключить следующие запуски.";
   writeStudyLog("Следующий автоматический запуск примерно в "+nextTime+".");
   autoStudyTimer=setTimeout(()=>{autoStudyTimer=null;void runAutoStudyCycle()},delay);
 }
