@@ -122,6 +122,7 @@ jobs:
           assert 'id="publicStudyLogs"' in page and 'id="publicStudyResults"' in page, "Study logs and results must be visible"
           assert "Стать создателем" not in page and 'id="creatorUnlockForm"' not in page, "Creator UI must be removed"
           assert 'path === "/api/creator-unlock"' not in worker and "handleFrossCreatorUnlock" not in worker, "Creator password endpoint must be removed"
+          assert "FROSS_CREATOR_PASSWORD" not in worker and "frossIsCreator" not in worker and "FROSS_CREATOR_EMAIL" not in worker, "Creator role must be removed"
           assert "frossTrainingSearchQuery(cleanTopic)" in worker, "Visitor topics must be searched"
           assert 'const githubStorage = await frossSaveKnowledgeToGitHub(unit.topic, notes, env);' in worker, "Public study must save to the shared library"
           assert 'id="publicKnowledgeBtn"' in page, "Guests must see the no-login knowledge button"
