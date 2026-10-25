@@ -44,7 +44,6 @@ export default {
         version: "1.1",
         brainVersion: "1.0",
         build: "fross-python-transformer-2026-10-24",
-        creatorPasswordConfigured: typeof env.FROSS_CREATOR_PASSWORD === "string" && env.FROSS_CREATOR_PASSWORD.length >= 24,
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
         pythonBrainHealth,
@@ -55,7 +54,6 @@ export default {
       }, 200, request);
     });
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
-    if (path === "/api/creator-unlock") return frossApiGuard(path, request, () => handleFrossCreatorUnlock(request, env));
     if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
     if (path === "/api/auto-study") return frossApiGuard(path, request, () => handleFrossAutoStudy(request, env, ctx));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
@@ -645,88 +643,16 @@ function frossSafetyReply(query) {
   return null;
 }
 
-function frossBase64UrlEncode(bytes) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-function frossBase64UrlDecode(value) {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
-  return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
-}
-async function frossCreatorSigningKey(env) {
-  const secret = typeof env.FROSS_CREATOR_PASSWORD === "string" ? env.FROSS_CREATOR_PASSWORD : "";
-  if (secret.length < 24) return null;
-  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
-}
-async function frossCreateCreatorToken(auth, env) {
-  const key = await frossCreatorSigningKey(env);
-  if (!key) return null;
-  const payload = frossBase64UrlEncode(new TextEncoder().encode(JSON.stringify({
-    uid: auth.uid,
-    email: typeof auth.email === "string" ? auth.email.toLowerCase() : "",
-    exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
-    version: "0.6"
-  })));
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-  return payload + "." + frossBase64UrlEncode(new Uint8Array(signature));
-}
-async function frossHasCreatorToken(auth, env, request) {
-  const token = request?.headers?.get("X-FROSS-CREATOR-TOKEN") || "";
-  const parts = token.split(".");
-  if (parts.length !== 2) return false;
-  const key = await frossCreatorSigningKey(env);
-  if (!key) return false;
-  try {
-    const valid = await crypto.subtle.verify("HMAC", key, frossBase64UrlDecode(parts[1]), new TextEncoder().encode(parts[0]));
-    if (!valid) return false;
-    const payload = JSON.parse(new TextDecoder().decode(frossBase64UrlDecode(parts[0])));
-    return payload.uid === auth?.uid && Number(payload.exp) > Date.now() && payload.version === "0.6";
-  } catch { return false; }
-}
-async function frossIsCreator(auth, env, request) {
+async function frossIsCreator(auth, env) {
   const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
-  const emailAllowed = Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email.toLowerCase() === creatorEmail);
-  return emailAllowed || await frossHasCreatorToken(auth, env, request);
-}
-async function handleFrossCreatorUnlock(request, env) {
-  if (request.method === "OPTIONS") return corsPreflight();
-  if (request.method !== "POST") return frossJson({ error: "Используй POST /api/creator-unlock." }, 405, request);
-  const auth = await frossVerifyFirebaseToken(request);
-  if (!auth) return frossJson({ error: "Сначала войди в аккаунт FROSS." }, 401, request);
-  let body;
-  try { body = await request.json(); } catch { return frossJson({ error: "Некорректный JSON." }, 400, request); }
-  const expected = typeof env.FROSS_CREATOR_PASSWORD === "string" ? env.FROSS_CREATOR_PASSWORD : "";
-  const supplied = typeof body?.password === "string" ? body.password : "";
-  if (expected.length < 24) return frossJson({ error: "Пароль создателя ещё не настроен. Добавь Secret FROSS_CREATOR_PASSWORD в Cloudflare." }, 503, request);
-  // Compare equal-length UTF-8 buffers without an early exit on differing bytes.
-  const a = new TextEncoder().encode(expected);
-  const b = new TextEncoder().encode(supplied);
-  let diff = a.length ^ b.length;
-  const length = Math.max(a.length, b.length);
-  for (let i = 0; i < length; i++) diff |= (a[i % Math.max(1, a.length)] || 0) ^ (b[i % Math.max(1, b.length)] || 0);
-  if (diff !== 0) return frossJson({ error: "Пароль создателя неверный." }, 403, request);
-  const token = await frossCreateCreatorToken(auth, env);
-  if (!token) return frossJson({ error: "Не удалось создать сессию создателя." }, 503, request);
-  return frossJson({ ok: true, isCreator: true, creatorToken: token, expiresInSeconds: 2592000 }, 200, request);
+  return Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email.toLowerCase() === creatorEmail);
 }
 async function handleFrossIdentity(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  const isCreator = await frossIsCreator(auth, env, request);
-  return frossJson({
-    ok: true,
-    isCreator,
-    emailVerified: auth.emailVerified,
-    engine: "FROSS Transformer 1.0",
-    learningEnabled: isCreator,
-    brainRoutes: {
-      pythonReady: frossBrainServiceConfigured(env),
-      allModesUsePython: true
-    }
-  }, 200, request);
+  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer 1.0", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
 }
 
 function frossIsPublicTrainingUrl(value) {
@@ -1190,82 +1116,36 @@ const FROSS_AUTO_STUDY_CURRICULUM = [
   { topic: "Примеры кода Python", query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
 ];
 
-async function frossReserveAutoStudyStep(env) {
+async function frossReserveAutoStudyStep(env, requestedTopic = "") {
   const token = frossGithubToken(env);
-  if (token.length < 20) {
-    return {
-      ok: false,
-      status: 503,
-      message: "Постепенное пополнение общей базы пока не настроено: владелец FROSS должен добавить Secret FROSS_GITHUB_TOKEN в Cloudflare."
-    };
-  }
-
+  if (token.length < 20) return { ok: false, status: 503, message: "Обучение пока не настроено: добавь Secret FROSS_GITHUB_TOKEN в Cloudflare." };
   const read = await frossGithubReadContents(FROSS_AUTO_STUDY_STATE_PATH, token);
-  if (!read.ok) {
-    return { ok: false, status: 502, message: "Не удалось проверить очередь обучения в GitHub: " + read.error };
-  }
-
+  if (!read.ok) return { ok: false, status: 502, message: "Не удалось проверить очередь обучения в GitHub: " + read.error };
   let state = { nextTopicIndex: 0, lastStartedAt: "" };
   if (read.exists) {
-    try {
-      const parsed = JSON.parse(read.text);
-      state = {
-        nextTopicIndex: Number.isInteger(parsed.nextTopicIndex) ? parsed.nextTopicIndex : 0,
-        lastStartedAt: typeof parsed.lastStartedAt === "string" ? parsed.lastStartedAt : ""
-      };
-    } catch {
-      return { ok: false, status: 503, message: "Файл очереди обучения повреждён. Обратись к владельцу FROSS." };
-    }
+    try { const parsed = JSON.parse(read.text); state = { nextTopicIndex: Number.isInteger(parsed.nextTopicIndex) ? parsed.nextTopicIndex : 0, lastStartedAt: typeof parsed.lastStartedAt === "string" ? parsed.lastStartedAt : "" }; }
+    catch { return { ok: false, status: 503, message: "Файл очереди обучения повреждён." }; }
   }
-
-  const now = Date.now();
-  const lastStarted = Date.parse(state.lastStartedAt || "");
+  const now = Date.now(), lastStarted = Date.parse(state.lastStartedAt || "");
   const elapsed = Number.isFinite(lastStarted) ? Math.max(0, now - lastStarted) : FROSS_AUTO_STUDY_COOLDOWN_MS;
   if (elapsed >= 0 && elapsed < FROSS_AUTO_STUDY_COOLDOWN_MS) {
     const retryAfterSeconds = Math.ceil((FROSS_AUTO_STUDY_COOLDOWN_MS - elapsed) / 1000);
-    return {
-      ok: false,
-      status: 429,
-      retryAfterSeconds,
-      message: "Недавно уже запустили общий шаг обучения. Чтобы не перегружать сервис, следующий шаг станет доступен примерно через " + Math.ceil(retryAfterSeconds / 60) + " мин."
-    };
+    return { ok: false, status: 429, retryAfterSeconds, message: "Недавно уже запускали обучение. Следующий запуск будет доступен примерно через " + Math.ceil(retryAfterSeconds / 60) + " мин." };
   }
-
   const index = ((state.nextTopicIndex % FROSS_AUTO_STUDY_CURRICULUM.length) + FROSS_AUTO_STUDY_CURRICULUM.length) % FROSS_AUTO_STUDY_CURRICULUM.length;
-  const unit = FROSS_AUTO_STUDY_CURRICULUM[index];
+  const cleanTopic = frossClean(requestedTopic || "").slice(0, 180);
+  const unit = cleanTopic.length >= 2 ? { topic: cleanTopic, query: frossTrainingSearchQuery(cleanTopic), custom: true } : FROSS_AUTO_STUDY_CURRICULUM[index];
   const updatedState = {
-    schemaVersion: 1,
-    lastStartedAt: new Date(now).toISOString(),
-    lastTopic: unit.topic,
-    nextTopicIndex: (index + 1) % FROSS_AUTO_STUDY_CURRICULUM.length,
+    schemaVersion: 1, lastStartedAt: new Date(now).toISOString(), lastTopic: unit.topic,
+    nextTopicIndex: cleanTopic.length >= 2 ? index : (index + 1) % FROSS_AUTO_STUDY_CURRICULUM.length,
     cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000)
   };
-  const saved = await frossGithubPutContents(
-    FROSS_AUTO_STUDY_STATE_PATH,
-    JSON.stringify(updatedState, null, 2),
-    token,
-    "FROSS auto-study: reserve next incremental topic",
-    read.sha
-  );
+  const saved = await frossGithubPutContents(FROSS_AUTO_STUDY_STATE_PATH, JSON.stringify(updatedState, null, 2), token, "FROSS auto-study: reserve topic " + unit.topic.slice(0, 60), read.sha);
   if (!saved.ok) {
-    // Concurrent calls that read the same SHA cannot both reserve a step.
     const conflict = /HTTP (409|422)/.test(saved.error || "");
-    return {
-      ok: false,
-      status: conflict ? 429 : 502,
-      retryAfterSeconds: conflict ? 900 : undefined,
-      message: conflict
-        ? "Другой пользователь уже запустил общий шаг обучения. Попробуй позже."
-        : "Не удалось зарезервировать шаг обучения: " + saved.error
-    };
+    return { ok: false, status: conflict ? 429 : 502, retryAfterSeconds: conflict ? 900 : undefined, message: conflict ? "Другой посетитель уже запустил обучение. Попробуй позже." : "Не удалось зарезервировать шаг обучения: " + saved.error };
   }
-
-  return {
-    ok: true,
-    unit,
-    nextAvailableAt: new Date(now + FROSS_AUTO_STUDY_COOLDOWN_MS).toISOString(),
-    cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000)
-  };
+  return { ok: true, unit, nextAvailableAt: new Date(now + FROSS_AUTO_STUDY_COOLDOWN_MS).toISOString(), cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000) };
 }
 
 async function frossAutoStudyProgramming(env, trigger = "scheduled", onlyUnit = null) {
@@ -1297,28 +1177,44 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled", onlyUnit = 
 async function handleFrossAutoStudy(request, env, ctx) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/auto-study." }, 405, request);
-  // This single-step shared study endpoint is intentionally available without sign-in.
-  // The server-side GitHub state reservation enforces a global cooldown for all visitors.
-  const reservation = await frossReserveAutoStudyStep(env);
+  let body;
+  try { body = await request.json(); } catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
+  const topic = frossClean(typeof body?.topic === "string" ? body.topic : "").slice(0, 180);
+  if (topic.length === 1) return frossJson({ ok: false, error: "Введи тему хотя бы из двух символов." }, 400, request);
+  const reservation = await frossReserveAutoStudyStep(env, topic);
   if (!reservation.ok) {
-    return frossJson({
-      ok: false,
-      error: reservation.message,
-      retryAfterSeconds: reservation.retryAfterSeconds || null
-    }, reservation.status || 500, request);
+    console.warn("[FROSS public study] reservation failed", JSON.stringify({ status: reservation.status, message: reservation.message }));
+    return frossJson({ ok: false, error: reservation.message, retryAfterSeconds: reservation.retryAfterSeconds || null }, reservation.status || 500, request);
   }
-
-  ctx.waitUntil(frossAutoStudyProgramming(env, "manual", reservation.unit));
-  return frossJson({
-    ok: true,
-    started: true,
-    personalOnly: false,
-    topic: reservation.unit.topic,
-    topics: [reservation.unit.topic],
-    cooldownMinutes: reservation.cooldownMinutes,
-    nextAvailableAt: reservation.nextAvailableAt,
-    message: "Запущен один учебный шаг: «" + reservation.unit.topic + "». Результат пополнит общую публичную базу знаний; следующий шаг доступен через " + reservation.cooldownMinutes + " минут."
-  }, 202, request);
+  const unit = reservation.unit;
+  const logs = ["Старт: " + new Date().toISOString(), "Тема: " + unit.topic, "Интервал общего запуска: " + reservation.cooldownMinutes + " минут."];
+  console.log("[FROSS public study] started", JSON.stringify({ topic: unit.topic, custom: unit.custom === true }));
+  try {
+    const search = await frossRunSearch(unit.query, "reasoning");
+    const searchResults = Array.isArray(search?.results) ? search.results : [];
+    logs.push("Поиск завершён. Найдено исходных результатов: " + searchResults.length + ".");
+    if (Array.isArray(search?.errors) && search.errors.length) logs.push("Предупреждения поиска: " + search.errors.slice(0,3).map(value => frossClean(value).slice(0,120)).join(" | "));
+    const candidates = frossMergeTrainingCandidates(unit.topic, searchResults, 5);
+    logs.push("Подготовлено источников для обработки: " + candidates.length + ".");
+    const notes = await frossBuildTrainingNotes(unit.topic, candidates);
+    logs.push("Заметок после обработки источников: " + notes.length + ".");
+    if (!notes.length) {
+      const error = "По теме не удалось собрать подходящие материалы. Попробуй уточнить формулировку.";
+      logs.push("Ошибка: " + error);
+      console.warn("[FROSS public study] no notes", JSON.stringify({ topic: unit.topic, errors: search?.errors || [] }));
+      return frossJson({ ok: false, error, topic: unit.topic, logs, results: [], nextAvailableAt: reservation.nextAvailableAt, cooldownMinutes: reservation.cooldownMinutes }, 404, request);
+    }
+    const githubStorage = await frossSaveKnowledgeToGitHub(unit.topic, notes, env);
+    logs.push(githubStorage.saved ? "Общая база обновлена: " + (githubStorage.path || "memory/knowledge") + "." : "Общая база не обновлена: " + String(githubStorage.message || "ошибка GitHub").slice(0,240));
+    const results = notes.slice(0,8).map(note => ({ topic: note.topic, title: note.title, url: note.url, summary: note.summary, snippet: note.snippet, keyPoints: note.keyPoints, keywords: note.keywords, source: note.source, score: note.score }));
+    console.log("[FROSS public study] finished", JSON.stringify({ topic: unit.topic, found: notes.length, saved: githubStorage.saved === true, path: githubStorage.path || "" }));
+    return frossJson({ ok: true, completed: true, saved: githubStorage.saved === true, personalOnly: false, topic: unit.topic, topics: [unit.topic], count: notes.length, results, logs, githubStorage, cooldownMinutes: reservation.cooldownMinutes, nextAvailableAt: reservation.nextAvailableAt, message: githubStorage.saved ? "Тема изучена и добавлена в общую базу знаний." : "Источники найдены, но запись в общую базу не удалась." }, 200, request);
+  } catch (error) {
+    const message = String(error?.message || error).slice(0,260);
+    logs.push("Ошибка обработки: " + message);
+    console.error("[FROSS public study] failed", JSON.stringify({ topic: unit.topic, error: message }));
+    return frossJson({ ok: false, error: "Не удалось завершить изучение: " + message, topic: unit.topic, logs, results: [], nextAvailableAt: reservation.nextAvailableAt, cooldownMinutes: reservation.cooldownMinutes }, 502, request);
+  }
 }
 
 async function handleFrossTrain(request, env) {
