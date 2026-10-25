@@ -1321,7 +1321,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Transformer 1.0",
+    engine: "FROSS Transformer Brain 1.1",
     topic,
     notes,
     count: notes.length,
@@ -1682,7 +1682,7 @@ async function handleFrossApi(request, env) {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS Transformer 1.0",
+      engine: "FROSS Transformer Brain 1.1",
       remoteBrainConfigured: remote.configured,
       kind: remote.kind || "generation-unavailable",
       generationModel: "FROSS Transformer 1.1 trained from scratch",
@@ -1690,7 +1690,7 @@ async function handleFrossApi(request, env) {
       webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       backend: "python",
-      note: "Активный генеративный маршрут — собственный Python Transformer; готовые языковые API не используются."
+      note: "FROSS Brain 1.1 направляет запрос через 7/14-этапный рабочий план; исходные слова пользователя и найденные веб-фрагменты объединяются в контекст одной собственной модели."
     }
   }, 200, request);
 }
