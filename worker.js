@@ -1297,9 +1297,8 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled", onlyUnit = 
 async function handleFrossAutoStudy(request, env, ctx) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/auto-study." }, 405, request);
-  const auth = await frossVerifyFirebaseToken(request);
-  if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-
+  // This single-step shared study endpoint is intentionally available without sign-in.
+  // The server-side GitHub state reservation enforces a global cooldown for all visitors.
   const reservation = await frossReserveAutoStudyStep(env);
   if (!reservation.ok) {
     return frossJson({
