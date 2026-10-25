@@ -245,8 +245,8 @@ class FrossTransformer(nn.Module):
         return self.language_head(x)
 
 
-def _load_corpus(path: str | Path) -> list[dict[str, str]]:
-    records: list[dict[str, str]] = []
+def _load_corpus(path: str | Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     corpus_path = Path(path)
     if not corpus_path.exists():
         raise FileNotFoundError(f"Training corpus not found: {corpus_path}")
@@ -261,15 +261,42 @@ def _load_corpus(path: str | Path) -> list[dict[str, str]]:
             continue
         user = str(row.get("user", "")).strip()
         assistant = str(row.get("assistant", "")).strip()
-        if user and assistant:
-            records.append({"user": user, "assistant": assistant})
+        if not user or not assistant:
+            continue
+        # Optional dialogue history teaches the model how to use follow-ups and corrections.
+        history: list[dict[str, str]] = []
+        raw_history = row.get("history", [])
+        if isinstance(raw_history, list):
+            for turn in raw_history[-8:]:
+                if not isinstance(turn, dict):
+                    continue
+                content = " ".join(str(turn.get("content", "")).split()).strip()
+                if not content:
+                    continue
+                role = "assistant" if str(turn.get("role", "")).lower() in {"assistant", "fross"} else "user"
+                history.append({"role": role, "content": content[:700]})
+        records.append({"user": user, "assistant": assistant, "history": history})
     if len(records) < 8:
         raise ValueError("The corpus must contain at least 8 user/assistant examples.")
     return records
 
 
-def _format_record(record: dict[str, str]) -> str:
-    return f"Пользователь: {record['user']}\n{RESPONSE_PREFIX}{record['assistant']}\n"
+def _format_record(record: dict[str, Any]) -> str:
+    # Match the same turn labels and ordering used by generate_reply().
+    parts: list[str] = []
+    history = record.get("history", [])
+    if isinstance(history, list):
+        for turn in history[-8:]:
+            if not isinstance(turn, dict):
+                continue
+            content = " ".join(str(turn.get("content", "")).split()).strip()[:700]
+            if not content:
+                continue
+            role = "FROSS" if str(turn.get("role", "")).lower() in {"assistant", "fross"} else "Пользователь"
+            parts.append(f"{role}: {content}")
+    parts.append(f"Пользователь: {str(record['user']).strip()}")
+    parts.append(f"{RESPONSE_PREFIX}{str(record['assistant']).strip()}")
+    return "\n".join(parts) + "\n"
 
 
 def _format_generation_prefix(message: str) -> str:
@@ -277,7 +304,7 @@ def _format_generation_prefix(message: str) -> str:
     return "Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX
 
 
-def _encode_stream(records: list[dict[str, str]], tokenizer: BPETokenizer) -> list[int]:
+def _encode_stream(records: list[dict[str, Any]], tokenizer: BPETokenizer) -> list[int]:
     stream: list[int] = []
     for record in records:
         stream.append(BOS_ID)
