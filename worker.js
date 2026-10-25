@@ -1648,7 +1648,8 @@ async function handleFrossApi(request, env) {
           kind: remote.kind,
           remoteBrain: true,
           generationModel: "FROSS Transformer 1.1",
-          webSearchUsed: shouldSearch,\n          wordLookupUsed: termLookupUsed,
+          webSearchUsed: shouldSearch,
+          wordLookupUsed: termLookupUsed,
           note: "Ответ генерируется собственной моделью FROSS; при поиске веб-фрагменты объединяются с пользовательским запросом и контекстом чата."
         }
       }, 200, request);
