@@ -136,7 +136,7 @@ jobs:
           assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
           assert "function frossForbiddenProgrammingTopic(topic)" in worker and "frossForbiddenProgrammingTopic(topic)" in worker, "Custom learning must reject programming languages outside JavaScript, Python, HTML and CSS"
           assert "...(shouldSearch ? results.slice(0, 6) : [])" in worker, "Fresh search results must be prioritized in the model context"
-          assert 'VERSION = "FROSS Transformer 1.1"' in transformer and '"block_size": 320' in transformer, "Transformer version and context window must match Brain 1.1"
+          assert 'VERSION = "FROSS Transformer 1.1"' in transformer and '"block_size": 320' in transformer and '"n_layer": 4' in transformer, "Transformer version, context window and depth must match Brain 1.1"
           assert "FROSS Brain 1.1 — обычный рабочий план 7 этапов" in transformer and "FROSS Brain 1.1 — расширенный рабочий план 14 этапов" in transformer, "Model prompt must guide both stage plans"
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
           assert 'FROSS Python Transformer Brain 1.1' in server and 'max_new_tokens=150 if mode == "reasoning" else 112' in server, "Python service must match Brain 1.1 and reasoning budget"
