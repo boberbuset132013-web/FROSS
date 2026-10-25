@@ -634,17 +634,78 @@ async function refreshLearningPanel(){
   if(currentUser){try{await loadKnowledge();await importBrowserStudyNotesToAccount()}catch(error){writeStudyLog("Не удалось обновить память аккаунта: "+String(error?.message||error),"warning")}}
   $("trainingStatus").textContent="Готово к запуску. Можно изучить учебную тему или указать свою.";
 }
-async function runPublicStudy(topicOverride){
+function updateAutoStudyControls(){
+  const start=$("autoStudyBtn"),stop=$("autoStudyStopBtn");
+  if(!start||!stop)return;
+  start.disabled=autoStudyEnabled||autoStudyInFlight;
+  start.textContent=autoStudyEnabled?"✓ Автообучение включено":"▶ Старт автообучения";
+  stop.disabled=!autoStudyEnabled;
+  stop.title=autoStudyEnabled?"Остановить автоматические запуски":"Автообучение сейчас остановлено";
+}
+function stopAutoStudy(){
+  if(autoStudyTimer){clearTimeout(autoStudyTimer);autoStudyTimer=null}
+  autoStudyEnabled=false;
+  try{localStorage.setItem(FROSS_AUTO_STUDY_STORAGE_KEY,"0")}catch{}
+  updateAutoStudyControls();
+  const status=autoStudyInFlight
+    ?"Остановка принята. Уже начатая тема завершится, но новые автоматические запуски больше не будут начинаться."
+    :"Автообучение остановлено. Нажми «Старт автообучения», когда захочешь продолжить.";
+  $("trainingStatus").textContent=status;
+  writeStudyLog("Автообучение остановлено пользователем. Текущий запрос не прерывается, новые циклы отключены.","warning");
+}
+function startAutoStudy(){
+  if(autoStudyEnabled)return;
+  autoStudyEnabled=true;
+  autoStudyInitialTopic=String($("publicStudyTopic").value||"").trim();
+  try{localStorage.setItem(FROSS_AUTO_STUDY_STORAGE_KEY,"1")}catch{}
+  updateAutoStudyControls();
+  $("trainingStatus").textContent="Автообучение запущено. Первая тема начнётся сейчас, следующие будут запускаться примерно раз в 2 минуты. Оставь вкладку открытой.";
+  writeStudyLog("Автообучение запущено пользователем; интервал — 2 минуты.","success");
+  void runAutoStudyCycle();
+}
+async function runAutoStudyCycle(){
+  if(!autoStudyEnabled)return;
+  if(autoStudyInFlight){
+    autoStudyTimer=setTimeout(()=>{autoStudyTimer=null;void runAutoStudyCycle()},1000);
+    return;
+  }
+  let topic=autoStudyInitialTopic;
+  autoStudyInitialTopic="";
+  if(!topic){
+    topic=FROSS_AUTO_STUDY_TOPICS[autoStudyTopicIndex%FROSS_AUTO_STUDY_TOPICS.length];
+    autoStudyTopicIndex=(autoStudyTopicIndex+1)%FROSS_AUTO_STUDY_TOPICS.length;
+    try{localStorage.setItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY,String(autoStudyTopicIndex))}catch{}
+  }
+  writeStudyLog("Автоматический запуск темы: "+topic+".");
+  const result=await runPublicStudy(topic,true);
+  if(!autoStudyEnabled)return;
+  const serverAt=Date.parse(result?.nextAvailableAt||"");
+  const scheduledAt=Number.isFinite(serverAt)?serverAt:(autoStudyNextAllowedAt||Date.now()+FROSS_AUTO_STUDY_INTERVAL_MS);
+  const delay=Math.max(1500,scheduledAt-Date.now()+1200);
+  const nextTime=new Date(Date.now()+delay).toLocaleTimeString();
+  $("trainingStatus").textContent=(result?.ok?"Тема «"+(result.topic||topic)+"» завершена.":"Предупреждение при изучении темы «"+topic+"».")+
+    " Автоматическое продолжение примерно в "+nextTime+". Нажми «Стоп», чтобы отключить следующие запуски.";
+  writeStudyLog("Следующий автоматический запуск примерно в "+nextTime+".");
+  autoStudyTimer=setTimeout(()=>{autoStudyTimer=null;void runAutoStudyCycle()},delay);
+}
+async function runPublicStudy(topicOverride,isAutomatic=false){
   const button=$("autoStudyBtn"),searchButton=$("publicStudySubmit"),guestButton=$("publicKnowledgeBtn");
   const topic=String(typeof topicOverride==="string"?topicOverride:$("publicStudyTopic").value||"").trim();
-  if(topic.length===1){$("trainingStatus").textContent="Введи тему из двух или более символов.";return}
-  button.disabled=true;searchButton.disabled=true;if(guestButton)guestButton.disabled=true;
+  if(topic.length===1){$("trainingStatus").textContent="Введи тему из двух или более символов.";return {ok:false}}
+  if(autoStudyInFlight){$("trainingStatus").textContent="Изучение уже выполняется. Дождись завершения текущей темы.";return {ok:false,busy:true}}
+  if(autoStudyEnabled&&!isAutomatic){$("trainingStatus").textContent="Автообучение включено. Нажми «Стоп» перед отдельным ручным изучением темы.";return {ok:false,busy:true}}
+  autoStudyInFlight=true;button.disabled=true;searchButton.disabled=true;if(guestButton)guestButton.disabled=true;
   clearStudyOutput();$("trainingStatus").textContent=topic?"Ищу источники по теме «"+topic+"» и собираю заметки…":"Запускаю следующий шаг общего учебного плана…";
-  writeStudyLog(topic?"Тема запроса: "+topic:"Тема не указана; выберу следующий шаг JavaScript/Python.");
-  writeStudyLog("Запрашиваю поиск и сохранение заметок.");
+  writeStudyLog(topic?"Тема запроса: "+topic:"Тема не указана; выберу следующий шаг учебного плана.");
+  writeStudyLog("Запрашиваю поиск, обработку источников и сохранение структурированных заметок.");
+  let responseData=null;
   try{
     const response=await fetch("/api/auto-study",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic})});
     const data=await frossReadJsonResponse(response,"/api/auto-study");
+    responseData=data;
+    const serverNext=Date.parse(data?.nextAvailableAt||"");
+    if(Number.isFinite(serverNext))autoStudyNextAllowedAt=serverNext;
+    else if(Number.isFinite(Number(data?.retryAfterSeconds))&&Number(data.retryAfterSeconds)>0)autoStudyNextAllowedAt=Date.now()+Number(data.retryAfterSeconds)*1000;
     if(Array.isArray(data.logs))data.logs.forEach(message=>writeStudyLog(message));
     renderPublicStudyResults(data.results||[]);
     if(!response.ok||data?.ok!==true)throw new Error(data?.error||"Не удалось завершить изучение темы.");
@@ -662,8 +723,28 @@ async function runPublicStudy(topicOverride){
       writeStudyLog("Общая GitHub-база не обновлена: "+String(reason).slice(0,200)+".","warning");
       writeStudyLog("Заметки сохранены отдельно; FROSS сможет использовать их из "+memoryLabel+".","success");
     }
-  }catch(error){$("trainingStatus").textContent="Не удалось завершить изучение: "+String(error?.message||error);writeStudyLog("Ошибка: "+String(error?.message||error),"error")}
-  finally{button.disabled=false;searchButton.disabled=false;if(guestButton)guestButton.disabled=false}
+    if(isAutomatic&&!autoStudyEnabled)$("trainingStatus").textContent="Текущая тема «"+data.topic+"» завершена. Автообучение остановлено; новых автоматических запусков не будет.";
+    return {ok:true,nextAvailableAt:data.nextAvailableAt||null,topic:data.topic||topic};
+  }catch(error){
+    const retry=responseData?.nextAvailableAt|| (autoStudyNextAllowedAt?new Date(autoStudyNextAllowedAt).toISOString():null);
+    $("trainingStatus").textContent=(isAutomatic&&!autoStudyEnabled?"Текущая тема завершилась с предупреждением; автообучение остановлено. ":"Не удалось завершить изучение: ")+String(error?.message||error);
+    writeStudyLog("Ошибка: "+String(error?.message||error),"error");
+    return {ok:false,nextAvailableAt:retry,retryAfterSeconds:responseData?.retryAfterSeconds||null};
+  }finally{
+    autoStudyInFlight=false;searchButton.disabled=false;if(guestButton)guestButton.disabled=false;
+    updateAutoStudyControls();
+  }
+}
+function resumeAutoStudySetting(){
+  try{
+    const index=Number(localStorage.getItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY));
+    autoStudyTopicIndex=Number.isInteger(index)&&index>=0?index%FROSS_AUTO_STUDY_TOPICS.length:0;
+    if(localStorage.getItem(FROSS_AUTO_STUDY_STORAGE_KEY)!=="1")return;
+    autoStudyEnabled=true;
+    updateAutoStudyControls();
+    $("trainingStatus").textContent="Автообучение возобновлено из сохранённых настроек; следующая тема запустится сейчас.";
+    setTimeout(()=>{if(autoStudyEnabled)void runAutoStudyCycle()},1200);
+  }catch{}
 }
 function startVoiceInput(){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -744,7 +825,9 @@ $("publicKnowledgeBtn").addEventListener("click",()=>{$("trainingModal").classLi
 $("trainingClose").addEventListener("click",()=>{$("trainingModal").classList.add("hidden")});
 $("trainingModal").addEventListener("click",e=>{if(e.target===$("trainingModal"))$("trainingModal").classList.add("hidden")});
 $("publicStudyForm").addEventListener("submit",event=>{event.preventDefault();runPublicStudy()});
-$("autoStudyBtn").addEventListener("click",()=>runPublicStudy(""));
+$("autoStudyBtn").addEventListener("click",startAutoStudy);
+$("autoStudyStopBtn").addEventListener("click",stopAutoStudy);
+resumeAutoStudySetting();
 
 $("fontSizeRange").addEventListener("input",e=>{localStorage.setItem("fross-font-scale",e.target.value);applyCustomization()});
 $("jumpBottomBtn").addEventListener("click",()=>{$("messagesScroll").scrollTo({top:$("messagesScroll").scrollHeight,behavior:"smooth"})});
