@@ -784,6 +784,8 @@ const FROSS_GITHUB_OWNER = "boberbuset132013-web";
 const FROSS_GITHUB_REPO = "FROSS";
 const FROSS_GITHUB_BRANCH = "main";
 const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
+const FROSS_AUTO_STUDY_STATE_PATH = "memory/knowledge/auto-study-state.json";
+const FROSS_AUTO_STUDY_COOLDOWN_MS = 15 * 60 * 1000;
 let frossGithubIndexCache = null;
 let frossGithubIndexCacheUntil = 0;
 const frossGithubTopicCache = new Map();
@@ -1181,19 +1183,99 @@ async function frossBuildTrainingNotes(topic, candidates) {
   return collected.filter(note => note.title && (note.snippet || note.url));
 }
 
-async function frossAutoStudyProgramming(env, trigger = "scheduled") {
+const FROSS_AUTO_STUDY_CURRICULUM = [
+  { topic: "Основы JavaScript", query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
+  { topic: "Примеры кода JavaScript", query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
+  { topic: "Основы Python", query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
+  { topic: "Примеры кода Python", query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
+];
+
+async function frossReserveAutoStudyStep(env) {
+  const token = frossGithubToken(env);
+  if (token.length < 20) {
+    return {
+      ok: false,
+      status: 503,
+      message: "Постепенное пополнение общей базы пока не настроено: владелец FROSS должен добавить Secret FROSS_GITHUB_TOKEN в Cloudflare."
+    };
+  }
+
+  const read = await frossGithubReadContents(FROSS_AUTO_STUDY_STATE_PATH, token);
+  if (!read.ok) {
+    return { ok: false, status: 502, message: "Не удалось проверить очередь обучения в GitHub: " + read.error };
+  }
+
+  let state = { nextTopicIndex: 0, lastStartedAt: "" };
+  if (read.exists) {
+    try {
+      const parsed = JSON.parse(read.text);
+      state = {
+        nextTopicIndex: Number.isInteger(parsed.nextTopicIndex) ? parsed.nextTopicIndex : 0,
+        lastStartedAt: typeof parsed.lastStartedAt === "string" ? parsed.lastStartedAt : ""
+      };
+    } catch {
+      return { ok: false, status: 503, message: "Файл очереди обучения повреждён. Обратись к владельцу FROSS." };
+    }
+  }
+
+  const now = Date.now();
+  const lastStarted = Date.parse(state.lastStartedAt || "");
+  const elapsed = Number.isFinite(lastStarted) ? now - lastStarted : FROSS_AUTO_STUDY_COOLDOWN_MS;
+  if (elapsed >= 0 && elapsed < FROSS_AUTO_STUDY_COOLDOWN_MS) {
+    const retryAfterSeconds = Math.ceil((FROSS_AUTO_STUDY_COOLDOWN_MS - elapsed) / 1000);
+    return {
+      ok: false,
+      status: 429,
+      retryAfterSeconds,
+      message: "Недавно уже запустили общий шаг обучения. Чтобы не перегружать сервис, следующий шаг станет доступен примерно через " + Math.ceil(retryAfterSeconds / 60) + " мин."
+    };
+  }
+
+  const index = ((state.nextTopicIndex % FROSS_AUTO_STUDY_CURRICULUM.length) + FROSS_AUTO_STUDY_CURRICULUM.length) % FROSS_AUTO_STUDY_CURRICULUM.length;
+  const unit = FROSS_AUTO_STUDY_CURRICULUM[index];
+  const updatedState = {
+    schemaVersion: 1,
+    lastStartedAt: new Date(now).toISOString(),
+    lastTopic: unit.topic,
+    nextTopicIndex: (index + 1) % FROSS_AUTO_STUDY_CURRICULUM.length,
+    cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000)
+  };
+  const saved = await frossGithubPutContents(
+    FROSS_AUTO_STUDY_STATE_PATH,
+    JSON.stringify(updatedState, null, 2),
+    token,
+    "FROSS auto-study: reserve next incremental topic",
+    read.sha
+  );
+  if (!saved.ok) {
+    // Concurrent calls that read the same SHA cannot both reserve a step.
+    const conflict = /HTTP (409|422)/.test(saved.error || "");
+    return {
+      ok: false,
+      status: conflict ? 429 : 502,
+      retryAfterSeconds: conflict ? 900 : undefined,
+      message: conflict
+        ? "Другой пользователь уже запустил общий шаг обучения. Попробуй позже."
+        : "Не удалось зарезервировать шаг обучения: " + saved.error
+    };
+  }
+
+  return {
+    ok: true,
+    unit,
+    nextAvailableAt: new Date(now + FROSS_AUTO_STUDY_COOLDOWN_MS).toISOString(),
+    cooldownMinutes: Math.round(FROSS_AUTO_STUDY_COOLDOWN_MS / 60000)
+  };
+}
+
+async function frossAutoStudyProgramming(env, trigger = "scheduled", onlyUnit = null) {
   if (frossGithubToken(env).length < 20) {
     console.warn("[FROSS auto-study] skipped: FROSS_GITHUB_TOKEN is not configured");
     return { skipped: true, reason: "FROSS_GITHUB_TOKEN is not configured" };
   }
-  const curriculum = [
-    { topic: "Основы JavaScript", query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
-    { topic: "Примеры кода JavaScript", query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
-    { topic: "Основы Python", query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
-    { topic: "Примеры кода Python", query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
-  ];
+  const workList = onlyUnit ? [onlyUnit] : FROSS_AUTO_STUDY_CURRICULUM;
   const outcomes = [];
-  for (const unit of curriculum) {
+  for (const unit of workList) {
     try {
       const search = await frossRunSearch(unit.query, "reasoning");
       const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 5);
@@ -1211,54 +1293,32 @@ async function frossAutoStudyProgramming(env, trigger = "scheduled") {
   console.log("[FROSS auto-study]", JSON.stringify({ trigger, outcomes }));
   return { ok: outcomes.some(item => item.saved), outcomes };
 }
+
 async function handleFrossAutoStudy(request, env, ctx) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/auto-study." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  if (!await frossIsCreator(auth, env, request)) {
-    return frossJson({ error: "Запуск автоизучения доступен только создателю." }, 403, request);
-  }
-  const topics = ["Основы JavaScript", "Примеры кода JavaScript", "Основы Python", "Примеры кода Python"];
-  if (frossGithubToken(env).length < 20) {
-    // GitHub is optional for personal learning: return study notes for the signed-in
-    // browser to save to that user's private Firestore memory.
-    const curriculum = [
-      { topic: topics[0], query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
-      { topic: topics[1], query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
-      { topic: topics[2], query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
-      { topic: topics[3], query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
-    ];
-    const notes = [];
-    const outcomes = [];
-    for (const unit of curriculum) {
-      try {
-        const search = await frossRunSearch(unit.query, "reasoning");
-        const candidates = frossMergeTrainingCandidates(unit.topic, search.results, 3);
-        const learned = await frossBuildTrainingNotes(unit.topic, candidates);
-        notes.push(...learned.slice(0, 3));
-        outcomes.push({ topic: unit.topic, noteCount: learned.length });
-      } catch (error) {
-        outcomes.push({ topic: unit.topic, noteCount: 0, error: String(error?.message || error).slice(0, 120) });
-      }
-    }
+
+  const reservation = await frossReserveAutoStudyStep(env);
+  if (!reservation.ok) {
     return frossJson({
-      ok: true,
-      started: false,
-      personalOnly: true,
-      topics,
-      notes: notes.slice(0, 12),
-      outcomes,
-      message: "GitHub-токен не настроен. Я собрал материалы и передаю их для сохранения в личную память Firestore; общая библиотека GitHub не изменяется."
-    }, 200, request);
+      ok: false,
+      error: reservation.message,
+      retryAfterSeconds: reservation.retryAfterSeconds || null
+    }, reservation.status || 500, request);
   }
-  ctx.waitUntil(frossAutoStudyProgramming(env, "manual"));
+
+  ctx.waitUntil(frossAutoStudyProgramming(env, "manual", reservation.unit));
   return frossJson({
     ok: true,
     started: true,
     personalOnly: false,
-    topics,
-    message: "Фоновое изучение запущено. Проверь memory/knowledge/ и Cloudflare Runtime Logs."
+    topic: reservation.unit.topic,
+    topics: [reservation.unit.topic],
+    cooldownMinutes: reservation.cooldownMinutes,
+    nextAvailableAt: reservation.nextAvailableAt,
+    message: "Запущен один учебный шаг: «" + reservation.unit.topic + "». Результат пополнит общую публичную базу знаний; следующий шаг доступен через " + reservation.cooldownMinutes + " минут."
   }, 202, request);
 }
 
