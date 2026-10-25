@@ -1023,8 +1023,26 @@ function frossTrainingSearchQuery(topic) {
   if (/(python|питон)/i.test(normalized)) {
     return (topic + " Python official tutorial basics variables types conditions loops functions lists dictionaries examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
-  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
-    return (topic + " JavaScript MDN guide basics variables types conditions loops functions arrays objects examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
+    return (topic + " JavaScript MDN guide basics types conditions loops functions arrays objects examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(^|\\W)html($|\\W)|хтмл|разметк/i.test(normalized)) {
+    return (topic + " MDN HTML elements semantic structure forms links accessibility written examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(^|\\W)css($|\\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
+    return (topic + " MDN CSS selectors box model layout flexbox grid responsive examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(намерен|запрос.*пользоват|диалог|поним.*пользоват|ответ.*пользоват|недопоним|продолжен.*диалог)/i.test(normalized)) {
+    return (topic + " conversational intent dialogue context user correction follow-up relevant response text examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(английск|english)/i.test(normalized)) {
+    return (topic + " written English vocabulary grammar examples written dialogues text exercises no audio").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(китайск|mandarin|中文)/i.test(normalized)) {
+    return (topic + " Mandarin Chinese characters pinyin written vocabulary grammar text examples no audio").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
+  }
+  if (/(русск|орфограф|пунктуац)/i.test(normalized)) {
+    return (topic + " русский язык справочник письменная речь орфография пунктуация примеры").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
   return (topic + " guide documentation fundamentals examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
 }
@@ -1037,10 +1055,22 @@ function frossTrainingSeedResources(topic) {
       { title: "Data Structures — официальная документация Python", url: "https://docs.python.org/3/tutorial/datastructures.html", snippet: "Списки, кортежи, множества, словари и практические примеры структур данных Python.", source: "Python Documentation", score: 0.98 }
     ];
   }
-  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
+  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
     return [
       { title: "JavaScript Guide — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide", snippet: "Руководство MDN по JavaScript: типы, управление потоком, функции, объекты и асинхронное программирование.", source: "MDN Web Docs", score: 1 },
       { title: "JavaScript Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference", snippet: "Справочник JavaScript по встроенным объектам, операторам и языковым конструкциям с примерами.", source: "MDN Web Docs", score: 0.98 }
+    ];
+  }
+  if (/(^|\\W)html($|\\W)|хтмл|разметк/i.test(normalized)) {
+    return [
+      { title: "HTML: Introduction to HTML — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Learn/HTML/Introduction_to_HTML", snippet: "Введение MDN в HTML: структура документа, элементы, атрибуты, ссылки и разметка содержания.", source: "MDN Web Docs", score: 1 },
+      { title: "HTML Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference", snippet: "Справочник HTML по стандартным элементам и атрибутам.", source: "MDN Web Docs", score: 0.98 }
+    ];
+  }
+  if (/(^|\\W)css($|\\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
+    return [
+      { title: "CSS First Steps — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Learn/CSS/First_steps", snippet: "Введение MDN в CSS: правила, селекторы, каскад, размеры, цвета и оформление.", source: "MDN Web Docs", score: 1 },
+      { title: "CSS Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference", snippet: "Справочник CSS по свойствам, значениям и способам оформления элементов.", source: "MDN Web Docs", score: 0.98 }
     ];
   }
   return [];
@@ -1109,30 +1139,31 @@ async function frossBuildTrainingNotes(topic, candidates) {
 }
 
 const FROSS_AUTO_STUDY_CURRICULUM = [
-  { topic: "JavaScript: основы и типы данных", query: "MDN JavaScript guide variables data types operators beginner" },
-  { topic: "Python: основы и типы данных", query: "Python official tutorial variables data types expressions beginner" },
-  { topic: "JavaScript: функции и массивы", query: "MDN JavaScript functions arrays objects practical examples" },
-  { topic: "Python: функции и коллекции", query: "Python official tutorial functions lists dictionaries sets" },
-  { topic: "Веб-разработка: HTML и CSS", query: "MDN HTML CSS beginner semantic markup responsive layout accessibility" },
-  { topic: "Алгоритмы и структуры данных", query: "algorithm fundamentals data structures arrays stacks queues hash tables sorting searching educational" },
-  { topic: "Git и GitHub", query: "Git official book commits branches merge GitHub beginner workflow" },
-  { topic: "Отладка и тестирование кода", query: "JavaScript Python debugging unit testing official documentation beginner" },
-  { topic: "Английский: повседневная речь", query: "British Council LearnEnglish speaking everyday phrases dialogues beginner" },
-  { topic: "Английский: произношение и аудирование", query: "BBC Learning English pronunciation listening practice phonetics beginner" },
-  { topic: "Английский: грамматика и словарь", query: "British Council LearnEnglish grammar vocabulary examples exercises" },
-  { topic: "Китайский: тоны и пиньинь", query: "Chinese language learning pinyin four tones pronunciation beginner university" },
-  { topic: "Китайский: базовые фразы", query: "Mandarin Chinese beginner greetings introductions numbers basic phrases pinyin" },
-  { topic: "Китайский: иероглифы и грамматика", query: "Mandarin Chinese beginner characters radicals sentence structure educational" },
-  { topic: "Русский: грамотная речь", query: "русский язык культура речи нормы современного русского языка образовательные материалы" },
-  { topic: "Русский: орфография и пунктуация", query: "русский язык правила орфографии пунктуации справочник образование" },
-  { topic: "Познание: критическое мышление", query: "critical thinking logical fallacies evidence evaluation educational resources" },
-  { topic: "Познание: память и обучение", query: "learning science memory retrieval practice spaced repetition cognitive psychology research" },
-  { topic: "Математика: логика и основы", query: "Khan Academy logic algebra mathematical reasoning beginner" },
-  { topic: "Наука: физика и космос", query: "NASA educational resources physics space astronomy basics" },
-  { topic: "Наука: биология и экология", query: "biology ecology fundamentals educational resources biodiversity ecosystems" },
-  { topic: "История и культура", query: "reliable educational world history culture overview primary sources" },
-  { topic: "Кибербезопасность для начинающих", query: "CISA cybersecurity basics passwords phishing privacy educational" },
-  { topic: "Общение и навыки объяснения", query: "educational communication active listening clear explanations public speaking basics" }
+  { topic: "JavaScript: основы и типы данных", query: "MDN JavaScript guide variables types operators expressions examples text tutorial" },
+  { topic: "JavaScript: функции, массивы и объекты", query: "MDN JavaScript functions arrays objects examples beginner text tutorial" },
+  { topic: "JavaScript: события и DOM", query: "MDN JavaScript event listeners DOM manipulation querySelector examples" },
+  { topic: "JavaScript: async, fetch и ошибки", query: "MDN JavaScript async await fetch promises error handling examples" },
+  { topic: "Python: основы, условия и циклы", query: "Python official tutorial variables conditions loops text examples" },
+  { topic: "Python: функции, списки и словари", query: "Python official tutorial functions lists dictionaries examples" },
+  { topic: "Python: исключения, файлы и JSON", query: "Python official documentation exceptions pathlib json files tutorial" },
+  { topic: "HTML: структура и семантические элементы", query: "MDN HTML semantic elements document structure beginner written tutorial" },
+  { topic: "HTML: формы, ссылки и доступность", query: "MDN HTML forms labels links accessibility alt text reference" },
+  { topic: "CSS: селекторы и блочная модель", query: "MDN CSS selectors box model padding margin border tutorial" },
+  { topic: "CSS: Flexbox и Grid", query: "MDN CSS Flexbox Grid layout practical examples" },
+  { topic: "CSS: адаптивный дизайн", query: "MDN CSS responsive design media queries flexible layout text tutorial" },
+  { topic: "Понимание намерения пользователя", query: "conversation design user intent dialogue context response relevance clarification examples text" },
+  { topic: "Продолжение диалога и исправление недопонимания", query: "conversation context user corrections repair misunderstanding follow-up responses written examples" },
+  { topic: "Как отвечать точно и по делу", query: "clear writing answer relevance concise explanations uncertainty source verification educational" },
+  { topic: "Английский: письменные диалоги и словарь", query: "written English beginner dialogues vocabulary everyday phrases text examples no audio" },
+  { topic: "Английский: грамматика в примерах", query: "English grammar beginner text examples present simple questions articles written exercises" },
+  { topic: "Китайский: иероглифы и письменные фразы", query: "Mandarin Chinese beginner characters pinyin written phrases vocabulary text examples no audio" },
+  { topic: "Китайский: порядок слов и грамматика", query: "Mandarin Chinese beginner sentence structure grammar written examples text" },
+  { topic: "Русский: орфография и пунктуация", query: "русский язык орфография пунктуация справочник примеры письменная речь" },
+  { topic: "Русский: понятный письменный ответ", query: "русский язык ясное письменное изложение культура речи редактура примеры" },
+  { topic: "Критическое мышление и проверка фактов", query: "critical thinking source evaluation evidence fact versus assumption written guide" },
+  { topic: "Наука: космос и солнечная система", query: "NASA educational text solar system planets astronomy basics" },
+  { topic: "Наука: биология и экология", query: "educational text biology ecology ecosystems biodiversity fundamentals" },
+  { topic: "История и культура", query: "reliable educational world history culture overview written sources" }
 ];
 
 async function frossReserveAutoStudyStep(env, requestedTopic = "") {
