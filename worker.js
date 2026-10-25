@@ -1023,13 +1023,13 @@ function frossTrainingSearchQuery(topic) {
   if (/(python|питон)/i.test(normalized)) {
     return (topic + " Python official tutorial basics variables types conditions loops functions lists dictionaries examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
-  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
+  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
     return (topic + " JavaScript MDN guide basics types conditions loops functions arrays objects examples code").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
-  if (/(^|\\W)html($|\\W)|хтмл|разметк/i.test(normalized)) {
+  if (/(^|\W)html($|\W)|хтмл|разметк/i.test(normalized)) {
     return (topic + " MDN HTML elements semantic structure forms links accessibility written examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
-  if (/(^|\\W)css($|\\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
+  if (/(^|\W)css($|\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
     return (topic + " MDN CSS selectors box model layout flexbox grid responsive examples").slice(0, FROSS_MAX_SEARCH_QUERY_LENGTH);
   }
   if (/(намерен|запрос.*пользоват|диалог|поним.*пользоват|ответ.*пользоват|недопоним|продолжен.*диалог)/i.test(normalized)) {
@@ -1055,19 +1055,19 @@ function frossTrainingSeedResources(topic) {
       { title: "Data Structures — официальная документация Python", url: "https://docs.python.org/3/tutorial/datastructures.html", snippet: "Списки, кортежи, множества, словари и практические примеры структур данных Python.", source: "Python Documentation", score: 0.98 }
     ];
   }
-  if (/(javascript|java\\s?script|джаваскрипт|\\bjs\\b)/i.test(normalized)) {
+  if (/(javascript|java\s?script|джаваскрипт|\bjs\b)/i.test(normalized)) {
     return [
       { title: "JavaScript Guide — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide", snippet: "Руководство MDN по JavaScript: типы, управление потоком, функции, объекты и асинхронное программирование.", source: "MDN Web Docs", score: 1 },
       { title: "JavaScript Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference", snippet: "Справочник JavaScript по встроенным объектам, операторам и языковым конструкциям с примерами.", source: "MDN Web Docs", score: 0.98 }
     ];
   }
-  if (/(^|\\W)html($|\\W)|хтмл|разметк/i.test(normalized)) {
+  if (/(^|\W)html($|\W)|хтмл|разметк/i.test(normalized)) {
     return [
       { title: "HTML: Introduction to HTML — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Learn/HTML/Introduction_to_HTML", snippet: "Введение MDN в HTML: структура документа, элементы, атрибуты, ссылки и разметка содержания.", source: "MDN Web Docs", score: 1 },
       { title: "HTML Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference", snippet: "Справочник HTML по стандартным элементам и атрибутам.", source: "MDN Web Docs", score: 0.98 }
     ];
   }
-  if (/(^|\\W)css($|\\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
+  if (/(^|\W)css($|\W)|стил(и|ей|ях)?|flexbox|grid layout/i.test(normalized)) {
     return [
       { title: "CSS First Steps — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Learn/CSS/First_steps", snippet: "Введение MDN в CSS: правила, селекторы, каскад, размеры, цвета и оформление.", source: "MDN Web Docs", score: 1 },
       { title: "CSS Reference — MDN Web Docs", url: "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference", snippet: "Справочник CSS по свойствам, значениям и способам оформления элементов.", source: "MDN Web Docs", score: 0.98 }
@@ -1343,7 +1343,7 @@ function frossLikelyConversationIntent(message) {
 
 function frossShouldSearchExplicit(query) {
   const q = frossClean(frossCorrectText(query)).toLowerCase().replace(/ё/g, "е");
-  // String matching is deliberate here: JavaScript's default \\b does not treat Cyrillic as word characters.
+  // String matching is deliberate here: JavaScript's default \b does not treat Cyrillic as word characters.
   return ["найди", "поищи", "в интернете", "поиск", "источник", "источники", "ссылки",
     "актуальн", "последние новости", "новости", "сегодня", "прямо сейчас", "на данный момент",
     "курс валют", "цена сегодня", "сколько стоит сейчас", "свежие данные",
