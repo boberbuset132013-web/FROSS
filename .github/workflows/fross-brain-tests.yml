@@ -140,6 +140,7 @@ jobs:
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
           assert 'FROSS Python Transformer Brain 1.1' in server and 'max_new_tokens=150 if mode == "reasoning" else 112' in server, "Python service must match Brain 1.1 and reasoning budget"
           assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
+          assert "2 минуты" in page and "5 минут" not in page, "Learning panel must display the two-minute cadence"
           assert 'Я сегодня злой.' in corpus and 'значение слова «злой»' in corpus, "Corpus should cover contextual word meanings"
           assert "frossFallbackStudyInProgress" in worker and "fallbackMode: true" in worker, "Study must work when the GitHub secret is absent"
           assert "Стать создателем" not in page and 'id="creatorUnlockForm"' not in page, "Creator UI must be removed"
