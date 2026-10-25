@@ -272,6 +272,11 @@ def _format_record(record: dict[str, str]) -> str:
     return f"Пользователь: {record['user']}\n{RESPONSE_PREFIX}{record['assistant']}\n"
 
 
+def _format_generation_prefix(message: str) -> str:
+    """Build the exact response prefix seen in training examples."""
+    return "Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX
+
+
 def _encode_stream(records: list[dict[str, str]], tokenizer: BPETokenizer) -> list[int]:
     stream: list[int] = []
     for record in records:
@@ -479,7 +484,7 @@ def generate_reply(
     if memory_lines:
         prompt_parts.append("Контекст знаний: " + " ".join(memory_lines))
     prompt_parts.extend(previous)
-    prompt_parts.append("Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX)
+    prompt_parts.append(_format_generation_prefix(message))
     prompt = "\n".join(prompt_parts)
     block_size = int(model.config["block_size"])
     prompt_tokens = tokenizer.encode(prompt)
