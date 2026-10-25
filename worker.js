@@ -87,7 +87,7 @@ function corsPreflight() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Telegram-Bot-Api-Secret-Token, X-FROSS-CREATOR-TOKEN",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Telegram-Bot-Api-Secret-Token",
       "Access-Control-Max-Age": "86400",
     },
   });
@@ -525,7 +525,7 @@ function frossJson(data, status = 200, request) {
       "Access-Control-Allow-Origin": origin,
       "Vary": "Origin",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-FROSS-CREATOR-TOKEN"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
     }
   });
 }
@@ -643,10 +643,6 @@ function frossSafetyReply(query) {
   return null;
 }
 
-async function frossIsCreator(auth, env) {
-  const creatorEmail = typeof env.FROSS_CREATOR_EMAIL === "string" ? env.FROSS_CREATOR_EMAIL.trim().toLowerCase() : "";
-  return Boolean(creatorEmail && auth?.emailVerified && auth?.email && auth.email.toLowerCase() === creatorEmail);
-}
 async function handleFrossIdentity(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
@@ -1222,7 +1218,6 @@ async function handleFrossTrain(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/train." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  const isCreator = await frossIsCreator(auth, env, request);
 
   let body;
   try { body = await request.json(); }
@@ -1240,16 +1235,7 @@ async function handleFrossTrain(request, env) {
     providerErrors: search.errors
   }, 404, request);
 
-  // Any signed-in user may study a topic, but only creator-authenticated learning
-  // may publish content to the shared GitHub library. Other users stay private.
-  const githubStorage = isCreator
-    ? await frossSaveKnowledgeToGitHub(topic, notes, env)
-    : {
-        configured: false,
-        saved: false,
-        public: false,
-        message: "Материалы будут сохранены только в приватной памяти этого аккаунта."
-      };
+  const githubStorage = await frossSaveKnowledgeToGitHub(topic, notes, env);
 
   return frossJson({
     ok: true,
@@ -1257,7 +1243,7 @@ async function handleFrossTrain(request, env) {
     topic,
     notes,
     count: notes.length,
-    storageScope: isCreator ? "private-and-shared" : "private",
+    storageScope: "shared",
     githubStorage,
     providerErrors: search.errors,
     notice: "FROSS попробовал прочитать публичные страницы и, если сайт не разрешил загрузку, сохранил поисковые фрагменты. Это заметки, а не дообучение модели; проверь источники и удали неточные записи."
@@ -1437,8 +1423,6 @@ async function handleFrossApi(request, env) {
   if (!message) return frossJson({ error: "Напиши сообщение для FROSS." }, 400, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Войди через Google, чтобы пользоваться FROSS." }, 401, request);
-  // Private creator email is held as a Cloudflare secret, never added to the public code or brain inputs.
-  const isCreator = await frossIsCreator(auth, env, request);
   const quota = await frossGetChatQuota(request, auth, String(body.chatId || ""), String(body.messageId || ""), message);
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
   const correctedQuery = frossCorrectText(message);
