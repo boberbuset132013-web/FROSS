@@ -141,6 +141,11 @@ jobs:
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
           assert 'FROSS Python Transformer Brain 1.1' in server and 'max_new_tokens=150 if mode == "reasoning" else 112' in server, "Python service must match Brain 1.1 and reasoning budget"
           assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
+          assert 'id="autoStudyStopBtn"' in page and "function startAutoStudy()" in page and "function stopAutoStudy()" in page, "Automatic learning must expose Start and Stop"
+          assert "FROSS_AUTO_STUDY_STORAGE_KEY" in page and "resumeAutoStudySetting()" in page, "Automatic learning state should resume from browser storage"
+          assert "FROSS_AUTO_STUDY_TOPICS" in page and "FROSS_AUTO_STUDY_INTERVAL_MS=120000" in page, "Automatic study must rotate topics at a two-minute interval"
+          assert "hostCounts" in worker and "boilerplate" in worker and "frossMergeTrainingCandidates(unit.topic, searchResults, 7)" in worker, "Study notes should filter boilerplate and use diverse sources"
+          assert "def _response_strategy(message: str)" in transformer and "prompt_parts.append(_response_strategy(message))" in transformer, "Brain 1.1 should route output by user intent"
           assert "2 минуты" in page and "5 минут" not in page, "Learning panel must display the two-minute cadence"
           assert 'Я сегодня злой.' in corpus and 'значение слова «злой»' in corpus, "Corpus should cover contextual word meanings"
           assert "frossFallbackStudyInProgress" in worker and "fallbackMode: true" in worker, "Study must work when the GitHub secret is absent"
