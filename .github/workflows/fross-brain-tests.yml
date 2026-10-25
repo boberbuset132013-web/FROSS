@@ -100,7 +100,7 @@ jobs:
           assert "orb-blue" in page and "orb-teal" in page
           assert "@keyframes fross-float-green" in page and "@keyframes fross-float-teal" in page
           assert "body.light-theme .composer" in page and "body.light-theme .auth-cover" in page
-          assert "FROSS Transformer 1.0 генерирует текст собственной моделью" in page
+          assert "Это пополнение справочной базы, а не переобучение весов Transformer." in page
           assert "SpeechRecognition" in page and 'recognition.lang="ru-RU"' in page
           assert "Речь распознана. Проверь текст перед отправкой." in page
           brain_js = Path("fross-brain.js").read_text(encoding="utf-8")
@@ -108,7 +108,7 @@ jobs:
           assert "export function frossThink" not in brain_js
           assert "function quickReply" not in brain_js
           assert "frossQuickResponse" not in worker and "frossThink" not in worker
-          assert "saveMemoryBtn" in page and "exportMemoryBtn" not in page
+          assert 'id="publicStudySubmit"' in page and "exportMemoryBtn" not in page
           assert "https://docs.python.org/3/tutorial/" in worker
           assert "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide" in worker
           assert 'path === "/api/auto-study"' in worker
