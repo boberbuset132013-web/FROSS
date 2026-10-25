@@ -81,14 +81,14 @@ jobs:
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
           assert "function frossTrainingSeedResources(topic)" in worker
           transformer = Path("fross_transformer.py").read_text(encoding="utf-8")
-          assert 'brainVersion: "1.0"' in worker
+          assert 'brainVersion: "1.1"' in worker
           assert "class CausalSelfAttention" in transformer and "class FrossTransformer" in transformer
           assert "masked_fill(causal_mask" in transformer
           assert "trained_from_random_weights" in transformer
           assert "FROSS_LLM_API_KEY" not in worker and "openrouter" not in worker.lower()
           assert "function frossGenerateWithModel" not in worker
           assert "frossShouldSearchExplicit(correctedQuery)" in worker
-          assert 'generationModel: "FROSS Transformer 1.0"' in worker
+          assert 'generationModel: "FROSS Transformer 1.1"' in worker
           assert not Path("services/llm_client.py").exists()
           assert "const selectedEndpoint = frossPythonBrainUrl(env);" in worker
           assert 'const FROSS_DEFAULT_PYTHON_BRAIN_URL = "https://fross-python-brain.hostless.app/chat";' in worker
@@ -117,7 +117,7 @@ jobs:
           assert "autoStudyBtn" in page
           assert 'id="knowledgeBtn"' in page, "All signed-in users should see the shared knowledge button"
           assert "async function frossReserveAutoStudyStep" in worker, "Public knowledge steps must use a server-side reservation"
-          assert "FROSS_AUTO_STUDY_COOLDOWN_MS = 5 * 60 * 1000" in worker, "Learning must allow a new topic every five minutes"
+          assert "FROSS_AUTO_STUDY_COOLDOWN_MS = 2 * 60 * 1000" in worker, "Learning must allow a new topic every two minutes"
           curriculum = worker.split("const FROSS_AUTO_STUDY_CURRICULUM = [", 1)[1].split("];", 1)[0]
           corpus = Path("data/fross_corpus.jsonl").read_text(encoding="utf-8")
           assert "JavaScript: основы и типы данных" in curriculum and "Python: основы, условия и циклы" in curriculum, "Study plan must cover JavaScript and Python"
@@ -126,12 +126,21 @@ jobs:
           assert "Английский: письменные диалоги" in curriculum and "Китайский: иероглифы" in curriculum and "Русский: орфография" in curriculum, "Study plan must offer text-only language topics"
           assert "listening" not in curriculum.lower() and "аудио" not in curriculum.lower() and "слушание" not in curriculum.lower(), "Learning curriculum must not rely on audio"
           assert "Git и GitHub" not in curriculum and "C++" not in curriculum and "SQL" not in curriculum, "Programming curriculum must stay within JavaScript, Python, HTML and CSS"
-          assert len([line for line in corpus.splitlines() if line.strip()]) >= 300, "Training corpus must include the new dialogue examples"
+          assert len([line for line in corpus.splitlines() if line.strip()]) >= 310, "Training corpus must include the new dialogue examples"
           assert "Как обучить модель понимать разные намерения пользователя?" in corpus and "Что делать, если модель повторяет приветствие после любого вопроса?" in corpus, "Corpus must cover intent understanding and incoherent replies"
           assert 'id="publicStudyTopic"' in page and 'id="publicStudyForm"' in page, "Public topic search must be available"
           assert 'id="publicStudyLogs"' in page and 'id="publicStudyResults"' in page, "Study logs and results must be visible"
           assert 'id="settingsLearningBtn"' in page and 'settingsLearningBtn").addEventListener' in page, "Learning must be available from Settings"
           assert "FROSS_BROWSER_STUDY_NOTES_KEY" in page and "saveStudyNotesToMemory" in page, "Study results must be saved to account/browser memory"
+          assert "function frossSteps(mode)" in worker and "1/14 — определить цель" in worker and "7/7 — проверить релевантность" in worker, "Worker must expose 7-stage normal and 14-stage reasoning workflows"
+          assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
+          assert "...(shouldSearch ? results.slice(0, 6) : [])" in worker, "Fresh search results must be prioritized in the model context"
+          assert 'VERSION = "FROSS Transformer 1.1"' in transformer and '"block_size": 320' in transformer, "Transformer version and context window must match Brain 1.1"
+          assert "FROSS Brain 1.1 — обычный рабочий план 7 этапов" in transformer and "FROSS Brain 1.1 — расширенный рабочий план 14 этапов" in transformer, "Model prompt must guide both stage plans"
+          server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
+          assert 'FROSS Python Transformer Brain 1.1' in server and 'max_new_tokens=150 if mode == "reasoning" else 112' in server, "Python service must match Brain 1.1 and reasoning budget"
+          assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
+          assert 'Я сегодня злой.' in corpus and 'значение слова «злой»' in corpus, "Corpus should cover contextual word meanings"
           assert "frossFallbackStudyInProgress" in worker and "fallbackMode: true" in worker, "Study must work when the GitHub secret is absent"
           assert "Стать создателем" not in page and 'id="creatorUnlockForm"' not in page, "Creator UI must be removed"
           assert 'path === "/api/creator-unlock"' not in worker and "handleFrossCreatorUnlock" not in worker, "Creator password endpoint must be removed"
@@ -183,6 +192,6 @@ jobs:
           assert.equal(typeof brain.frossQuickResponse, "undefined");
           assert.doesNotMatch(brainSource, /DEFINITIONS|function quickReply|export function frossThink/);
           assert.doesNotMatch(workerSource, /frossQuickResponse|frossThink|quickReply/);
-          assert.match(workerSource, /generationModel: "FROSS Transformer 1.0"/);
+          assert.match(workerSource, /generationModel: "FROSS Transformer 1.1"/);
           console.log("JavaScript brain only normalizes requests; replies must come from the trained Transformer.");
           JS
