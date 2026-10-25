@@ -477,6 +477,7 @@ body.light-theme .side-bottom{border-color:#e4e5ef}
 @media(max-width:760px){.ambient-orb{opacity:.13;filter:blur(14px)}body.light-theme .ambient-orb{opacity:.075}}
 @media(prefers-reduced-motion:reduce){.ambient-orb{animation:none!important;will-change:auto;transform:none!important}}
 
+.study-logs{display:flex;flex-direction:column;gap:6px;max-height:150px;overflow:auto;padding-left:22px;color:var(--muted);font-size:11px}.study-logs li{line-height:1.5;overflow-wrap:anywhere}.study-result{padding:12px 0;border-bottom:1px solid var(--line);min-width:0}.study-result-title{font-size:13px;font-weight:750;color:var(--text);line-height:1.45;overflow-wrap:anywhere}.study-result-meta{font-size:10px;color:var(--muted);margin:4px 0;overflow-wrap:anywhere}.study-result-summary{font-size:12px;color:var(--text);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.study-result a{font-size:11px;color:#b5a6ff;overflow-wrap:anywhere}.study-results-empty{font-size:11px;color:var(--muted);padding:8px 0}
 </style></head><body>
 <div class="ambient-orbs" aria-hidden="true"><span class="ambient-orb orb-green"></span><span class="ambient-orb orb-violet"></span><span class="ambient-orb orb-blue"></span><span class="ambient-orb orb-teal"></span></div>
 <div id="appRoot" class="app">
@@ -488,10 +489,10 @@ body.light-theme .side-bottom{border-color:#e4e5ef}
 <section id="messagesScroll" class="messages-scroll"><div id="welcome" class="welcome"><div class="welcome-inner"><div class="orbit"><span>F</span></div><h1>Привет, я <span class="gradient">FROSS.</span></h1><p>Твой ИИ-помощник. Помогаю разбираться в вопросах, писать и учиться, искать информацию и объяснять сложное понятным языком.</p>
 <div class="prompt-grid"><button class="prompt-card" data-prompt="Объясни сложную тему простыми словами"><strong>✧ Разобраться в теме</strong><span>Объясню понятно и по шагам</span></button><button class="prompt-card" data-prompt="Найди свежую информацию о технологиях и приведи источники"><strong>⌕ Найти информацию</strong><span>Поиск по доступным источникам</span></button><button class="prompt-card" data-prompt="Помоги придумать интересный проект и составить план"><strong>◈ Придумать проект</strong><span>Идеи, план и следующие шаги</span></button><button class="prompt-card" data-prompt="Расскажи, что ты умеешь и как со мной работаешь"><strong>↗ Познакомиться</strong><span>Узнай, как работает FROSS 1.1</span></button></div></div></div><div id="messageList" class="message-list hidden"></div></section>
 <div class="composer-wrap"><div id="limitBanner" class="limit-banner hidden">Лимит в 60 сообщений достигнут. Этот чат закрыт — создай новый чат.</div><form id="composer" class="composer"><textarea id="messageInput" rows="1" maxlength="30000" placeholder="Напиши сообщение для FROSS (до 30 000 символов)..." aria-label="Сообщение"></textarea><div class="composer-bottom"><div class="composer-tools"><button id="reasoningBtn" class="tool-btn" type="button" aria-pressed="false" title="Генерировать более подробный ответ">✧ <span id="reasoningLabel">Рассуждение</span> <span class="mode-level" id="modeLevel">8</span></button><button id="voiceBtn" class="tool-btn" type="button" aria-label="Голосовой ввод" title="Надиктовать текст на русском">🎙 <span>Голос</span></button><span id="composerNote" class="composer-note">Enter — отправить · Shift + Enter — новая строка</span></div><button id="sendBtn" class="send-btn" type="submit" aria-label="Отправить">↑</button></div></form><div class="disclaimer">FROSS может ошибаться — проверяй важные сведения по источникам.</div></div></main></div>
-<div id="authCover" class="auth-cover"><div class="auth-card"><div class="auth-brand"><div class="orbit"><span>F</span></div><h2>Встречай <span class="gradient">FROSS 1.1</span></h2><p>Войди через Google или используй электронную почту и пароль.</p></div><button id="googleBtn" class="google-btn"><span class="google-g">G</span><span>Продолжить с Google</span></button><div style="display:flex;align-items:center;gap:12px;margin:17px 0 0;color:#737889;font-size:11px"><span style="height:1px;background:#353744;flex:1"></span>ИЛИ ПО ЭЛЕКТРОННОЙ ПОЧТЕ<span style="height:1px;background:#353744;flex:1"></span></div><form id="emailAuthForm" class="auth-form"><input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="Электронная почта" required><input id="authPassword" class="auth-input" type="password" autocomplete="current-password" minlength="6" placeholder="Пароль (не менее 6 символов)" required><button id="emailSubmitBtn" class="primary auth-submit" type="submit">Войти</button></form><div class="auth-switch"><span id="authSwitchText">Нет аккаунта?</span><button id="authSwitchBtn" type="button">Создать аккаунт</button></div><div style="text-align:center;margin-top:7px"><button id="resetPasswordBtn" class="reset-btn" type="button">Забыл пароль</button></div><div id="authMessage" class="auth-message">Для регистрации укажи почту и придумай пароль. Пароль хранится и проверяется Firebase.</div><div style="margin-top:14px;border-top:1px solid #353744;padding-top:14px"><button id="publicKnowledgeBtn" class="tool-btn" type="button" style="width:100%;justify-content:center">✧ Пополнить знания FROSS без входа</button><p id="publicLearningStatus" class="training-description" role="status" aria-live="polite" style="margin:8px 0 0">Запускает один небольшой шаг пополнения общей базы. Не переобучает веса нейросети.</p></div><div class="auth-footer">Продолжая, используй сервис ответственно.<br><a href="https://github.com/boberbuset132013-web/FROSS/blob/main/SETUP.md" target="_blank" rel="noopener noreferrer">Инструкция по настройке</a></div></div></div>
+<div id="authCover" class="auth-cover"><div class="auth-card"><div class="auth-brand"><div class="orbit"><span>F</span></div><h2>Встречай <span class="gradient">FROSS 1.1</span></h2><p>Войди через Google или используй электронную почту и пароль.</p></div><button id="googleBtn" class="google-btn"><span class="google-g">G</span><span>Продолжить с Google</span></button><div style="display:flex;align-items:center;gap:12px;margin:17px 0 0;color:#737889;font-size:11px"><span style="height:1px;background:#353744;flex:1"></span>ИЛИ ПО ЭЛЕКТРОННОЙ ПОЧТЕ<span style="height:1px;background:#353744;flex:1"></span></div><form id="emailAuthForm" class="auth-form"><input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="Электронная почта" required><input id="authPassword" class="auth-input" type="password" autocomplete="current-password" minlength="6" placeholder="Пароль (не менее 6 символов)" required><button id="emailSubmitBtn" class="primary auth-submit" type="submit">Войти</button></form><div class="auth-switch"><span id="authSwitchText">Нет аккаунта?</span><button id="authSwitchBtn" type="button">Создать аккаунт</button></div><div style="text-align:center;margin-top:7px"><button id="resetPasswordBtn" class="reset-btn" type="button">Забыл пароль</button></div><div id="authMessage" class="auth-message">Для регистрации укажи почту и придумай пароль. Пароль хранится и проверяется Firebase.</div><div style="margin-top:14px;border-top:1px solid #353744;padding-top:14px"><button id="publicKnowledgeBtn" class="tool-btn" type="button" style="width:100%;justify-content:center">✧ Обучение FROSS</button><p id="publicLearningStatus" class="training-description" role="status" aria-live="polite" style="margin:8px 0 0">Общее обучение доступно всем, без входа.</p></div><div class="auth-footer">Продолжая, используй сервис ответственно.<br><a href="https://github.com/boberbuset132013-web/FROSS/blob/main/SETUP.md" target="_blank" rel="noopener noreferrer">Инструкция по настройке</a></div></div></div>
 <button id="jumpBottomBtn" class="jump-bottom hidden" type="button" aria-label="Вниз к последнему сообщению" title="К последнему сообщению">↓</button>
 <div id="settingsModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="settings-card"><div class="settings-head"><span id="settingsTitle">Настройки чата</span><button id="settingsClose" class="settings-close" type="button">Закрыть</button></div><label class="settings-field">Размер текста <span id="fontSizeValue">100%</span><input id="fontSizeRange" type="range" min="90" max="125" step="5" value="100"></label><div class="settings-note">Настройки применяются сразу в этом браузере. Режим рассуждения делает ответ подробнее, но не показывает скрытые внутренние рассуждения модели.</div></div></div>
-<div id="trainingModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainingTitle"><div class="settings-card training-modal-card"><div class="settings-head"><span id="trainingTitle">Пополнение знаний FROSS</span><button id="trainingClose" class="settings-close" type="button">Закрыть</button></div><p class="training-description">FROSS Transformer 1.0 генерирует текст собственной моделью. Любой вошедший пользователь может запустить один небольшой шаг пополнения общей базы знаний. За один шаг FROSS собирает открытые материалы по одной теме JavaScript или Python. Эти заметки помогают при ответах, но не переобучают веса самой нейросети. Общий запуск доступен не чаще одного раза в 15 минут.</p><button id="autoStudyBtn" class="primary training-run" type="button" style="width:100%;justify-content:center;margin:0 0 12px" title="Добавить один следующий раздел в общую базу; глобальный интервал 15 минут">Пополнить общую базу — 1 шаг</button><form id="creatorUnlockForm" class="training-form"><input id="creatorPasswordInput" class="training-input" type="password" autocomplete="current-password" placeholder="Пароль создателя" aria-label="Пароль создателя" required><button id="creatorUnlockBtn" class="primary training-run" type="submit">Стать создателем</button></form><form id="trainingForm" class="training-form"><input id="trainingTopic" class="training-input" type="text" maxlength="180" placeholder="Например: основы Python или история космоса" required><button id="trainingSubmit" class="primary training-run" type="submit">Изучить</button></form><div id="trainingStatus" class="training-status" role="status"></div><div id="knowledgeList" class="knowledge-list"></div><div class="knowledge-actions"><button id="saveMemoryBtn" class="tool-btn" type="button">Сохранить знания</button><button id="clearMemoryBtn" class="tool-btn" type="button">Очистить личную память</button><a class="tool-btn" href="https://github.com/boberbuset132013-web/FROSS/tree/main/memory/knowledge" target="_blank" rel="noopener noreferrer">Открыть базу GitHub</a></div><p class="training-warning">Общая библиотека memory/knowledge публичная и может использоваться в ответах FROSS как справочный контекст. Кнопка добавляет за один запуск одну тему, а не переобучает веса модели. Личные чаты не публикуются. Проверяй источники перед использованием.</p></div></div>
+<div id="trainingModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainingTitle"><div class="settings-card training-modal-card"><div class="settings-head"><span id="trainingTitle">Обучение FROSS</span><button id="trainingClose" class="settings-close" type="button">Закрыть</button></div><p class="training-description">Два действия: продолжить общий учебный план или искать материалы по своей теме. Результаты поиска и журнал будут показаны здесь. Один общий запуск доступен раз в 15 минут.</p><button id="autoStudyBtn" class="primary training-run" type="button" style="width:100%;justify-content:center;margin:0 0 12px">Начать обучение</button><form id="publicStudyForm" class="training-form"><input id="publicStudyTopic" class="training-input" type="text" maxlength="180" placeholder="Тема для поиска и изучения…" aria-label="Тема для изучения"><button id="publicStudySubmit" class="tool-btn" type="submit" style="width:100%;justify-content:center">Найти тему и изучить</button></form><div id="trainingStatus" class="training-status" role="status" aria-live="polite">Готово к запуску. Результаты и логи появятся ниже.</div><section aria-label="Журнал обучения"><div class="knowledge-item-title" style="margin-top:16px">Журнал</div><ol id="publicStudyLogs" class="study-logs" aria-live="polite"><li>Ожидаю запуска.</li></ol></section><section aria-label="Результаты обучения"><div class="knowledge-item-title" style="margin-top:16px">Результаты</div><div id="publicStudyResults" class="knowledge-list"></div></section><p class="training-warning">Это пополнение справочной базы, а не переобучение весов Transformer.</p></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
@@ -500,7 +501,7 @@ import { firebaseConfig } from "./firebase-config.js";
 const $=id=>document.getElementById(id);
 const configReady=Object.values(firebaseConfig).every(v=>typeof v==="string"&&v&&!v.includes("YOUR_"));
 let auth=null,db=null,currentUser=null,activeChat=null,activeMessages=[],busy=false,chats=[];
-let isCreator=false, knowledgeNotes=[],pythonBrainReady=false,speechRecognition=null;
+let knowledgeNotes=[],pythonBrainReady=false,speechRecognition=null;
 function setAuthNote(text,error=false){$("authMessage").textContent=text;$("authMessage").style.borderColor=error?"#704344":"#3c354d";$("authMessage").style.color=error?"#ffb5b5":"#bbb3e7"}
 function escapeHtml(v){return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function formattedContent(v){const parts=String(v||"").split("```");return parts.map((part,index)=>{if(index%2===1){const nl=part.indexOf("\n");const first=nl>=0?part.slice(0,nl).trim():"";const lang=/^[a-zA-Z0-9_+#.-]{1,24}$/.test(first)?first:"Код";const code=first===lang&&nl>=0?part.slice(nl+1):part;return '<div class="code-block"><div class="code-header"><span>'+escapeHtml(lang)+'</span><button class="code-copy" type="button">⧉ Копировать код</button></div><pre><code>'+escapeHtml(code.replace(/\n$/,""))+'</code></pre></div>'}return escapeHtml(part).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")}).join("")}
@@ -508,7 +509,7 @@ function chatPath(){return ["users",currentUser.uid,"chats"]}
 function getChatRef(id){return doc(db,...chatPath(),id)}
 function knowledgePath(){return ["users",currentUser.uid,"knowledge"]}
 async function frossReadJsonResponse(response,path){const text=await response.text();try{return JSON.parse(text)}catch{const contentType=response.headers.get("content-type")||"не указан";if(contentType.toLowerCase().includes("text/html")||/^\s*</.test(text)){throw new Error(path+" вернул HTML вместо JSON (HTTP "+response.status+"). Проверь, что последний Worker опубликован и wrangler.jsonc направляет /api/* в Worker. Ответ сервера: "+text.replace(/\s+/g," ").slice(0,120))}throw new Error(path+" вернул некорректный JSON (HTTP "+response.status+").")}}
-async function frossApiPost(path,payload={}){if(!currentUser)throw new Error("Войди в аккаунт.");const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const creatorToken=localStorage.getItem("frossCreatorToken");if(creatorToken)headers["X-FROSS-CREATOR-TOKEN"]=creatorToken;const response=await fetch(path,{method:"POST",headers,body:JSON.stringify(payload)});const data=await frossReadJsonResponse(response,path);if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Ошибка сервера "+response.status)}return data}
+async function frossApiPost(path,payload={}){if(!currentUser)throw new Error("Войди в аккаунт.");const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const response=await fetch(path,{method:"POST",headers,body:JSON.stringify(payload)});const data=await frossReadJsonResponse(response,path);if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Ошибка сервера "+response.status)}return data}
 function chooseKnowledgeForMessage(message,limit=80){
   const queryTerms=[...new Set((String(message||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]).filter(word=>!["это","как","что","для","или","при","the","and","how","what"].includes(word)))];
   const termSet=value=>new Set((String(value||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]));
@@ -555,97 +556,57 @@ function renderKnowledgeList(){
     row.append(content,del);box.append(row);
   }
 }
-function setTrainingControls(enabled){["trainingTopic","trainingSubmit","clearMemoryBtn","saveMemoryBtn"].forEach(id=>{const control=$(id);if(control)control.disabled=!enabled});const auto=$("autoStudyBtn");if(auto)auto.disabled=!enabled}
-function creatorSetupMessage(){
-  return "Любой вошедший пользователь может изучать тему в личной памяти и запускать один шаг пополнения общей базы знаний раз в 15 минут."
+function writeStudyLog(message,level="info"){
+  const box=$("publicStudyLogs");if(!box)return;
+  const item=document.createElement("li");item.className="study-log "+level;
+  item.textContent="["+new Date().toLocaleTimeString()+"] "+String(message||"");
+  box.append(item);box.scrollTop=box.scrollHeight;
 }
-async function refreshCreatorAccess(){
-  isCreator=false;knowledgeNotes=[];pythonBrainReady=false;
-  $("knowledgeBtn").classList.remove("hidden");
-  setTrainingControls(false);
-  $("trainingStatus").textContent="Проверяю доступ к режиму обучения…";
-  try{
-    const data=await frossApiPost("/api/identity",{});
-    isCreator=data.isCreator===true;
-    $("creatorUnlockForm").classList.toggle("hidden",isCreator);
-    pythonBrainReady=data.brainRoutes?.pythonReady===true;
-    setTrainingControls(true);
-    await loadKnowledge();
-    $("trainingStatus").textContent=isCreator
-      ? "Доступ создателя активен. Можно изучать темы и запускать общий учебный шаг."
-      : "Введи тему для личной памяти или нажми «Пополнить общую базу — 1 шаг»; общий запуск ограничен одним разом в 15 минут."
-  }catch(error){
-    $("trainingStatus").textContent="Не удалось проверить доступ. Если Worker ещё не обновлён, дождись публикации. Детали: "+String(error?.message||error);
+function clearStudyOutput(){$("publicStudyLogs").replaceChildren();$("publicStudyResults").replaceChildren()}
+function renderPublicStudyResults(results){
+  const box=$("publicStudyResults");box.replaceChildren();const items=Array.isArray(results)?results:[];
+  if(!items.length){const empty=document.createElement("div");empty.className="study-results-empty";empty.textContent="Подходящие материалы пока не найдены.";box.append(empty);return}
+  for(const note of items.slice(0,8)){
+    const card=document.createElement("article");card.className="study-result";
+    const title=document.createElement("div");title.className="study-result-title";title.textContent=note.title||"Источник без названия";
+    const meta=document.createElement("div");meta.className="study-result-meta";meta.textContent=[note.source||"Веб-поиск",note.topic||"",note.url||""].filter(Boolean).join(" · ");
+    const summary=document.createElement("div");summary.className="study-result-summary";summary.textContent=note.summary||note.snippet||"Текст источника недоступен; ссылка сохранена для проверки.";
+    card.append(title,meta,summary);
+    if(note.url&&/^https?:\/\//i.test(note.url)){const link=document.createElement("a");link.href=note.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Открыть источник";link.style.display="inline-block";link.style.marginTop="7px";card.append(link)}
+    if(Array.isArray(note.keyPoints)&&note.keyPoints.length){const ul=document.createElement("ul");ul.style.margin="8px 0 0";ul.style.paddingLeft="20px";for(const point of note.keyPoints.slice(0,5)){const li=document.createElement("li");li.textContent=String(point);ul.append(li)}card.append(ul)}
+    box.append(card);
   }
 }
-$("creatorUnlockForm").addEventListener("submit",async event=>{
-  event.preventDefault();
-  if(!currentUser)return;
-  const button=$("creatorUnlockBtn");
-  const password=$("creatorPasswordInput").value;
-  button.disabled=true;
-  $("trainingStatus").textContent="Проверяю пароль создателя…";
-  try{
-    const data=await frossApiPost("/api/creator-unlock",{password});
-    if(!data.creatorToken)throw new Error("Сервер не выдал сессию создателя.");
-    localStorage.setItem("frossCreatorToken",data.creatorToken);
-    $("creatorPasswordInput").value="";
-    isCreator=true;
-    await refreshCreatorAccess();
-    $("trainingStatus").textContent="Доступ создателя сохранён в этом браузере на 30 дней. Для постоянного распознавания подтверждённой почты настрой FROSS_CREATOR_EMAIL в Cloudflare.";
-  }catch(error){
-    $("trainingStatus").textContent="Не удалось включить режим создателя: "+String(error?.message||error);
-  }finally{button.disabled=false}
-});
-async function deleteKnowledgeNote(id,button){if(!currentUser)return;if(!confirm("Удалить эту заметку из личной памяти FROSS?"))return;button.disabled=true;try{await deleteDoc(doc(db,...knowledgePath(),id));knowledgeNotes=knowledgeNotes.filter(note=>note.id!==id);renderKnowledgeList();$("trainingStatus").textContent="Заметка удалена. Осталось: "+knowledgeNotes.length+"."}catch(error){button.disabled=false;$("trainingStatus").textContent="Не удалось удалить заметку: "+String(error?.message||error)}}
-async function learnTopic(event){event.preventDefault();if(!currentUser)return;const topic=$("trainingTopic").value.trim();if(topic.length<2){$("trainingStatus").textContent="Введи тему подробнее.";return}const button=$("trainingSubmit");button.disabled=true;$("trainingStatus").textContent="Ищу источники, собираю заметки и проверяю дубликаты…";try{const data=await frossApiPost("/api/train",{topic});let saved=0,duplicates=0;for(const note of data.notes||[]){const exists=knowledgeNotes.some(old=>old.url&&note.url&&old.url===note.url&&String(old.topic||"").toLowerCase()===String(note.topic||"").toLowerCase());if(exists){duplicates++;continue}await addDoc(collection(db,...knowledgePath()),{schemaVersion:2,kind:String(note.kind||"source-note").slice(0,40),topic:String(note.topic||topic).slice(0,180),title:String(note.title||"Источник").slice(0,260),url:/^https?:\/\//i.test(note.url||"")?note.url:"",snippet:String(note.snippet||"").slice(0,3200),summary:String(note.summary||"").slice(0,900),keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5).map(value=>String(value).slice(0,300)):[],keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24).map(value=>String(value).slice(0,40)):[],source:String(note.source||"web search").slice(0,80),score:Number(note.score)||0,savedAt:serverTimestamp()});saved++}await loadKnowledge();const github=data.githubStorage||{};const githubStatus=github.saved?" GitHub: сохранено в "+github.path+" (публичная библиотека).":github.public===false?" Общая GitHub-библиотека не изменялась; заметки останутся приватными в этом аккаунте.":github.configured?" GitHub не удалось обновить: "+(github.message||"проверь FROSS_GITHUB_TOKEN"):" GitHub не подключён: добавь Secret FROSS_GITHUB_TOKEN в Cloudflare. Личная память Firestore сохранена отдельно."; $("trainingStatus").textContent="Готово: изучена тема «"+topic+"». Сохранено заметок: "+saved+(duplicates?", дубликатов пропущено: "+duplicates:"")+". "+githubStatus+" "+(data.notice||"");$("trainingTopic").value=""}catch(error){$("trainingStatus").textContent="Не удалось обучить память: "+String(error?.message||error)}finally{button.disabled=false}}
-async function runAutoStudyNow(){
-  if(!currentUser){$("trainingStatus").textContent="Сначала войди в FROSS.";return}
-  const button=$("autoStudyBtn");button.disabled=true;
-  $("trainingStatus").textContent="Проверяю доступность следующего общего учебного шага…";
-  try{
-    const data=await frossApiPost("/api/auto-study",{});
-    const topic=data.topic?" Тема этого шага: "+data.topic+".":"";
-    const next=data.nextAvailableAt?" Следующий общий запуск будет доступен примерно после "+new Date(data.nextAvailableAt).toLocaleTimeString()+".":"";
-    $("trainingStatus").textContent=(data.message||"Один шаг пополнения общей базы запущен.")+topic+next+" Это обновляет справочную базу, а не веса нейросети.";
-  }catch(error){
-    $("trainingStatus").textContent="Не удалось запустить шаг: "+String(error?.message||error);
-  }finally{button.disabled=false}
+async function refreshLearningPanel(){
+  if(currentUser){try{await loadKnowledge()}catch{}}
+  $("trainingStatus").textContent="Готово к запуску. Можно изучить следующую тему JavaScript/Python или указать свою.";
 }
-async function clearKnowledge(){if(!currentUser||!knowledgeNotes.length)return;if(!confirm("Удалить все "+knowledgeNotes.length+" заметок личной памяти? Чаты не будут удалены."))return;const button=$("clearMemoryBtn");button.disabled=true;try{for(const note of knowledgeNotes){await deleteDoc(doc(db,...knowledgePath(),note.id))}knowledgeNotes=[];renderKnowledgeList();$("trainingStatus").textContent="Личная память очищена."}catch(error){$("trainingStatus").textContent="Не удалось полностью очистить память: "+String(error?.message||error);await loadKnowledge()}finally{button.disabled=false}}
-async function saveKnowledge(){
-  if(!currentUser){$("trainingStatus").textContent="Войди в FROSS, чтобы сохранить знания.";return}
-  if(!knowledgeNotes.length){$("trainingStatus").textContent="Пока нечего сохранять. Сначала изучи тему.";return}
-  const button=$("saveMemoryBtn");button.disabled=true;
-  $("trainingStatus").textContent="Сохраняю "+knowledgeNotes.length+" заметок в личную базу Firestore…";
-  let saved=0;
+async function runPublicStudy(topicOverride){
+  const button=$("autoStudyBtn"),searchButton=$("publicStudySubmit"),guestButton=$("publicKnowledgeBtn");
+  const topic=String(typeof topicOverride==="string"?topicOverride:$("publicStudyTopic").value||"").trim();
+  if(topic.length===1){$("trainingStatus").textContent="Введи тему из двух или более символов.";return}
+  button.disabled=true;searchButton.disabled=true;if(guestButton)guestButton.disabled=true;
+  clearStudyOutput();$("trainingStatus").textContent=topic?"Ищу источники по теме «"+topic+"» и собираю заметки…":"Запускаю следующий шаг общего учебного плана…";
+  writeStudyLog(topic?"Тема запроса: "+topic:"Тема не указана; выберу следующий шаг JavaScript/Python.");
+  writeStudyLog("Запрашиваю поиск, обработку источников и сохранение общей базы.");
   try{
-    for(const note of knowledgeNotes){
-      if(!note.id)continue;
-      const payload={
-        schemaVersion:Number(note.schemaVersion)||2,
-        kind:String(note.kind||"source-note").slice(0,40),
-        topic:String(note.topic||"").slice(0,180),
-        title:String(note.title||"Источник").slice(0,260),
-        url:/^https?:\/\//i.test(note.url||"")?String(note.url).slice(0,700):"",
-        snippet:String(note.snippet||"").slice(0,3200),
-        summary:String(note.summary||"").slice(0,900),
-        keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5).map(value=>String(value).slice(0,300)):[],
-        keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24).map(value=>String(value).slice(0,40)):[],
-        source:String(note.source||"").slice(0,80),
-        score:Number(note.score)||0,
-        lastSavedAt:serverTimestamp()
-      };
-      await updateDoc(doc(db,...knowledgePath(),note.id),payload);
-      saved++;
+    const response=await fetch("/api/auto-study",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic})});
+    const data=await frossReadJsonResponse(response,"/api/auto-study");
+    if(Array.isArray(data.logs))data.logs.forEach(message=>writeStudyLog(message));
+    renderPublicStudyResults(data.results||[]);
+    if(!response.ok||data?.ok!==true)throw new Error(data?.error||"Не удалось завершить изучение темы.");
+    const next=data.nextAvailableAt?" Следующий общий запуск доступен после "+new Date(data.nextAvailableAt).toLocaleTimeString()+".":"";
+    if(data.saved===true){
+      $("trainingStatus").textContent="Готово: «"+data.topic+"». Заметок в общей базе: "+(data.count||0)+"."+next;
+      writeStudyLog("Успешно: общая база обновлена ("+String(data.githubStorage?.path||"memory/knowledge")+").","success");
+      if(data.githubStorage?.commitUrl)writeStudyLog("Коммит: "+data.githubStorage.commitUrl,"success");
+    }else{
+      $("trainingStatus").textContent="Материалы по «"+data.topic+"» найдены ("+(data.count||0)+"), но сохранить их в общую базу не удалось: "+String(data.githubStorage?.message||"ошибка GitHub").slice(0,240)+next;
+      writeStudyLog("Ошибка сохранения общей базы. Проверь FROSS_GITHUB_TOKEN в Cloudflare.","error");
     }
-    await loadKnowledge();
-    $("trainingStatus").textContent="Сохранено: "+saved+" заметок в личной базе знаний Firestore. Они привязаны к твоему аккаунту и не публикуются в GitHub.";
-  }catch(error){
-    $("trainingStatus").textContent="Не удалось сохранить все знания: "+String(error?.message||error)+". Проверь подключение и Firestore Rules.";
-  }finally{button.disabled=false}
+  }catch(error){$("trainingStatus").textContent="Не удалось завершить изучение: "+String(error?.message||error);writeStudyLog("Ошибка: "+String(error?.message||error),"error")}
+  finally{button.disabled=false;searchButton.disabled=false;if(guestButton)guestButton.disabled=false}
 }
-
 function startVoiceInput(){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   const input=$("messageInput"),button=$("voiceBtn"),note=$("composerNote");
@@ -704,7 +665,7 @@ async function openChat(id){if(!currentUser||busy)return;activeChat=chats.find(c
 async function saveAssistantMessage(id,text,sources=[]){const item={role:"assistant",content:String(text||"Не удалось получить ответ.").slice(0,25000),createdAt:serverTimestamp()};await addDoc(collection(db,...chatPath(),id,"messages"),item);activeMessages.push({...item,createdAt:new Date(),sources})}
 function resizeInput(){const el=$("messageInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,180)+"px"}
 function recentChatContext(messages,maxUserMessages=5){const items=Array.isArray(messages)?messages:[];let userCount=0,startIndex=items.length;for(let index=items.length-1;index>=0;index--){if(items[index]?.role==="user"){if(userCount>=maxUserMessages)break;userCount++;startIndex=index}else if(userCount<maxUserMessages){startIndex=index}}return items.slice(startIndex).map(item=>({role:item?.role==="assistant"?"assistant":"user",content:String(item?.content||"").slice(0,4000)}))}
-async function sendMessage(raw){const message=String(raw||"").trim();if(message.length>30000){setAuthNote("Сообщение слишком длинное: максимум 30 000 символов.",true);return}if(!message||!currentUser||!activeChat||busy)return;if(activeChat.status==="closed"||activeChat.userMessageCount>=60){setChatScreen();return}busy=true;$("messageInput").value="";resizeInput();$("messageInput").disabled=true;$("sendBtn").disabled=true;const chatId=activeChat.id,parentRef=getChatRef(chatId),msgRef=doc(collection(db,...chatPath(),chatId,"messages")),history=recentChatContext(activeMessages,5);try{await runTransaction(db,async tx=>{const snap=await tx.get(parentRef);if(!snap.exists())throw new Error("Чат не найден.");const c=snap.data();if(c.status==="closed"||c.userMessageCount>=60)throw new Error("Чат закрыт: лимит 60 сообщений достигнут.");const count=Number(c.userMessageCount||0)+1;tx.update(parentRef,{userMessageCount:count,status:count>=60?"closed":"open",lastUserMessageId:msgRef.id,updatedAt:serverTimestamp()});tx.set(msgRef,{role:"user",content:message,state:"pending",createdAt:serverTimestamp()})});activeChat.userMessageCount=Number(activeChat.userMessageCount||0)+1;activeChat.status=activeChat.userMessageCount>=60?"closed":"open";activeChat.lastUserMessageId=msgRef.id;if(activeChat.title==="Новый чат"){activeChat.title=message.slice(0,36)+(message.length>36?"…":"");updateDoc(parentRef,{title:activeChat.title,updatedAt:serverTimestamp()}).catch(()=>{})}activeMessages.push({id:msgRef.id,role:"user",content:message,createdAt:new Date()});renderActiveMessages();await loadChats();setChatScreen();const stop=showTyping();try{const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const creatorToken=localStorage.getItem("frossCreatorToken");if(creatorToken)headers["X-FROSS-CREATOR-TOKEN"]=creatorToken;const response=await fetch("/api/chat",{method:"POST",headers,body:JSON.stringify({message,chatId,messageId:msgRef.id,history,mode:reasoningEnabled?"reasoning":"normal",knowledge:chooseKnowledgeForMessage(message,24)})});const data=await frossReadJsonResponse(response,"/api/chat");if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Сервер вернул ошибку "+response.status)}await updateDoc(msgRef,{state:"answered"});await saveAssistantMessage(chatId,data.reply,data.sources||[])}catch(error){await updateDoc(msgRef,{state:"answered"}).catch(()=>{});await saveAssistantMessage(chatId,"Не получилось получить ответ: "+String(error?.message||error)+"\n\nПроверь настройку из SETUP.md.",[])}finally{stop();busy=false;await loadChats().catch(()=>{});setChatScreen();renderActiveMessages();$("messageInput").focus()}}catch(error){busy=false;setChatScreen();const text=String(error?.message||error);if(/closed|60 сообщений|закрыт/i.test(text)){activeChat.status="closed";activeChat.userMessageCount=60;setChatScreen()}else setAuthNote("Не удалось сохранить сообщение: "+text,true)}}
+async function sendMessage(raw){const message=String(raw||"").trim();if(message.length>30000){setAuthNote("Сообщение слишком длинное: максимум 30 000 символов.",true);return}if(!message||!currentUser||!activeChat||busy)return;if(activeChat.status==="closed"||activeChat.userMessageCount>=60){setChatScreen();return}busy=true;$("messageInput").value="";resizeInput();$("messageInput").disabled=true;$("sendBtn").disabled=true;const chatId=activeChat.id,parentRef=getChatRef(chatId),msgRef=doc(collection(db,...chatPath(),chatId,"messages")),history=recentChatContext(activeMessages,5);try{await runTransaction(db,async tx=>{const snap=await tx.get(parentRef);if(!snap.exists())throw new Error("Чат не найден.");const c=snap.data();if(c.status==="closed"||c.userMessageCount>=60)throw new Error("Чат закрыт: лимит 60 сообщений достигнут.");const count=Number(c.userMessageCount||0)+1;tx.update(parentRef,{userMessageCount:count,status:count>=60?"closed":"open",lastUserMessageId:msgRef.id,updatedAt:serverTimestamp()});tx.set(msgRef,{role:"user",content:message,state:"pending",createdAt:serverTimestamp()})});activeChat.userMessageCount=Number(activeChat.userMessageCount||0)+1;activeChat.status=activeChat.userMessageCount>=60?"closed":"open";activeChat.lastUserMessageId=msgRef.id;if(activeChat.title==="Новый чат"){activeChat.title=message.slice(0,36)+(message.length>36?"…":"");updateDoc(parentRef,{title:activeChat.title,updatedAt:serverTimestamp()}).catch(()=>{})}activeMessages.push({id:msgRef.id,role:"user",content:message,createdAt:new Date()});renderActiveMessages();await loadChats();setChatScreen();const stop=showTyping();try{const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const response=await fetch("/api/chat",{method:"POST",headers,body:JSON.stringify({message,chatId,messageId:msgRef.id,history,mode:reasoningEnabled?"reasoning":"normal",knowledge:chooseKnowledgeForMessage(message,24)})});const data=await frossReadJsonResponse(response,"/api/chat");if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Сервер вернул ошибку "+response.status)}await updateDoc(msgRef,{state:"answered"});await saveAssistantMessage(chatId,data.reply,data.sources||[])}catch(error){await updateDoc(msgRef,{state:"answered"}).catch(()=>{});await saveAssistantMessage(chatId,"Не получилось получить ответ: "+String(error?.message||error)+"\n\nПроверь настройку из SETUP.md.",[])}finally{stop();busy=false;await loadChats().catch(()=>{});setChatScreen();renderActiveMessages();$("messageInput").focus()}}catch(error){busy=false;setChatScreen();const text=String(error?.message||error);if(/closed|60 сообщений|закрыт/i.test(text)){activeChat.status="closed";activeChat.userMessageCount=60;setChatScreen()}else setAuthNote("Не удалось сохранить сообщение: "+text,true)}}
 async function handleGoogleSignIn(){if(!auth)return;googleBtn.disabled=true;setAuthNote("Подключаю Google…");const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:"select_account"});try{await signInWithPopup(auth,provider);setAuthNote("Вход выполнен.")}catch(error){if(error?.code==="auth/popup-blocked"||error?.code==="auth/popup-closed-by-user"){try{await signInWithRedirect(auth,provider)}catch(e){setAuthNote("Не удалось войти: "+String(e?.message||e),true)}}else setAuthNote("Не удалось войти ("+(error?.code||"ошибка")+"): "+String(error?.message||error),true)}finally{googleBtn.disabled=false}}
 let authMode="login";
 function setAuthMode(mode){authMode=mode;const register=mode==="register";$("emailSubmitBtn").textContent=register?"Создать аккаунт":"Войти";$("authSwitchText").textContent=register?"Уже есть аккаунт?":"Нет аккаунта?";$("authSwitchBtn").textContent=register?"Войти":"Создать аккаунт";$("authPassword").autocomplete=register?"new-password":"current-password";$("resetPasswordBtn").classList.toggle("hidden",register);$("authPassword").placeholder=register?"Придумай пароль (не менее 6 символов)":"Пароль";}
@@ -719,30 +680,12 @@ function applyCustomization(){localStorage.removeItem("fross-theme");document.bo
 $("settingsBtn").addEventListener("click",()=>{$("settingsModal").classList.remove("hidden")});
 $("settingsClose").addEventListener("click",()=>{$("settingsModal").classList.add("hidden")});
 $("settingsModal").addEventListener("click",e=>{if(e.target===$("settingsModal"))$("settingsModal").classList.add("hidden")});
-$("knowledgeBtn").addEventListener("click",()=>{$("trainingModal").classList.remove("hidden");if(isCreator)loadKnowledge().catch(()=>{});else $("trainingStatus").textContent=creatorSetupMessage();$("autoStudyBtn").focus()});
-$("publicKnowledgeBtn").addEventListener("click",async()=>{
-  const button=$("publicKnowledgeBtn");
-  const status=$("publicLearningStatus");
-  button.disabled=true;
-  status.textContent="Проверяю, доступен ли следующий общий шаг…";
-  try{
-    const response=await fetch("/api/auto-study",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
-    const data=await frossReadJsonResponse(response,"/api/auto-study");
-    if(!response.ok||data?.ok!==true)throw new Error(data?.error||"Не удалось запустить обучение.");
-    const next=data.nextAvailableAt?" Следующий запуск будет доступен примерно в "+new Date(data.nextAvailableAt).toLocaleTimeString()+".":"";
-    status.textContent=(data.message||"Шаг пополнения общей базы запущен.")+next+" Это обновляет справочную базу, а не веса нейросети.";
-  }catch(error){
-    status.textContent="Не удалось запустить шаг: "+String(error?.message||error);
-  }finally{
-    button.disabled=false;
-  }
-});
+$("knowledgeBtn").addEventListener("click",()=>{$("trainingModal").classList.remove("hidden");$("publicStudyTopic").focus()});
+$("publicKnowledgeBtn").addEventListener("click",()=>{$("trainingModal").classList.remove("hidden");$("publicStudyTopic").focus()});
 $("trainingClose").addEventListener("click",()=>{$("trainingModal").classList.add("hidden")});
 $("trainingModal").addEventListener("click",e=>{if(e.target===$("trainingModal"))$("trainingModal").classList.add("hidden")});
-$("trainingForm").addEventListener("submit",learnTopic);
-$("autoStudyBtn").addEventListener("click",runAutoStudyNow);
-$("clearMemoryBtn").addEventListener("click",clearKnowledge);
-$("saveMemoryBtn").addEventListener("click",saveKnowledge);
+$("publicStudyForm").addEventListener("submit",event=>{event.preventDefault();runPublicStudy()});
+$("autoStudyBtn").addEventListener("click",()=>runPublicStudy(""));
 
 $("fontSizeRange").addEventListener("input",e=>{localStorage.setItem("fross-font-scale",e.target.value);applyCustomization()});
 $("jumpBottomBtn").addEventListener("click",()=>{$("messagesScroll").scrollTo({top:$("messagesScroll").scrollHeight,behavior:"smooth"})});
@@ -760,6 +703,6 @@ $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey
 document.querySelectorAll("[data-prompt]").forEach(b=>b.addEventListener("click",()=>{if(!currentUser)return;$("messageInput").value=b.dataset.prompt;resizeInput();$("composer").requestSubmit()}));
 $("mobileMenu").addEventListener("click",()=>{$("sidebar").classList.add("open");$("mobileOverlay").classList.add("show")});
 $("mobileOverlay").addEventListener("click",closeSidebar);
-async function boot(){if(!configReady){$("googleBtn").disabled=true;setAuthNote("Сначала вставь настройки Firebase Web App в public/firebase-config.js, включи Google в Authentication и опубликуй Firestore Rules. Подробные шаги — по ссылке ниже.",true);return}try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);await getRedirectResult(auth).catch(()=>null);onAuthStateChanged(auth,async user=>{currentUser=user;if(!user){localStorage.removeItem("frossCreatorToken");isCreator=false;knowledgeNotes=[];$("knowledgeBtn").classList.add("hidden");$("trainingModal").classList.add("hidden");activeChat=null;activeMessages=[];chats=[];$("chatList").replaceChildren();$("userName").textContent="Гость";$("userEmail").textContent="Вход не выполнен";$("userInitial").classList.remove("hidden");$("userAvatar").classList.add("hidden");$("logoutBtn").classList.add("hidden");$("messageList").replaceChildren();$("messageList").classList.add("hidden");$("welcome").classList.remove("hidden");$("messageInput").value="";$("topTitle").textContent="Новый чат";$("messageInput").disabled=true;$("sendBtn").disabled=true;$("limitBanner").classList.add("hidden");$("authCover").classList.remove("hidden");return}$("authCover").classList.add("hidden");$("userName").textContent=user.displayName||"Пользователь";$("userEmail").textContent=user.email||"";$("userInitial").textContent=(user.displayName||user.email||"F").charAt(0).toUpperCase();if(user.photoURL){$("userAvatar").src=user.photoURL;$("userAvatar").classList.remove("hidden");$("userInitial").classList.add("hidden")} $("logoutBtn").classList.remove("hidden");try{await loadChats();if(!activeChat||!chats.some(c=>c.id===activeChat.id)){if(chats.length)await openChat(chats[0].id);else await createChat()}else await openChat(activeChat.id)}catch(e){setAuthNote("Не удалось загрузить историю чатов из Firestore: "+String(e?.message||e)+". Проверь опубликованные firestore.rules и доступ к коллекции users/"+user.uid+"/chats.",true);$("authCover").classList.remove("hidden")}try{if(typeof refreshCreatorAccess==="function"){await refreshCreatorAccess()}else{$("trainingStatus").textContent="Панель обучения обновляется. Перезагрузи страницу с Ctrl+F5.";setTrainingControls(false)}}catch(e){$("trainingStatus").textContent="Не удалось проверить доступ создателя: "+String(e?.message||e)}})}catch(e){setAuthNote("Ошибка запуска Firebase: "+String(e?.message||e),true)}}
+async function boot(){if(!configReady){$("googleBtn").disabled=true;setAuthNote("Сначала вставь настройки Firebase Web App в public/firebase-config.js, включи Google в Authentication и опубликуй Firestore Rules. Подробные шаги — по ссылке ниже.",true);return}try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);await getRedirectResult(auth).catch(()=>null);onAuthStateChanged(auth,async user=>{currentUser=user;if(!user){knowledgeNotes=[];$("knowledgeBtn").classList.add("hidden");$("trainingModal").classList.add("hidden");activeChat=null;activeMessages=[];chats=[];$("chatList").replaceChildren();$("userName").textContent="Гость";$("userEmail").textContent="Вход не выполнен";$("userInitial").classList.remove("hidden");$("userAvatar").classList.add("hidden");$("logoutBtn").classList.add("hidden");$("messageList").replaceChildren();$("messageList").classList.add("hidden");$("welcome").classList.remove("hidden");$("messageInput").value="";$("topTitle").textContent="Новый чат";$("messageInput").disabled=true;$("sendBtn").disabled=true;$("limitBanner").classList.add("hidden");$("authCover").classList.remove("hidden");return}$("authCover").classList.add("hidden");$("userName").textContent=user.displayName||"Пользователь";$("userEmail").textContent=user.email||"";$("userInitial").textContent=(user.displayName||user.email||"F").charAt(0).toUpperCase();if(user.photoURL){$("userAvatar").src=user.photoURL;$("userAvatar").classList.remove("hidden");$("userInitial").classList.add("hidden")} $("logoutBtn").classList.remove("hidden");try{await loadChats();if(!activeChat||!chats.some(c=>c.id===activeChat.id)){if(chats.length)await openChat(chats[0].id);else await createChat()}else await openChat(activeChat.id)}catch(e){setAuthNote("Не удалось загрузить историю чатов из Firestore: "+String(e?.message||e)+". Проверь опубликованные firestore.rules и доступ к коллекции users/"+user.uid+"/chats.",true);$("authCover").classList.remove("hidden")}try{await refreshLearningPanel()}catch(e){$("trainingStatus").textContent="Не удалось проверить панель обучения: "+String(e?.message||e)}})}catch(e){setAuthNote("Ошибка запуска Firebase: "+String(e?.message||e),true)}}
 boot();
 </script></body></html>
