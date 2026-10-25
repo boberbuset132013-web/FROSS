@@ -54,6 +54,8 @@ def configure_runtime_threads() -> int:
     return thread_count
 PAD_ID, UNK_ID, BOS_ID, EOS_ID = 0, 1, 2, 3
 SPECIAL_TOKENS = ("<pad>", "<unk>", "<bos>", "<eos>")
+# Keep the response prefix identical in training examples and generation prompts.
+RESPONSE_PREFIX = "FROSS: "
 BASE_CHARS = "".join(dict.fromkeys(
     string.ascii_letters + string.digits + string.punctuation +
     " \n\r\t" +
@@ -267,7 +269,7 @@ def _load_corpus(path: str | Path) -> list[dict[str, str]]:
 
 
 def _format_record(record: dict[str, str]) -> str:
-    return f"Пользователь: {record['user']}\nFROSS: {record['assistant']}\n"
+    return f"Пользователь: {record['user']}\n{RESPONSE_PREFIX}{record['assistant']}\n"
 
 
 def _encode_stream(records: list[dict[str, str]], tokenizer: BPETokenizer) -> list[int]:
@@ -309,9 +311,9 @@ def train_model(
 ) -> dict[str, Any]:
     if steps < 1 or batch_size < 1 or block_size < 32:
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
+    configure_runtime_threads()
     random.seed(seed)
     torch.manual_seed(seed)
-    configure_runtime_threads()
     records = _load_corpus(corpus_path)
     random.shuffle(records)
     val_count = max(2, int(len(records) * 0.1))
@@ -330,6 +332,13 @@ def train_model(
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
     last_start = len(train_stream) - actual_block - 1
     last_loss = float("nan")
+    best_validation_loss = float("inf")
+    best_state: dict[str, torch.Tensor] | None = None
+    best_checkpoint_step = 0
+    best_train_loss = float("nan")
+    # Evaluate several times and keep the weights that generalize best to held-out
+    # examples, rather than automatically shipping the very last (possibly overfit) step.
+    evaluation_interval = max(50, min(300, steps // 8))
     for step in range(steps):
         starts = [random.randint(0, last_start) for _ in range(batch_size)]
         x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
@@ -344,10 +353,34 @@ def train_model(
             group["lr"] = learning_rate
         optimizer.step()
         last_loss = float(loss.detach())
+        is_eval_step = (step + 1) % evaluation_interval == 0 or step + 1 == steps
+        if is_eval_step:
+            candidate_validation_loss = _evaluate(model, validation_stream, actual_block)
+            if math.isfinite(candidate_validation_loss) and candidate_validation_loss < best_validation_loss:
+                best_validation_loss = candidate_validation_loss
+                best_checkpoint_step = step + 1
+                best_train_loss = last_loss
+                best_state = {
+                    name: value.detach().cpu().clone()
+                    for name, value in model.state_dict().items()
+                }
         if (step + 1) % max(1, steps // 5) == 0 or step + 1 == steps:
-            print(f"step {step + 1}/{steps} · train loss {last_loss:.4f}", flush=True)
+            shown_val = (
+                f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
+            )
+            print(
+                f"step {step + 1}/{steps} · train loss {last_loss:.4f} · "
+                f"best validation loss {shown_val}",
+                flush=True,
+            )
 
-    validation_loss = _evaluate(model, validation_stream, actual_block)
+    if best_state is not None:
+        model.load_state_dict(best_state, strict=True)
+        validation_loss = best_validation_loss
+        reported_train_loss = best_train_loss
+    else:
+        validation_loss = _evaluate(model, validation_stream, actual_block)
+        reported_train_loss = last_loss
     model.eval()
     checkpoint = {
         "format_version": 1,
@@ -356,12 +389,13 @@ def train_model(
         "tokenizer": tokenizer.to_dict(),
         "state_dict": model.state_dict(),
         "metrics": {
-            "train_loss": round(last_loss, 5),
+            "train_loss": round(reported_train_loss, 5) if math.isfinite(reported_train_loss) else None,
             "validation_loss": round(validation_loss, 5) if math.isfinite(validation_loss) else None,
             "training_device": str(device),
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
             "training_steps": steps,
+            "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
             "parameters": sum(p.numel() for p in model.parameters()),
             "trained_from_random_weights": True,
@@ -370,7 +404,10 @@ def train_model(
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     torch.save(checkpoint, target)
-    return {"ok": True, "version": VERSION, "output": str(target), **checkpoint["metrics"]}
+    return {
+        "ok": True, "version": VERSION, "output": str(target),
+        **checkpoint["metrics"]
+    }
 
 
 def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, BPETokenizer | None, dict[str, Any]]:
@@ -411,7 +448,7 @@ def generate_reply(
     mode: str = "normal",
     max_new_tokens: int | None = None,
     temperature: float | None = None,
-    top_k: int = 24,
+    top_k: int = 12,
 ) -> str:
     if not str(message).strip():
         raise ValueError("Message must not be empty.")
@@ -442,7 +479,7 @@ def generate_reply(
     if memory_lines:
         prompt_parts.append("Контекст знаний: " + " ".join(memory_lines))
     prompt_parts.extend(previous)
-    prompt_parts.append("Пользователь: " + str(message).strip()[:3000] + "\nFROSS:")
+    prompt_parts.append("Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX)
     prompt = "\n".join(prompt_parts)
     block_size = int(model.config["block_size"])
     prompt_tokens = tokenizer.encode(prompt)
@@ -457,7 +494,7 @@ def generate_reply(
         prompt_tokens = prompt_tokens[-prompt_budget:]
     token_ids = ([BOS_ID] + prompt_tokens)[-block_size:]
     max_tokens = max_new_tokens if max_new_tokens is not None else (240 if deep else 150)
-    temp = float(temperature if temperature is not None else (0.55 if deep else 0.72))
+    temp = float(temperature if temperature is not None else (0.40 if deep else 0.48))
     temp = max(0.1, min(1.5, temp))
     generated: list[int] = []
     recent_generated: list[int] = []
