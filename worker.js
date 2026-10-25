@@ -1352,25 +1352,25 @@ function frossLikelyConversationIntent(message) {
 }
 
 function frossShouldAutoLookup(query) {
-  const q = frossClean(query).toLowerCase().replace(/ё/g, "е").replace(/\\s+/g, " ").trim();
+  const q = frossClean(query).toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
   if (!q) return false;
   // Look up unfamiliar terms for information requests, technical questions, and short user statements
   // that contain a descriptive word (for example, "я сегодня злой"). Skip lightweight social turns.
   if (/^(привет|здравствуй|здравствуйте|hello|hi|спасибо|спс|пока|до свидания|ок|окей|ага|угу|да|нет|ладно|понятно)[!.? ]*$/.test(q)) return false;
   return /(что такое|что значит|что означает|значение слова|объясни|почему|как работает|как устроен|в чем разница|в чём разница|кто такой|что за термин|расшифруй|определи|помоги понять|проверь|ошибка|не работает|сегодня|сейчас|новый термин|не знаю что значит)/i.test(q)
-    || /(?:^|\\s)(?:я|мне)\\s+(?:(?:сегодня|сейчас|кажется|довольно|очень|просто|так)\\s+)?(?:злой|злая|злое|злые|сердит|груст|растерян|устал|расстроен|расстроена|взволнован|незнакомо|непонятно)/i.test(q);
+    || /(?:^|\s)(?:я|мне)\s+(?:(?:сегодня|сейчас|кажется|довольно|очень|просто|так)\s+)?(?:злой|злая|злое|злые|сердит|груст|растерян|устал|расстроен|расстроена|взволнован|незнакомо|непонятно)/i.test(q);
 }
 
 function frossBuildUserLookupQuery(query) {
-  const raw = frossClean(query).replace(/\\s+/g, " ").trim().slice(0, 220);
+  const raw = frossClean(query).replace(/\s+/g, " ").trim().slice(0, 220);
   const normalized = raw.toLowerCase().replace(/ё/g, "е");
   const stop = new Set(["что","это","как","почему","зачем","когда","где","можно","нужно","надо","ли","мне","меня","мой","моя","мое","мои","твой","твоя","для","при","или","если","то","а","но","и","в","во","на","по","с","со","из","к","ко","от","до","за","не","да","нет","есть","был","была","быть","будет","будут","так","вот","же","бы","ну","просто","очень","пожалуйста","помоги","расскажи","объясни","проверь","сделай","напиши"]);
   const tokens = (normalized.match(/[a-zа-яё][a-zа-яё0-9_-]{1,}/gi) || [])
     .filter(word => !stop.has(word))
     .filter((word, index, all) => all.indexOf(word) === index)
     .slice(0, 3);
-  if (/\\bя\\b/i.test(normalized) && !tokens.includes("я")) tokens.unshift("я");
-  if (/\\bсегодня\\b/i.test(normalized) && !tokens.includes("сегодня")) tokens.push("сегодня");
+  if (/\bя\b/i.test(normalized) && !tokens.includes("я")) tokens.unshift("я");
+  if (/\bсегодня\b/i.test(normalized) && !tokens.includes("сегодня")) tokens.push("сегодня");
   const picked = tokens.slice(0, 3);
   if (!picked.length) return "";
   const wordQuery = picked.map(word => "значение слова «" + word + "»").join("; ");
@@ -1617,8 +1617,9 @@ async function handleFrossApi(request, env) {
   {
     const selectedEndpoint = frossPythonBrainUrl(env);
     const modelKnowledge = [
-      ...allKnowledge.slice(0, shouldSearch ? 18 : 24),
-      ...(shouldSearch ? results.slice(0, 6) : [])
+      // Put results from this request first: the compact model can consume only a few notes.
+      ...(shouldSearch ? results.slice(0, 6) : []),
+      ...allKnowledge.slice(0, shouldSearch ? 18 : 24)
     ];
     remote = await frossCallBrainService(
       selectedEndpoint,
