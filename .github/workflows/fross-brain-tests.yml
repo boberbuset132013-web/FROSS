@@ -13,6 +13,10 @@ on:
       - "wrangler.jsonc"
       - "services/**"
       - "render.yaml"
+      - "hostless.yaml"
+      - "fross_transformer.py"
+      - "data/**"
+      - "tests/**"
       - ".github/workflows/fross-brain-tests.yml"
   workflow_dispatch:
 
@@ -28,6 +32,25 @@ jobs:
           python-version: "3.12"
       - name: Install CPU training dependency
         run: python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Validate Hostless Docker build paths
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          config = Path("hostless.yaml").read_text(encoding="utf-8")
+          assert 'dockerfile_path: "services/python-brain/Dockerfile"' in config, "Hostless Dockerfile path must be relative to the repository root"
+          assert 'working_directory: "/"' in config, "Hostless working directory must be the repository root"
+          assert 'build_context_directory: "/"' in config, "Hostless build context must include repository-root files"
+          dockerfile = Path("services/python-brain/Dockerfile").read_text(encoding="utf-8")
+          copy_sources = []
+          for raw_line in dockerfile.splitlines():
+              line = raw_line.strip()
+              if line.startswith("COPY "):
+                  source = line.split()[1]
+                  copy_sources.append(source)
+                  assert Path(source).exists(), f"Docker COPY source is missing from repository root: {source}"
+          assert copy_sources, "No COPY instructions found in the Python brain Dockerfile"
+          print("Hostless root context and all Docker COPY source paths are valid.")
+          PY
       - name: Compile Python Transformer and service adapter
         run: python -m py_compile fross_transformer.py services/python-brain/server.py tests/test_fross_transformer.py
       - name: Test original Transformer architecture and tokenizer
