@@ -1028,6 +1028,13 @@ function frossBuildKnowledgeSummary(topic, title, text) {
   return frossBuildKnowledgeKeyPoints(topic, title, text, 3).join(" ").slice(0, 900);
 }
 
+function frossForbiddenProgrammingTopic(topic) {
+  const q = frossClean(topic).toLowerCase().replace(/ё/g, "е");
+  // Brain 1.1's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
+  const unsupported = /(^|[^a-zа-яё0-9_])(c\\+\\+|cpp|c#|csharp|java(?!script)|typescript|php|ruby|rust|golang|swift|kotlin|sql|bash|lua|perl|scala|dart|matlab|fortran|assembly)(?=$|[^a-zа-яё0-9_])/i;
+  return unsupported.test(q);
+}
+
 function frossTrainingSearchQuery(topic) {
   const normalized = String(topic || "").toLowerCase().replace(/ё/g, "е");
   if (/(python|питон)/i.test(normalized)) {
@@ -1256,6 +1263,7 @@ async function handleFrossAutoStudy(request, env, ctx) {
   try { body = await request.json(); } catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
   const topic = frossClean(typeof body?.topic === "string" ? body.topic : "").slice(0, 180);
   if (topic.length === 1) return frossJson({ ok: false, error: "Введи тему хотя бы из двух символов." }, 400, request);
+  if (topic && frossForbiddenProgrammingTopic(topic)) return frossJson({ ok: false, error: "Учебный план FROSS поддерживает программирование только на JavaScript, Python, HTML и CSS. Выбери одну из этих тем или другое непредметное направление." }, 400, request);
   const reservation = await frossReserveAutoStudyStep(env, topic);
   if (!reservation.ok) {
     console.warn("[FROSS public study] reservation failed", JSON.stringify({ status: reservation.status, message: reservation.message }));
@@ -1306,6 +1314,7 @@ async function handleFrossTrain(request, env) {
   catch { return frossJson({ error: "Тело запроса должно быть JSON." }, 400, request); }
   const topic = frossClean(body.topic || "").slice(0, 180);
   if (topic.length < 2) return frossJson({ error: "Введи тему, которую нужно изучить." }, 400, request);
+  if (frossForbiddenProgrammingTopic(topic)) return frossJson({ error: "Учебный план FROSS поддерживает программирование только на JavaScript, Python, HTML и CSS." }, 400, request);
 
   const searchQuery = frossTrainingSearchQuery(topic);
   const search = await frossRunSearch(searchQuery, "reasoning");
