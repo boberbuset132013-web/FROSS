@@ -5,8 +5,8 @@ build:
   max_cpu: 7
   min_memory: 5120
   max_memory: 10240
-dockerfile_path: "./Dockerfile"
-working_directory: "services/python-brain"
+dockerfile_path: "services/python-brain/Dockerfile"
+working_directory: "/"
 build_context_directory: "/"
 post_build_command: ""
 scaling:
