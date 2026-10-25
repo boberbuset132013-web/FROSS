@@ -33,6 +33,13 @@ class TransformerTests(unittest.TestCase):
         self.assertTrue(formatted.startswith(prefix))
         self.assertEqual(formatted[len(prefix):], "Привет!\n")
 
+    def test_response_strategy_routes_common_user_intents(self) -> None:
+        self.assertIn("короткая социальная реплика", transformer._response_strategy("Привет!"))
+        self.assertIn("перевод", transformer._response_strategy("Переведи это на русский."))
+        self.assertIn("ограниченной правки", transformer._response_strategy("Не меняй ничего кроме цвета."))
+        self.assertIn("продолжение или исправление", transformer._response_strategy("Почему?"))
+        self.assertIn("готовый результат или код", transformer._response_strategy("Напиши код на JavaScript."))
+
     def test_training_format_includes_dialogue_history(self) -> None:
         record = {
             "history": [
