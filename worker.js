@@ -707,7 +707,7 @@ const FROSS_GITHUB_REPO = "FROSS";
 const FROSS_GITHUB_BRANCH = "main";
 const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
 const FROSS_AUTO_STUDY_STATE_PATH = "memory/knowledge/auto-study-state.json";
-const FROSS_AUTO_STUDY_COOLDOWN_MS = 15 * 60 * 1000;
+const FROSS_AUTO_STUDY_COOLDOWN_MS = 5 * 60 * 1000;
 let frossFallbackStudyLastStartedAt = 0;
 let frossFallbackStudyNextTopicIndex = 0;
 let frossFallbackStudyInProgress = false;
@@ -1109,10 +1109,30 @@ async function frossBuildTrainingNotes(topic, candidates) {
 }
 
 const FROSS_AUTO_STUDY_CURRICULUM = [
-  { topic: "Основы JavaScript", query: "JavaScript MDN guide basics variables data types conditions loops functions arrays objects" },
-  { topic: "Примеры кода JavaScript", query: "JavaScript MDN code examples functions arrays objects async fetch beginner" },
-  { topic: "Основы Python", query: "Python official tutorial basics variables data types conditions loops functions lists dictionaries" },
-  { topic: "Примеры кода Python", query: "Python official tutorial code examples functions lists dictionaries loops beginner" }
+  { topic: "JavaScript: основы и типы данных", query: "MDN JavaScript guide variables data types operators beginner" },
+  { topic: "Python: основы и типы данных", query: "Python official tutorial variables data types expressions beginner" },
+  { topic: "JavaScript: функции и массивы", query: "MDN JavaScript functions arrays objects practical examples" },
+  { topic: "Python: функции и коллекции", query: "Python official tutorial functions lists dictionaries sets" },
+  { topic: "Веб-разработка: HTML и CSS", query: "MDN HTML CSS beginner semantic markup responsive layout accessibility" },
+  { topic: "Алгоритмы и структуры данных", query: "algorithm fundamentals data structures arrays stacks queues hash tables sorting searching educational" },
+  { topic: "Git и GitHub", query: "Git official book commits branches merge GitHub beginner workflow" },
+  { topic: "Отладка и тестирование кода", query: "JavaScript Python debugging unit testing official documentation beginner" },
+  { topic: "Английский: повседневная речь", query: "British Council LearnEnglish speaking everyday phrases dialogues beginner" },
+  { topic: "Английский: произношение и аудирование", query: "BBC Learning English pronunciation listening practice phonetics beginner" },
+  { topic: "Английский: грамматика и словарь", query: "British Council LearnEnglish grammar vocabulary examples exercises" },
+  { topic: "Китайский: тоны и пиньинь", query: "Chinese language learning pinyin four tones pronunciation beginner university" },
+  { topic: "Китайский: базовые фразы", query: "Mandarin Chinese beginner greetings introductions numbers basic phrases pinyin" },
+  { topic: "Китайский: иероглифы и грамматика", query: "Mandarin Chinese beginner characters radicals sentence structure educational" },
+  { topic: "Русский: грамотная речь", query: "русский язык культура речи нормы современного русского языка образовательные материалы" },
+  { topic: "Русский: орфография и пунктуация", query: "русский язык правила орфографии пунктуации справочник образование" },
+  { topic: "Познание: критическое мышление", query: "critical thinking logical fallacies evidence evaluation educational resources" },
+  { topic: "Познание: память и обучение", query: "learning science memory retrieval practice spaced repetition cognitive psychology research" },
+  { topic: "Математика: логика и основы", query: "Khan Academy logic algebra mathematical reasoning beginner" },
+  { topic: "Наука: физика и космос", query: "NASA educational resources physics space astronomy basics" },
+  { topic: "Наука: биология и экология", query: "biology ecology fundamentals educational resources biodiversity ecosystems" },
+  { topic: "История и культура", query: "reliable educational world history culture overview primary sources" },
+  { topic: "Кибербезопасность для начинающих", query: "CISA cybersecurity basics passwords phishing privacy educational" },
+  { topic: "Общение и навыки объяснения", query: "educational communication active listening clear explanations public speaking basics" }
 ];
 
 async function frossReserveAutoStudyStep(env, requestedTopic = "") {
