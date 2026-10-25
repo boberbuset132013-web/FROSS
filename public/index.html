@@ -671,14 +671,15 @@ async function runAutoStudyCycle(){
   }
   let topic=autoStudyInitialTopic;
   autoStudyInitialTopic="";
-  if(!topic){
-    topic=FROSS_AUTO_STUDY_TOPICS[autoStudyTopicIndex%FROSS_AUTO_STUDY_TOPICS.length];
-    autoStudyTopicIndex=(autoStudyTopicIndex+1)%FROSS_AUTO_STUDY_TOPICS.length;
-    try{localStorage.setItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY,String(autoStudyTopicIndex))}catch{}
-  }
+  const usesCurriculumQueue=!topic;
+  if(usesCurriculumQueue)topic=FROSS_AUTO_STUDY_TOPICS[autoStudyTopicIndex%FROSS_AUTO_STUDY_TOPICS.length];
   writeStudyLog("Автоматический запуск темы: "+topic+".");
   const result=await runPublicStudy(topic,true);
   if(!autoStudyEnabled)return;
+  if(usesCurriculumQueue&&(result?.ok||result?.status===400||result?.status===404)){
+    autoStudyTopicIndex=(autoStudyTopicIndex+1)%FROSS_AUTO_STUDY_TOPICS.length;
+    try{localStorage.setItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY,String(autoStudyTopicIndex))}catch{}
+  }
   const serverAt=Date.parse(result?.nextAvailableAt||"");
   const scheduledAt=Number.isFinite(serverAt)?serverAt:(autoStudyNextAllowedAt||Date.now()+FROSS_AUTO_STUDY_INTERVAL_MS);
   const delay=Math.max(1500,scheduledAt-Date.now()+1200);
@@ -702,7 +703,7 @@ async function runPublicStudy(topicOverride,isAutomatic=false){
   try{
     const response=await fetch("/api/auto-study",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic})});
     const data=await frossReadJsonResponse(response,"/api/auto-study");
-    responseData=data;
+    responseData={...data,httpStatus:response.status};
     const serverNext=Date.parse(data?.nextAvailableAt||"");
     if(Number.isFinite(serverNext))autoStudyNextAllowedAt=serverNext;
     else if(Number.isFinite(Number(data?.retryAfterSeconds))&&Number(data.retryAfterSeconds)>0)autoStudyNextAllowedAt=Date.now()+Number(data.retryAfterSeconds)*1000;
@@ -724,12 +725,12 @@ async function runPublicStudy(topicOverride,isAutomatic=false){
       writeStudyLog("Заметки сохранены отдельно; FROSS сможет использовать их из "+memoryLabel+".","success");
     }
     if(isAutomatic&&!autoStudyEnabled)$("trainingStatus").textContent="Текущая тема «"+data.topic+"» завершена. Автообучение остановлено; новых автоматических запусков не будет.";
-    return {ok:true,nextAvailableAt:data.nextAvailableAt||null,topic:data.topic||topic};
+    return {ok:true,status:response.status,nextAvailableAt:data.nextAvailableAt||null,topic:data.topic||topic};
   }catch(error){
     const retry=responseData?.nextAvailableAt|| (autoStudyNextAllowedAt?new Date(autoStudyNextAllowedAt).toISOString():null);
     $("trainingStatus").textContent=(isAutomatic&&!autoStudyEnabled?"Текущая тема завершилась с предупреждением; автообучение остановлено. ":"Не удалось завершить изучение: ")+String(error?.message||error);
     writeStudyLog("Ошибка: "+String(error?.message||error),"error");
-    return {ok:false,nextAvailableAt:retry,retryAfterSeconds:responseData?.retryAfterSeconds||null};
+    return {ok:false,status:responseData?.httpStatus||0,nextAvailableAt:retry,retryAfterSeconds:responseData?.retryAfterSeconds||null};
   }finally{
     autoStudyInFlight=false;searchButton.disabled=false;if(guestButton)guestButton.disabled=false;
     updateAutoStudyControls();
