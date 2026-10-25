@@ -1147,7 +1147,12 @@ async function frossBuildTrainingNotes(topic, candidates) {
   const tasks = safeCandidates.map(async item => {
     const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url.slice(0, 700) : "";
     const pageExcerpt = url ? await frossReadPublicPageExcerpt(url) : "";
-    const sourceText = (pageExcerpt || frossClean(item.snippet || "")).slice(0, 3200);
+    const searchSnippet = frossClean(item.snippet || "").slice(0, 3200);
+    const cleanPage = frossClean(pageExcerpt || "").slice(0, 3200);
+    const usedPageText = cleanPage.length >= searchSnippet.length;
+    const sourceText = (usedPageText ? cleanPage : searchSnippet).slice(0, 3200);
+    // A URL is a reference, not a learned fact: require usable text before saving a note.
+    if (sourceText.trim().length < 45) return null;
     return {
       schemaVersion: 2,
       kind: "source-note",
@@ -1158,7 +1163,7 @@ async function frossBuildTrainingNotes(topic, candidates) {
       summary: frossBuildKnowledgeSummary(topic, item.title || "", sourceText),
       keyPoints: frossBuildKnowledgeKeyPoints(topic, item.title || "", sourceText, 5),
       keywords: frossBuildKnowledgeKeywords(topic, item.title || "", sourceText),
-      source: frossClean(pageExcerpt ? "article text" : item.source || "web search excerpt").slice(0, 80),
+      source: frossClean(usedPageText && cleanPage ? "article text" : item.source || "web search excerpt").slice(0, 80),
       score: Number(Math.max(0, Math.min(1, Number(item.score) || 0)).toFixed(4))
     };
   });
@@ -1174,7 +1179,7 @@ async function frossBuildTrainingNotes(topic, candidates) {
       console.warn("[FROSS training] source processing failed", index);
     }
   }
-  return collected.filter(note => note.title && (note.snippet || note.url));
+  return collected.filter(note => note.title && String(note.snippet || "").trim().length >= 45);
 }
 
 const FROSS_AUTO_STUDY_CURRICULUM = [
