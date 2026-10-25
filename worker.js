@@ -1,16 +1,5 @@
 import { frossCorrectText } from "./fross-brain.js";
-
 // ================= КОНФИГУРАЦИЯ =================
-const BOT_UPDATE_FORWARD_URL = "";
-const ALLOWED_TOKENS = "";
-
-// Таймауты Telegram-прокси (мс)
-const LONG_POLL_TIMEOUT = 25000;
-const SHORT_TIMEOUT = 8000;
-const MAX_RETRIES = 2;
-const RETRY_BASE_DELAY = 400;
-const MAX_RETRY_AFTER_MS = 5000;
-
 // FROSS: ограничиваем время каждого поискового запроса.
 const FROSS_FETCH_TIMEOUT_MS = 4500;
 const FROSS_MAX_MESSAGE_LENGTH = 30000;
@@ -18,15 +7,6 @@ const FROSS_MAX_REPLY_LENGTH = 25000;
 const FROSS_MAX_SEARCH_QUERY_LENGTH = 400;
 const FROSS_MAX_HISTORY_USER_MESSAGES = 5;
 const FROSS_MAX_RESULTS_PER_PROVIDER = 5;
-
-// Заголовки, которые нельзя прокидывать дальше
-const STRIP_HEADERS = new Set([
-  "host", "content-length", "connection", "keep-alive",
-  "proxy-authenticate", "proxy-authorization", "te", "trailer",
-  "transfer-encoding", "upgrade",
-  "cf-connecting-ip", "cf-ipcountry", "cf-ray", "cf-visitor",
-  "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host", "x-real-ip",
-]);
 
 // ================= ОСНОВНОЙ ОБРАБОТЧИК =================
 export default {
@@ -78,24 +58,15 @@ export default {
     if (path === "/api/auto-study") return frossApiGuard(path, request, () => handleFrossAutoStudy(request, env, ctx));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
-    // 4. Вебхуки должны проверяться до фильтра Telegram Bot API путей.
-    // Иначе /webhook/... никогда не дойдёт до handleWebhook.
-    if (path.startsWith("/webhook")) return handleWebhook(request, path, ctx);
-
-    // 5. Все остальные пути — существующая логика Telegram-прокси
-    if (!isAllowedPath(path)) return jsonError(404, "Not found");
-
-    // 6. Проверка токена (если ALLOWED_TOKENS задан)
-    if (ALLOWED_TOKENS) {
-      const token = extractToken(path);
-      if (token) {
-        const allowed = ALLOWED_TOKENS.split(",").map(t => t.trim()).filter(Boolean);
-        if (!allowed.includes(token)) return jsonError(401, "Unauthorized token");
-      }
+    // Главная страница Worker: диагностика сервиса, без Telegram и без прокси.
+    if (path === "/" && method === "GET") {
+      return new Response(
+        "<!doctype html><html lang=\"ru\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>FROSS API</title><body style=\"font:16px system-ui;max-width:720px;margin:48px auto;padding:0 20px;background:#101116;color:#f4f5f8\"><h1>FROSS API работает</h1><p>Это API-сервис, а не интерфейс чата.</p><p>Проверка состояния: <a style=\"color:#b5a6ff\" href=\"/api/health\">/api/health</a></p></body></html>",
+        { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
+      );
     }
 
-    // 7. Проксирование в Telegram
-    return proxyToTelegram(request, url);
+    return jsonError(404, "FROSS route not found");
   },
 };
 
@@ -1613,115 +1584,3 @@ async function handleFrossApi(request, env) {
   }, 200, request);
 }
 
-// ================= ПРОКСИ TELEGRAM (СОХРАНЕНО) =================
-
-async function proxyToTelegram(request, url) {
-  const targetUrl = new URL("https://api.telegram.org");
-  targetUrl.pathname = url.pathname;
-  targetUrl.search = url.search;
-
-  const headers = new Headers();
-  for (const [key, value] of request.headers) {
-    if (!STRIP_HEADERS.has(key.toLowerCase())) headers.set(key, value);
-  }
-
-  let bodyBuf = null;
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    try {
-      bodyBuf = await request.arrayBuffer();
-    } catch {
-      return jsonError(400, "Cannot read request body");
-    }
-  }
-
-  const isLongPoll = url.pathname.includes("/getUpdates");
-  const maxAttempts = isLongPoll ? 1 : (MAX_RETRIES + 1);
-  const perAttemptTimeout = isLongPoll ? LONG_POLL_TIMEOUT : SHORT_TIMEOUT;
-  let lastError = null;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), perAttemptTimeout);
-
-    try {
-      const options = {
-        method: request.method,
-        headers,
-        redirect: "manual",
-        signal: controller.signal,
-      };
-      if (bodyBuf !== null) options.body = bodyBuf;
-
-      const response = await fetch(targetUrl.toString(), options);
-
-      if (response.status === 429) {
-        if (attempt < maxAttempts - 1) {
-          const wait = Math.min(parseRetryAfterMs(response), MAX_RETRY_AFTER_MS);
-          await sleep(wait);
-          continue;
-        }
-        return response;
-      }
-
-      if (response.ok || (response.status >= 400 && response.status < 500)) {
-        return response;
-      }
-
-      lastError = new Error(`Telegram API error: ${response.status}`);
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (lastError.name === "AbortError") break;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (attempt < maxAttempts - 1) {
-      await sleep(RETRY_BASE_DELAY * Math.pow(2, attempt));
-    }
-  }
-
-  return jsonError(502, lastError ? lastError.message : "Proxy error");
-}
-
-function parseRetryAfterMs(response) {
-  const raw = response.headers.get("Retry-After");
-  if (!raw) return RETRY_BASE_DELAY * 4;
-  const seconds = parseInt(raw, 10);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-  return RETRY_BASE_DELAY * 4;
-}
-
-// ================= ВЕБХУКИ TELEGRAM (СОХРАНЕНО) =================
-
-async function handleWebhook(request, path, ctx) {
-  const match = path.match(/^\/webhook\/bot([^/]+)/);
-  if (!match) return jsonError(400, "Invalid webhook path");
-
-  if (!BOT_UPDATE_FORWARD_URL) {
-    return jsonError(500, "Forward URL not configured");
-  }
-
-  try {
-    const body = await request.text();
-    const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
-
-    const response = await fetch(BOT_UPDATE_FORWARD_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Telegram-Bot-Api-Secret-Token": secret,
-      },
-      body,
-    });
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    if (ctx && ctx.waitUntil) {
-      ctx.waitUntil(Promise.resolve(console.error("Webhook forward error:", error)));
-    }
-    return jsonError(502, "Webhook forward failed");
-  }
-}
