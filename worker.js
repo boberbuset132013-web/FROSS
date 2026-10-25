@@ -1220,7 +1220,7 @@ async function frossReserveAutoStudyStep(env) {
 
   const now = Date.now();
   const lastStarted = Date.parse(state.lastStartedAt || "");
-  const elapsed = Number.isFinite(lastStarted) ? now - lastStarted : FROSS_AUTO_STUDY_COOLDOWN_MS;
+  const elapsed = Number.isFinite(lastStarted) ? Math.max(0, now - lastStarted) : FROSS_AUTO_STUDY_COOLDOWN_MS;
   if (elapsed >= 0 && elapsed < FROSS_AUTO_STUDY_COOLDOWN_MS) {
     const retryAfterSeconds = Math.ceil((FROSS_AUTO_STUDY_COOLDOWN_MS - elapsed) / 1000);
     return {
