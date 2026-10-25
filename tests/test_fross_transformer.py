@@ -14,6 +14,12 @@ import fross_transformer as transformer
 
 
 class TransformerTests(unittest.TestCase):
+    def test_default_architecture_and_generation_budget(self) -> None:
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 5)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 4)
+        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
+        self.assertEqual(transformer.MAX_GENERATION_TOKENS, 650)
+
     def test_bpe_tokenizer_round_trip(self) -> None:
         samples = [
             "Привет, FROSS!",
