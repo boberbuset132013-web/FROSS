@@ -1031,7 +1031,7 @@ function frossBuildKnowledgeSummary(topic, title, text) {
 function frossForbiddenProgrammingTopic(topic) {
   const q = frossClean(topic).toLowerCase().replace(/ё/g, "е");
   // Brain 1.1's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
-  const unsupported = /(^|[^a-zа-яё0-9_])(c\\+\\+|cpp|c#|csharp|java(?!script)|typescript|php|ruby|rust|golang|swift|kotlin|sql|bash|lua|perl|scala|dart|matlab|fortran|assembly)(?=$|[^a-zа-яё0-9_])/i;
+  const unsupported = /(^|[^a-zа-яё0-9_])(c\+\+|cpp|c#|csharp|java(?!script)|typescript|php|ruby|rust|golang|swift|kotlin|sql|bash|lua|perl|scala|dart|matlab|fortran|assembly)(?=$|[^a-zа-яё0-9_])/i;
   return unsupported.test(q);
 }
 
