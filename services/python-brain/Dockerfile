@@ -9,7 +9,7 @@ COPY services/python-brain/server.py /app/server.py
 # No pretrained checkpoint or remote model provider is used.
 RUN python /app/fross_transformer.py train --corpus /app/data/fross_corpus.jsonl \
        --output /app/fross-transformer.pt --steps 1800 --batch-size 4 --block-size 256 --merges 384 \
-    && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Привет, FROSS.')"
+    && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Привет, FROSS.')" \
     && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Как работает attention?')"
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 EXPOSE 10000
