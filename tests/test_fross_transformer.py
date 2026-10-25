@@ -33,6 +33,37 @@ class TransformerTests(unittest.TestCase):
         self.assertTrue(formatted.startswith(prefix))
         self.assertEqual(formatted[len(prefix):], "Привет!\n")
 
+    def test_training_format_includes_dialogue_history(self) -> None:
+        record = {
+            "history": [
+                {"role": "user", "content": "Сделай кнопку синей."},
+                {"role": "assistant", "content": "Изменю фон кнопки на синий."},
+            ],
+            "user": "Нет, только при наведении.",
+            "assistant": "Добавь синий цвет в :hover, а обычное состояние оставь прежним.",
+        }
+        formatted = transformer._format_record(record)
+        self.assertIn("Пользователь: Сделай кнопку синей.", formatted)
+        self.assertIn("FROSS: Изменю фон кнопки на синий.", formatted)
+        self.assertTrue(formatted.endswith("FROSS: Добавь синий цвет в :hover, а обычное состояние оставь прежним.\\n"))
+
+    def test_corpus_loader_preserves_dialogue_history(self) -> None:
+        import json
+        import tempfile
+
+        history = [{"role": "user", "content": "Оставь HTML без изменений."}]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "corpus.jsonl"
+            rows = [
+                {"history": history, "user": "Исправь только CSS.", "assistant": "Изменю только CSS."},
+                *({"user": f"вопрос {i}", "assistant": f"ответ {i}"} for i in range(7)),
+            ]
+            path.write_text("\\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8")
+            loaded = transformer._load_corpus(path)
+        self.assertEqual(loaded[0]["history"][0]["content"], "Оставь HTML без изменений.")
+        self.assertEqual(loaded[0]["history"][0]["role"], "user")
+        self.assertEqual(loaded[1]["history"], [])
+
     def test_causal_attention_cannot_see_future_tokens(self) -> None:
         torch.manual_seed(7)
         model = transformer.FrossTransformer(
