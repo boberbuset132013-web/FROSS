@@ -1388,6 +1388,7 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
         configured: true,
         handled: false,
         kind: typeof data?.kind === "string" ? data.kind.slice(0, 80) : "generation-unavailable",
+        diagnostic: typeof data?.diagnostic === "string" ? data.diagnostic.slice(0, 80) : "",
         modelStatus: data?.generationModelStatus && typeof data.generationModelStatus === "object"
           ? data.generationModelStatus
           : null,
@@ -1572,9 +1573,22 @@ async function handleFrossApi(request, env) {
     }
   }
 
-  const unavailableReply = remote.configured
-    ? "Python-сервис получил запрос, но собственная модель не выдала ответ. Проверь /health Python-сервиса: generationModelLoaded должно быть true, а в логах не должно быть ошибки checkpoint или генерации."
-    : "Python-модель ещё не подключена к Worker. Добавь Secret FROSS_BRAIN_SERVICE_TOKEN в Cloudflare и тот же токен в Hostless. Для другого адреса задай FROSS_PYTHON_BRAIN_URL, затем опубликуй Worker.";
+  let unavailableReply;
+  if (!remote.configured) {
+    unavailableReply = "Python-модель ещё не подключена к Worker. Добавь Secret FROSS_BRAIN_SERVICE_TOKEN в Cloudflare и тот же токен в Hostless. Для другого адреса задай FROSS_PYTHON_BRAIN_URL, затем опубликуй Worker.";
+  } else if (remote.error === "Brain service timeout.") {
+    unavailableReply = "Python-сервис не успел сгенерировать ответ в отведённое время. Я уменьшил нагрузку на CPU и длину генерации; если ошибка повторится, проверь нагрузку и логи Python-сервиса.";
+  } else if (remote.kind === "generation-model-unavailable") {
+    const reason = typeof remote.modelStatus?.reason === "string" ? remote.modelStatus.reason : "unknown";
+    unavailableReply = "Модель FROSS не загрузилась (" + reason + "). Открой /health и проверь generationModelLoaded и generationModelStatus.";
+  } else if (remote.kind === "generation-error") {
+    unavailableReply = "Во время генерации возникла ошибка (" + (remote.diagnostic || "unknown") + "). Проверь логи Python-сервиса и состояние /health.";
+  } else if (remote.kind === "empty-generation") {
+    unavailableReply = "Модель запустилась, но вернула пустой ответ. Проверь состояние модели на /health и логи Python-сервиса.";
+  } else {
+    const detail = remote.kind || remote.error || "generation-unavailable";
+    unavailableReply = "Python-сервис не выдал ответ. Диагностика: " + String(detail).slice(0, 100) + ". Проверь /health и логи сервиса.";
+  }
   return frossJson({
     name: FROSS_PROFILE.name,
     reply: unavailableReply,
