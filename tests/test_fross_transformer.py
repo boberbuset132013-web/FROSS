@@ -25,6 +25,14 @@ class TransformerTests(unittest.TestCase):
         for text in samples:
             self.assertEqual(tokenizer.decode(tokenizer.encode(text)), text)
 
+    def test_generation_prefix_matches_training_format(self) -> None:
+        record = {"user": "Привет, FROSS.", "assistant": "Привет!"}
+        formatted = transformer._format_record(record)
+        prefix = transformer._format_generation_prefix(record["user"])
+        self.assertEqual(transformer.RESPONSE_PREFIX, "FROSS: ")
+        self.assertTrue(formatted.startswith(prefix))
+        self.assertEqual(formatted[len(prefix):], "Привет!\n")
+
     def test_causal_attention_cannot_see_future_tokens(self) -> None:
         torch.manual_seed(7)
         model = transformer.FrossTransformer(
