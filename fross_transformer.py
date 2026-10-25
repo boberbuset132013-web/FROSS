@@ -303,7 +303,7 @@ def _format_record(record: dict[str, Any]) -> str:
 def _response_strategy(message: str) -> str:
     """Give the compact model a task-specific checklist, without generating a canned reply."""
     query = " ".join(str(message or "").lower().replace("ё", "е").split()).strip()
-    plain = re.sub(r"[!?.,;:()\\[\\]{}]+", " ", query)
+    plain = query.translate(str.maketrans({char: " " for char in "!?.,;:()[]{}"}))
     plain = " ".join(plain.split()).strip()
 
     if re.fullmatch(r"(привет|приветик|здравствуй|здравствуйте|доброе утро|добрый вечер|hello|hi|спасибо|благодарю|пока|до встречи|ок|окей|ага|угу)", plain):
@@ -313,7 +313,7 @@ def _response_strategy(message: str) -> str:
         return ("Тип запроса: продолжение или исправление диалога. Сначала используй последние подходящие реплики истории. "
                 "Не начинай новую тему и не проси повторить уже предоставленные данные. "
                 "При исправлении считай последнее уточнение главным.")
-    if re.search(r"\\b(переведи|перевод|translate|переведи на)\\b", plain):
+    if re.search(r"(^|[^a-zа-яё])(переведи|перевод|translate)(?=$|[^a-zа-яё])", plain):
         return ("Тип запроса: перевод. Сначала выдай точный перевод в запрошенный язык. "
                 "Не добавляй разбор грамматики, аудио или дополнительные версии, если их не просили.")
     if re.search(r"(не меняй|оставь без изменений|только эту|только этот|только при наведении|не добавляй|не трогай|исправь только|переделай только)", plain):
