@@ -714,7 +714,7 @@ async function frossReadPublicPageExcerpt(value) {
 
 const FROSS_GITHUB_OWNER = "boberbuset132013-web";
 const FROSS_GITHUB_REPO = "FROSS";
-const FROSS_GITHUB_BRANCH = "main";
+const FROSS_GITHUB_BRANCH = "fross-knowledge";
 const FROSS_GITHUB_INDEX_PATH = "memory/knowledge/index.json";
 const FROSS_AUTO_STUDY_STATE_PATH = "memory/knowledge/auto-study-state.json";
 const FROSS_AUTO_STUDY_COOLDOWN_MS = 2 * 60 * 1000;
