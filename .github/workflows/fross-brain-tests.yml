@@ -126,7 +126,7 @@ jobs:
           assert "Английский: письменные диалоги" in curriculum and "Китайский: иероглифы" in curriculum and "Русский: орфография" in curriculum, "Study plan must offer text-only language topics"
           assert "listening" not in curriculum.lower() and "аудио" not in curriculum.lower() and "слушание" not in curriculum.lower(), "Learning curriculum must not rely on audio"
           assert "Git и GitHub" not in curriculum and "C++" not in curriculum and "SQL" not in curriculum, "Programming curriculum must stay within JavaScript, Python, HTML and CSS"
-          assert len([line for line in corpus.splitlines() if line.strip()]) >= 275, "Training corpus must include the new dialogue examples"
+          assert len([line for line in corpus.splitlines() if line.strip()]) >= 300, "Training corpus must include the new dialogue examples"
           assert "Как обучить модель понимать разные намерения пользователя?" in corpus and "Что делать, если модель повторяет приветствие после любого вопроса?" in corpus, "Corpus must cover intent understanding and incoherent replies"
           assert 'id="publicStudyTopic"' in page and 'id="publicStudyForm"' in page, "Public topic search must be available"
           assert 'id="publicStudyLogs"' in page and 'id="publicStudyResults"' in page, "Study logs and results must be visible"
