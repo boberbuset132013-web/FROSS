@@ -41,7 +41,7 @@ export default {
       return frossJson({
         ok: true,
         worker: "FROSS",
-        version: "1.1",
+        version: "1.2",
         brainVersion: "1.2",
         build: "fross-python-transformer-2026-10-25",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
@@ -1045,7 +1045,7 @@ function frossBuildKnowledgeSummary(topic, title, text) {
 
 function frossForbiddenProgrammingTopic(topic) {
   const q = frossClean(topic).toLowerCase().replace(/ё/g, "е");
-  // Brain 1.1's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
+  // Brain 1.2's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
   const unsupported = /(^|[^a-zа-яё0-9_])(c\+\+|cpp|c#|csharp|java(?!script)|typescript|php|ruby|rust|golang|swift|kotlin|sql|bash|lua|perl|scala|dart|matlab|fortran|assembly)(?=$|[^a-zа-яё0-9_])/i;
   return unsupported.test(q);
 }
@@ -1606,7 +1606,7 @@ async function handleFrossApi(request, env) {
   const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
-  // Brain 1.1: keep the user's original words, retrieve web context when the request
+  // Brain 1.2: keep the user's original words, retrieve web context when the request
   // appears to contain an unfamiliar term, a concrete question, or a time-sensitive fact,
   // then let the local Transformer synthesize the context into its own answer.
   const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
