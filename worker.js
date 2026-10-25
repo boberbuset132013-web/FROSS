@@ -1369,8 +1369,8 @@ function frossBuildUserLookupQuery(query) {
     .filter(word => !stop.has(word))
     .filter((word, index, all) => all.indexOf(word) === index)
     .slice(0, 3);
-  if (/\bя\b/i.test(normalized) && !tokens.includes("я")) tokens.unshift("я");
-  if (/\bсегодня\b/i.test(normalized) && !tokens.includes("сегодня")) tokens.push("сегодня");
+  if (/(^|[^a-zа-яё0-9_])я(?=$|[^a-zа-яё0-9_])/i.test(normalized) && !tokens.includes("я")) tokens.unshift("я");
+  if (/(^|[^a-zа-яё0-9_])сегодня(?=$|[^a-zа-яё0-9_])/i.test(normalized) && !tokens.includes("сегодня")) tokens.push("сегодня");
   const picked = tokens.slice(0, 3);
   if (!picked.length) return "";
   const wordQuery = picked.map(word => "значение слова «" + word + "»").join("; ");
