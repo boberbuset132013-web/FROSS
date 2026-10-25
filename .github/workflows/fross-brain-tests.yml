@@ -134,6 +134,7 @@ jobs:
           assert "FROSS_BROWSER_STUDY_NOTES_KEY" in page and "saveStudyNotesToMemory" in page, "Study results must be saved to account/browser memory"
           assert "function frossSteps(mode)" in worker and "1/14 — определить цель" in worker and "7/7 — проверить релевантность" in worker, "Worker must expose 7-stage normal and 14-stage reasoning workflows"
           assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
+          assert "function frossForbiddenProgrammingTopic(topic)" in worker and "frossForbiddenProgrammingTopic(topic)" in worker, "Custom learning must reject programming languages outside JavaScript, Python, HTML and CSS"
           assert "...(shouldSearch ? results.slice(0, 6) : [])" in worker, "Fresh search results must be prioritized in the model context"
           assert 'VERSION = "FROSS Transformer 1.1"' in transformer and '"block_size": 320' in transformer, "Transformer version and context window must match Brain 1.1"
           assert "FROSS Brain 1.1 — обычный рабочий план 7 этапов" in transformer and "FROSS Brain 1.1 — расширенный рабочий план 14 этапов" in transformer, "Model prompt must guide both stage plans"
