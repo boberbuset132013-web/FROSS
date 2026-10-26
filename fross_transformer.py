@@ -721,6 +721,7 @@ def main() -> int:
     parser.add_argument("--block-size", type=int, default=320)
     parser.add_argument("--merges", type=int, default=384)
     parser.add_argument("--text", default="Объясни, как обучается нейросеть.")
+    parser.add_argument("--max-new-tokens", type=int, default=None)
     parser.add_argument("--onnx-output", default=None)
     args = parser.parse_args()
     if args.command == "export":
@@ -752,7 +753,7 @@ def main() -> int:
     if model is None or tokenizer is None:
         print(json.dumps({"ok": False, "status": status}, ensure_ascii=False, indent=2))
         return 1
-    print(generate_reply(model, tokenizer, args.text))
+    print(generate_reply(model, tokenizer, args.text, max_new_tokens=args.max_new_tokens))
     return 0
 
 
