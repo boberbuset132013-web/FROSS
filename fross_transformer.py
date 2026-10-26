@@ -539,7 +539,12 @@ def export_onnx_model(
     try:
         import onnx
         graph = onnx.load(str(target))
+        # ONNX Runtime 1.20.x (used by the lightweight C++ service image) supports
+        # ONNX IR up to version 10. The legacy exporter graph needs no newer IR
+        # features, so record the compatible version before validating and saving.
+        graph.ir_version = min(int(graph.ir_version), 10)
         onnx.checker.check_model(graph)
+        onnx.save(graph, str(target))
     except ImportError as exc:
         raise RuntimeError("The 'onnx' package is required to export the C++ inference graph.") from exc
     return {
@@ -548,6 +553,7 @@ def export_onnx_model(
         "version": VERSION,
         "block_size": block_size,
         "vocab_size": tokenizer.vocab_size,
+        "onnx_ir_version": int(graph.ir_version),
     }
 
 
