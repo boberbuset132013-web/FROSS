@@ -1704,9 +1704,19 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
   }
 }
 
-async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
+async function frossFetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 8000) {
   if (typeof endpoint !== "string" || !endpoint.trim()) {
-    return { configured: false, reachable: false, authenticated: false, generationModelLoaded: false };
+    return { configured: false, reachable: false, authenticated: false, ready: false, generationModelLoaded: false };
   }
   let healthUrl;
   let serviceBasePath = "";
@@ -1722,16 +1732,13 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
     return { configured: true, reachable: false, authenticated: false, error: "Invalid Python service URL." };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let healthData = null;
   try {
-    const response = await fetch(healthUrl.toString(), {
+    const response = await frossFetchWithTimeout(healthUrl.toString(), {
       method: "GET",
       headers: { "Accept": "application/json" },
-      cache: "no-store",
-      signal: controller.signal
-    });
+      cache: "no-store"
+    }, timeoutMs);
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
       return { configured: true, reachable: false, authenticated: false, httpStatus: response.status, generationModelLoaded: false };
@@ -1763,12 +1770,11 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
 
     const readyUrl = new URL(healthUrl.toString());
     readyUrl.pathname = (serviceBasePath || "") + "/ready";
-    const readyResponse = await fetch(readyUrl.toString(), {
+    const readyResponse = await frossFetchWithTimeout(readyUrl.toString(), {
       method: "POST",
       headers: { "Accept": "application/json", "Authorization": "Bearer " + token },
-      cache: "no-store",
-      signal: controller.signal
-    });
+      cache: "no-store"
+    }, timeoutMs);
     let readyData = null;
     if (readyResponse.ok) {
       try { readyData = await readyResponse.json(); } catch { readyData = null; }
@@ -1808,8 +1814,6 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
       generationModelLoaded: healthData?.generationModelLoaded === true,
       error: error?.name === "AbortError" ? "Python health/readiness check timed out." : "Python service is unreachable."
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
