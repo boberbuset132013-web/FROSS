@@ -44,6 +44,36 @@ class DistillationPipelineTests(unittest.TestCase):
         self.assertEqual(duplicates, 0)
         self.assertEqual(len(merged), len(base) + len(teacher))
 
+    def test_committed_teacher_examples_match_the_reported_errors(self) -> None:
+        teacher = read_corpus(ROOT / "data" / "fross_teacher_corpus.jsonl")
+
+        python_type_errors = [
+            row for row in teacher
+            if "TypeError: unsupported operand type(s) for +: 'int' and 'str'" in row["user"]
+        ]
+        self.assertEqual(len(python_type_errors), 3)
+        for row in python_type_errors:
+            answer = row["assistant"].lower()
+            self.assertIn("typeerror", answer)
+            self.assertIn("int(y)", answer)
+            self.assertNotIn("nullpointerexception", answer)
+            self.assertNotIn("javascript", answer)
+
+        array_example = next(
+            row for row in teacher
+            if row["user"].startswith("Как обработать ошибку при работе с несуществующим элементом массива?")
+        )
+        self.assertIn("не выбрасывает исключение", array_example["assistant"].lower())
+        self.assertIn("undefined", array_example["assistant"].lower())
+        self.assertNotIn("выведет: ошибка: undefined", array_example["assistant"].lower())
+
+        sql_example = next(
+            row for row in teacher
+            if row["user"].startswith("В PostgreSQL получаю ошибку")
+        )
+        self.assertIn("не обязано вызывать синтаксическую ошибку", sql_example["assistant"].lower())
+        self.assertIn("неявный псевдоним", sql_example["assistant"].lower())
+
     def test_read_corpus_reports_bad_json_line(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "broken.jsonl"
