@@ -75,6 +75,16 @@ jobs:
           assert health.get("generationModelStatus", {}).get("loaded") is True, health
           print("Docker health check passed: C++ ONNX inference is active.")
           PY
+          curl -fsS -X POST http://127.0.0.1:10000/ready -H 'Authorization: Bearer ci-test' > "$RUNNER_TEMP/fross-ready.json"
+          python - "$RUNNER_TEMP/fross-ready.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              ready = json.load(stream)
+          assert ready.get("ok") is True and ready.get("authenticated") is True, ready
+          assert ready.get("generationModelLoaded") is True, ready
+          assert ready.get("inferenceBackend") == "cpp-onnx", ready
+          print("Authenticated readiness endpoint passed.")
+          PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
           python - "$RUNNER_TEMP/fross-chat.json" <<'PY'
           import json, sys
