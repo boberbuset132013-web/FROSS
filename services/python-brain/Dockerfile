@@ -30,21 +30,42 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 # Train the FROSS student from random initialization on validated original and
 # teacher-generated text examples. Only text data is transferred: no teacher weights
 # are imported, and the teacher is not called during this build or during inference.
-# Default to a bounded deployment build. Set FROSS_TRAIN_STEPS=3000 only when a long training build is acceptable.
+# Prefer the hosted checkpoint when it is a compatible FROSS 1.4 model.
+# If download/validation fails, the image still gets a bounded 600-step model.
+ARG FROSS_MODEL_URL=https://deliverbit.com/f/uMSeXVFA5w/fross-transformer
+ARG FROSS_REQUIRED_MODEL_STEPS=3000
 ARG FROSS_TRAIN_STEPS=600
 ARG FROSS_VOCAB_SIZE=5000
 ARG FROSS_TRAIN_THREADS=2
 
-# Prepare the corpus in its own layer, so a retry can reuse it instead of repeating work.
 RUN python /app/training/distillation/prepare_corpus.py \
        --base /app/data/fross_corpus.jsonl \
        --teacher /app/data/fross_teacher_corpus.jsonl \
        --output /app/data/fross_training_corpus.jsonl
 
-# For the production target, save an intermediate 600-step checkpoint with a 3000-step
-# learning-rate schedule, then continue from its saved model, optimizer, and RNG state.
-# Small CI smoke builds (for example FROSS_TRAIN_STEPS=2) train directly in one pass.
-RUN if [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
+RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
+      echo "Attempting to download the hosted FROSS checkpoint..."; \
+      if curl -fL --silent --show-error --connect-timeout 8 --max-time 60 "${FROSS_MODEL_URL}" -o /app/fross-transformer.download; then \
+        mv /app/fross-transformer.download /app/fross-transformer.pt; \
+        if python -c "import torch, fross_transformer as t; c=torch.load('/app/fross-transformer.pt',map_location='cpu',weights_only=True); m=c.get('metrics',{}); assert c.get('version') == t.VERSION,c.get('version'); assert c.get('format_version') in (1,2); assert int(m.get('vocab_size',0)) == ${FROSS_VOCAB_SIZE},m; assert m.get('vocab_target_reached') is True,m; assert int(m.get('training_steps',0)) >= ${FROSS_REQUIRED_MODEL_STEPS},m; assert int(c.get('config',{}).get('block_size',0)) == 320; model,tok,status=t.load_model('/app/fross-transformer.pt'); assert model is not None and tok is not None,status; print('Compatible hosted checkpoint:',m.get('training_steps'),'steps')"; then \
+          printf 'uploaded-checkpoint\n' > /app/fross-model-source.txt; \
+        else \
+          rm -f /app/fross-transformer.pt; \
+          echo "Hosted checkpoint is incompatible or has fewer than ${FROSS_REQUIRED_MODEL_STEPS} steps; falling back to repository training."; \
+        fi; \
+      else \
+        rm -f /app/fross-transformer.download; \
+        echo "Hosted checkpoint download failed; falling back to repository training."; \
+      fi; \
+    else \
+      echo "FROSS_MODEL_URL is empty; training from repository corpus."; \
+    fi
+
+# 3,000-step training remains available as a build argument, but is not forced
+# into every deployment. For targets >600 the first stage is resumable.
+RUN if [ -f /app/fross-model-source.txt ]; then \
+      echo "A validated hosted checkpoint is ready; skipping retraining."; \
+    elif [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
       FROSS_TORCH_THREADS="${FROSS_TRAIN_THREADS}" OMP_NUM_THREADS="${FROSS_TRAIN_THREADS}" MKL_NUM_THREADS="${FROSS_TRAIN_THREADS}" \
       python /app/fross_transformer.py train --corpus /app/data/fross_training_corpus.jsonl \
         --output /app/fross-transformer.pt --steps 600 --schedule-steps "${FROSS_TRAIN_STEPS}" \
@@ -56,7 +77,9 @@ RUN if [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
         --batch-size 4 --block-size 320 --vocab-size "${FROSS_VOCAB_SIZE}"; \
     fi
 
-RUN if [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
+RUN if [ -f /app/fross-model-source.txt ]; then \
+      echo "Hosted checkpoint already contains the trained weights; skipping resume."; \
+    elif [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
       FROSS_TORCH_THREADS="${FROSS_TRAIN_THREADS}" OMP_NUM_THREADS="${FROSS_TRAIN_THREADS}" MKL_NUM_THREADS="${FROSS_TRAIN_THREADS}" \
       python /app/fross_transformer.py train --corpus /app/data/fross_training_corpus.jsonl \
         --output /app/fross-transformer.pt --steps "${FROSS_TRAIN_STEPS}" --resume \
@@ -66,10 +89,18 @@ RUN if [ "${FROSS_TRAIN_STEPS}" -gt 600 ]; then \
       echo "Target is ${FROSS_TRAIN_STEPS} steps; staged resume is not needed."; \
     fi
 
-RUN python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
-    && python -c "import torch; c=torch.load('/app/fross-transformer.pt', map_location='cpu', weights_only=True); m=c['metrics']; assert m['vocab_size']==${FROSS_VOCAB_SIZE}, m; assert m['training_steps']==${FROSS_TRAIN_STEPS}, m; assert m['vocab_target_reached'], m; print('Brain 1.4 checkpoint verified:', m['vocab_size'], 'tokens,', m['parameters'], 'parameters,', m['training_steps'], 'steps')" \
+RUN if [ ! -f /app/fross-model-source.txt ]; then \
+      printf 'repository-training steps=%s\n' "${FROSS_TRAIN_STEPS}" > /app/fross-model-source.txt; \
+    fi
+
+RUN if grep -qx "uploaded-checkpoint" /app/fross-model-source.txt; then \
+      python -c "import torch, fross_transformer as t; c=torch.load('/app/fross-transformer.pt',map_location='cpu',weights_only=True); m=c['metrics']; assert c.get('version')==t.VERSION,c.get('version'); assert int(m['vocab_size'])==${FROSS_VOCAB_SIZE},m; assert int(m['training_steps'])>=${FROSS_REQUIRED_MODEL_STEPS},m; assert m['vocab_target_reached'],m; print('Verified hosted checkpoint:',m['training_steps'],'steps')"; \
+    else \
+      python -c "import torch; c=torch.load('/app/fross-transformer.pt', map_location='cpu', weights_only=True); m=c['metrics']; assert m['vocab_size']==${FROSS_VOCAB_SIZE}, m; assert m['training_steps']==${FROSS_TRAIN_STEPS}, m; assert m['vocab_target_reached'], m; print('Brain 1.4 checkpoint verified:', m['vocab_size'], 'tokens,', m['parameters'], 'parameters,', m['training_steps'], 'steps')"; \
+    fi \
+    && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
     && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))" \
-    && python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()"
+    && python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
 ENV FROSS_CPP_RUNTIME_LIBRARY=/app/libfross_cpp.so

@@ -170,7 +170,7 @@ jobs:
           assert "MAX_GENERATION_TOKENS = 5000" in transformer and "min(int(max_tokens), MAX_GENERATION_TOKENS)" in transformer, "Generation must support up to 5000 new tokens"
           assert "max_new_tokens=GENERATION_TOKEN_LIMIT" in server, "Python service must use the shared 5000-token cap"
           dockerfile = Path("services/python-brain/Dockerfile").read_text(encoding="utf-8")
-          assert "ARG FROSS_TRAIN_STEPS=600" in dockerfile and "ARG FROSS_VOCAB_SIZE=5000" in dockerfile and "--vocab-size" in dockerfile and "FROSS_VOCAB_SIZE" in dockerfile and "--resume" in dockerfile and "--schedule-steps" in dockerfile, "Docker build must use a bounded 600-step default, support resumable 3000-step training, and keep the 5000-token vocabulary target"
+          assert "ARG FROSS_MODEL_URL=" in dockerfile and "ARG FROSS_REQUIRED_MODEL_STEPS=3000" in dockerfile and "ARG FROSS_TRAIN_STEPS=600" in dockerfile and "ARG FROSS_VOCAB_SIZE=5000" in dockerfile and "--vocab-size" in dockerfile and "FROSS_VOCAB_SIZE" in dockerfile and "--resume" in dockerfile and "--schedule-steps" in dockerfile and "uploaded-checkpoint" in dockerfile and "fross-model-source.txt" in dockerfile, "Docker build must prefer a compatible 3000-step hosted checkpoint and use a bounded 600-step fallback"
           knowledge_index = json.loads(Path("memory/knowledge/index.json").read_text(encoding="utf-8"))
           assert len(knowledge_index.get("topics", [])) >= 4, "Shared GitHub knowledge index should be initialized"
           assert Path("memory/knowledge/neural-networks.json").exists() and Path("memory/knowledge/javascript-basics.json").exists(), "Core public knowledge files should exist"

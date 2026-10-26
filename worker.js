@@ -1743,6 +1743,7 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
       version: typeof healthData?.version === "string" ? healthData.version.slice(0, 40) : null,
       generationModelLoaded: healthData?.generationModelLoaded === true,
       generationModel: typeof healthData?.generationModel === "string" ? healthData.generationModel.slice(0, 100) : null,
+      modelSource: typeof healthData?.modelSource === "string" ? healthData.modelSource.slice(0, 100) : null,
       generationModelStatus: healthData?.generationModelStatus && typeof healthData.generationModelStatus === "object"
         ? healthData.generationModelStatus
         : null,

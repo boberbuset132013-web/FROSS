@@ -16,6 +16,11 @@ if not (ROOT / "fross_transformer.py").exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+try:
+    MODEL_SOURCE = (ROOT / "fross-model-source.txt").read_text(encoding="utf-8").strip()[:100]
+except OSError:
+    MODEL_SOURCE = "unknown"
+
 import fross_transformer as transformer  # noqa: E402
 # Runtime containers may expose many host CPUs despite a small CPU quota.
 # Cap PyTorch's thread pools before the first model load or inference.
@@ -88,6 +93,7 @@ class Handler(BaseHTTPRequestHandler):
             "ok": True,
             "engine": ENGINE_NAME,
             "version": "1.4",
+            "modelSource": MODEL_SOURCE,
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
@@ -117,6 +123,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": True,
                 "engine": ENGINE_NAME,
                 "version": "1.4",
+                "modelSource": MODEL_SOURCE,
                 "authenticated": True,
                 "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
                 "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,

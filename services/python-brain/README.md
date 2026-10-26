@@ -17,7 +17,7 @@ The Docker build context must be the **repository root** because the Dockerfile 
 - Port: `10000`
 - Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
 
-The image trains the model during the build, exports `/app/fross-transformer.onnx`, compiles `/app/libfross_cpp.so`, and enables the C++ backend. The default target is 600 steps to keep production deployments bounded. Set build arg `FROSS_TRAIN_STEPS=3000` only when a long training build is acceptable; for targets above 600, the Dockerfile saves a 600-step intermediate checkpoint and resumes its optimizer/RNG state to the cumulative target.
+The image first tries the hosted `FROSS_MODEL_URL` checkpoint. It accepts only a compatible FROSS Transformer 1.4 checkpoint with a 5,000-token vocabulary, block size 320, and at least 3,000 training steps. A valid uploaded checkpoint avoids retraining during deployment. If the URL is unavailable or the checkpoint is incompatible, the default is a bounded 600-step local training run. Set build arg `FROSS_TRAIN_STEPS=3000` only when a long build is acceptable; above 600 steps, the Dockerfile saves a 600-step intermediate checkpoint and resumes the optimizer/RNG state to the cumulative target. The selected source is visible as `modelSource` in `/health` and `/api/health`.
 
 ## Verify deployment
 
