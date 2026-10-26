@@ -9,7 +9,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from prepare_corpus import read_corpus, record_key
+from prepare_corpus import read_corpus, record_key, write_jsonl_atomic
 
 SCHEMA = {
     "type": "object",
@@ -122,10 +122,13 @@ def main():
         return 2
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    output_rows = read_corpus(output, required=False)
     seen = set()
-    for path in (base, output):
-        for row in read_corpus(path, required=False):
+    for path in (base,):
+        for row in read_corpus(path):
             seen.add(record_key(row))
+    for row in output_rows:
+        seen.add(record_key(row))
 
     created = 0
     attempts = 0
@@ -141,20 +144,21 @@ def main():
         try:
             batch = call_teacher(args.base_url, args.model, topic, amount, args.timeout)
         except (RuntimeError, ValueError, OSError) as exc:
-            print(f"Teacher failed: {exc}", file=sys.stderr)
-            return 1 if created == 0 else 0
+            print(f"Teacher failed after creating {created} examples: {exc}", file=sys.stderr)
+            print("Already saved examples were preserved. Re-run the command to continue.", file=sys.stderr)
+            return 1
         fresh = []
-        for example in batch:
+        for example in batch[:amount]:
             key = record_key(example)
             if key in seen:
                 continue
             seen.add(key)
             fresh.append({**example, "source": "local_teacher_distillation", "teacher_model": args.model})
         if fresh:
-            with output.open("a", encoding="utf-8", newline="\n") as handle:
-                for row in fresh:
-                    handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
-                handle.flush()
+            # Replace atomically after every successful batch. An interrupted write
+            # cannot leave a half JSONL record that prevents the next run from resuming.
+            output_rows.extend(fresh)
+            write_jsonl_atomic(output, output_rows)
             created += len(fresh)
             print(f"Accepted {len(fresh)}; this run: {created}/{args.count}", flush=True)
         else:
