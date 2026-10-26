@@ -35,6 +35,15 @@ class DistillationPipelineTests(unittest.TestCase):
         self.assertEqual(len(merged), 3)
         self.assertEqual(merged[0]["assistant"], "Привет! Что будем делать?")
 
+    def test_committed_teacher_corpus_merges_with_original_corpus_cleanly(self) -> None:
+        base = read_corpus(ROOT / "data" / "fross_corpus.jsonl")
+        teacher = read_corpus(ROOT / "data" / "fross_teacher_corpus.jsonl")
+        merged, duplicates = merge_records(base, teacher)
+        self.assertEqual(len(base), 328)
+        self.assertEqual(len(teacher), 82)
+        self.assertEqual(duplicates, 0)
+        self.assertEqual(len(merged), len(base) + len(teacher))
+
     def test_read_corpus_reports_bad_json_line(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "broken.jsonl"
