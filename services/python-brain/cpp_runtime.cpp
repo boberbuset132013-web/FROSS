@@ -37,7 +37,8 @@ struct Runtime {
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session = std::make_unique<Ort::Session>(env, model_path, options);
 
-        const auto input_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        const auto input_type_info = session->GetInputTypeInfo(0);
+        const auto input_info = input_type_info.GetTensorTypeAndShapeInfo();
         const auto input_shape = input_info.GetShape();
         if (input_shape.size() != 2) {
             throw std::runtime_error("ONNX input must have rank 2: [batch, block_size]");
@@ -54,7 +55,8 @@ struct Runtime {
         }
         block_size = expected_block_size;
 
-        const auto output_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
+        const auto output_type_info = session->GetOutputTypeInfo(0);
+        const auto output_info = output_type_info.GetTensorTypeAndShapeInfo();
         const auto output_shape = output_info.GetShape();
         if (output_shape.size() != 3) {
             throw std::runtime_error("ONNX output must have rank 3: [batch, block_size, vocab_size]");
