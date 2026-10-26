@@ -9,6 +9,7 @@ and compute budget. Install PyTorch CPU wheels to train or run it.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from collections import Counter
 import json
 import math
@@ -475,43 +476,132 @@ def train_model(
     merge_count: int | None = None,
     target_vocab_size: int = 5000,
     seed: int = 1337,
+    resume: bool = False,
+    schedule_steps: int | None = None,
 ) -> dict[str, Any]:
+    """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
+
+    When using staged training, pass the same schedule_steps on both runs. For example,
+    train 600 steps with schedule_steps=3000, then resume with steps=3000.
+    """
     if steps < 1 or batch_size < 1 or block_size < 32:
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
+    schedule_total = int(schedule_steps if schedule_steps is not None else steps)
+    if schedule_total < steps:
+        raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
+    if resume and merge_count is not None:
+        raise ValueError("Resuming with the legacy --merges tokenizer option is not supported; use --vocab-size.")
+
+    target = Path(output_path)
+    resume_checkpoint: dict[str, Any] | None = None
+    resume_state: dict[str, Any] | None = None
+    if resume:
+        if not target.is_file():
+            raise FileNotFoundError(f"Cannot resume: checkpoint does not exist: {target}")
+        resume_checkpoint = torch.load(target, map_location="cpu", weights_only=True)
+        if int(resume_checkpoint.get("format_version", 0)) != 2:
+            raise ValueError(
+                "This checkpoint does not include resumable optimizer state. "
+                "Start a new 600-step run with the current Brain 1.4 code first."
+            )
+        resume_state = resume_checkpoint.get("resume_state")
+        if not isinstance(resume_state, dict):
+            raise ValueError("Checkpoint is missing its resumable training state.")
+        if int(resume_state.get("seed", -1)) != seed:
+            raise ValueError("Resume seed differs from the saved run. Use the same --seed (default: 1337).")
+        if int(resume_state.get("schedule_steps", -1)) != schedule_total:
+            raise ValueError(
+                "The learning-rate schedule does not match the saved run. "
+                f"Use --schedule-steps {resume_state.get('schedule_steps')}."
+            )
+
     configure_runtime_threads()
     random.seed(seed)
     torch.manual_seed(seed)
-    records = _load_corpus(corpus_path)
+    corpus_file = Path(corpus_path)
+    if not corpus_file.is_file():
+        raise FileNotFoundError(f"Training corpus not found: {corpus_file}")
+    corpus_sha256 = hashlib.sha256(corpus_file.read_bytes()).hexdigest()
+    if resume and resume_state is not None:
+        if resume_state.get("corpus_sha256") != corpus_sha256:
+            raise ValueError(
+                "The corpus has changed since the previous stage. Restore the exact original "
+                "data/fross_corpus.jsonl before resuming."
+            )
+
+    records = _load_corpus(corpus_file)
     random.shuffle(records)
     val_count = max(2, int(len(records) * 0.1))
     validation_records, train_records = records[:val_count], records[val_count:]
-    tokenizer = BPETokenizer.train(
-        [_format_record(row) for row in train_records],
-        merge_count=merge_count,
-        target_vocab_size=target_vocab_size if merge_count is None else None,
-        max_piece_chars=24,
-    )
+
+    if resume and resume_checkpoint is not None:
+        tokenizer = BPETokenizer(**resume_checkpoint["tokenizer"])
+    else:
+        tokenizer = BPETokenizer.train(
+            [_format_record(row) for row in train_records],
+            merge_count=merge_count,
+            target_vocab_size=target_vocab_size if merge_count is None else None,
+            max_piece_chars=24,
+        )
+
     train_stream = _encode_stream(train_records, tokenizer)
     validation_stream = _encode_stream(validation_records, tokenizer)
     actual_block = min(block_size, int(DEFAULT_CONFIG["block_size"]))
     if len(train_stream) <= actual_block + 1:
         raise ValueError("Training corpus is too small for the selected context length.")
 
-    config = {**DEFAULT_CONFIG, "block_size": actual_block}
+    if resume and resume_checkpoint is not None:
+        config = resume_checkpoint.get("config")
+        if not isinstance(config, dict) or int(config.get("block_size", 0)) != actual_block:
+            raise ValueError("The requested block size differs from the checkpoint. Use the original --block-size.")
+        prior_metrics = resume_checkpoint.get("metrics", {})
+        prior_vocab_target = prior_metrics.get("requested_vocab_size")
+        if prior_vocab_target is not None and int(prior_vocab_target) != target_vocab_size:
+            raise ValueError("The requested vocabulary size differs from the checkpoint.")
+    else:
+        config = {**DEFAULT_CONFIG, "block_size": actual_block}
+
     device = _preferred_device()
     model = FrossTransformer(tokenizer.vocab_size, config).to(device)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
-    last_start = len(train_stream) - actual_block - 1
+    start_step = 0
     last_loss = float("nan")
     best_validation_loss = float("inf")
     best_state: dict[str, torch.Tensor] | None = None
     best_checkpoint_step = 0
     best_train_loss = float("nan")
-    # Evaluate several times and keep the weights that generalize best to held-out
-    # examples, rather than automatically shipping the very last (possibly overfit) step.
-    evaluation_interval = max(50, min(300, steps // 8))
-    for step in range(steps):
+
+    if resume and resume_checkpoint is not None and resume_state is not None:
+        prior_metrics = resume_checkpoint.get("metrics", {})
+        start_step = int(resume_state.get("completed_steps", 0))
+        if start_step < 1:
+            raise ValueError("Checkpoint has an invalid completed-step count.")
+        if steps <= start_step:
+            raise ValueError(
+                f"Checkpoint already has {start_step} steps; --steps must be a larger cumulative target."
+            )
+        if int(prior_metrics.get("training_steps", -1)) != start_step:
+            raise ValueError("Checkpoint metrics and optimizer state have different step counts.")
+        model.load_state_dict(resume_state["last_state_dict"], strict=True)
+        optimizer.load_state_dict(resume_state["optimizer_state_dict"])
+        random.setstate(resume_state["python_rng_state"])
+        torch.set_rng_state(resume_state["torch_rng_state"].cpu())
+        saved_val = prior_metrics.get("validation_loss")
+        if saved_val is not None and math.isfinite(float(saved_val)):
+            best_validation_loss = float(saved_val)
+        best_checkpoint_step = int(prior_metrics.get("best_checkpoint_step", start_step))
+        saved_train_loss = prior_metrics.get("train_loss")
+        if saved_train_loss is not None:
+            best_train_loss = float(saved_train_loss)
+        best_state = {
+            name: value.detach().cpu().clone()
+            for name, value in resume_checkpoint["state_dict"].items()
+        }
+
+    last_start = len(train_stream) - actual_block - 1
+    evaluation_interval = max(50, min(300, schedule_total // 8))
+    for step in range(start_step, steps):
         starts = [random.randint(0, last_start) for _ in range(batch_size)]
         x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
         y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long, device=device)
@@ -520,7 +610,7 @@ def train_model(
         loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        learning_rate = 3e-4 * (1.0 - 0.65 * (step / max(1, steps - 1)))
+        learning_rate = 3e-4 * (1.0 - 0.65 * (step / max(1, schedule_total - 1)))
         for group in optimizer.param_groups:
             group["lr"] = learning_rate
         optimizer.step()
@@ -536,7 +626,7 @@ def train_model(
                     name: value.detach().cpu().clone()
                     for name, value in model.state_dict().items()
                 }
-        if (step + 1) % max(1, steps // 5) == 0 or step + 1 == steps:
+        if (step + 1) % max(1, (steps - start_step) // 5) == 0 or step + 1 == steps:
             shown_val = (
                 f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
             )
@@ -545,6 +635,27 @@ def train_model(
                 f"best validation loss {shown_val}",
                 flush=True,
             )
+
+    # Keep the true last training state separately from the best-validation inference weights.
+    last_state_dict = {
+        name: value.detach().cpu().clone()
+        for name, value in model.state_dict().items()
+    }
+
+    def _cpu_tree(value: Any) -> Any:
+        if torch.is_tensor(value):
+            return value.detach().cpu()
+        if isinstance(value, dict):
+            return {key: _cpu_tree(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_cpu_tree(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(_cpu_tree(item) for item in value)
+        return value
+
+    saved_optimizer_state = _cpu_tree(optimizer.state_dict())
+    saved_python_rng_state = random.getstate()
+    saved_torch_rng_state = torch.get_rng_state().clone()
 
     if best_state is not None:
         model.load_state_dict(best_state, strict=True)
@@ -555,11 +666,21 @@ def train_model(
         reported_train_loss = last_loss
     model.eval()
     checkpoint = {
-        "format_version": 1,
+        "format_version": 2,
         "version": VERSION,
         "config": config,
         "tokenizer": tokenizer.to_dict(),
-        "state_dict": model.state_dict(),
+        "state_dict": _cpu_tree(model.state_dict()),
+        "resume_state": {
+            "last_state_dict": last_state_dict,
+            "optimizer_state_dict": saved_optimizer_state,
+            "python_rng_state": saved_python_rng_state,
+            "torch_rng_state": saved_torch_rng_state,
+            "completed_steps": steps,
+            "corpus_sha256": corpus_sha256,
+            "seed": seed,
+            "schedule_steps": schedule_total,
+        },
         "metrics": {
             "train_loss": round(reported_train_loss, 5) if math.isfinite(reported_train_loss) else None,
             "validation_loss": round(validation_loss, 5) if math.isfinite(validation_loss) else None,
@@ -567,6 +688,8 @@ def train_model(
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
             "training_steps": steps,
+            "steps_this_run": steps - start_step,
+            "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
@@ -578,7 +701,6 @@ def train_model(
             "trained_from_random_weights": True,
         },
     }
-    target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     torch.save(checkpoint, target)
     return {
@@ -594,7 +716,7 @@ def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer 
         return None, None, {"loaded": False, "reason": "checkpoint-missing", "path": str(target)}
     try:
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
-        if int(checkpoint.get("format_version", 0)) != 1:
+        if int(checkpoint.get("format_version", 0)) not in {1, 2}:
             raise ValueError("Unsupported checkpoint format.")
         tokenizer = BPETokenizer(**checkpoint["tokenizer"])
         config = checkpoint["config"]
@@ -823,7 +945,10 @@ def main() -> int:
     parser.add_argument("command", choices=("train", "test", "generate", "export"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
-    parser.add_argument("--steps", type=int, default=600)
+    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
+    parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
+    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
+    parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
     parser.add_argument(
@@ -855,6 +980,9 @@ def main() -> int:
             block_size=args.block_size,
             merge_count=args.merges,
             target_vocab_size=args.vocab_size,
+            seed=args.seed,
+            resume=args.resume,
+            schedule_steps=args.schedule_steps,
         )
         model, tokenizer, status = load_model(args.output)
         if model is None or tokenizer is None:
