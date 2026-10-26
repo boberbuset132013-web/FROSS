@@ -30,8 +30,8 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 # Train the FROSS student from random initialization on validated original and
 # teacher-generated text examples. Only text data is transferred: no teacher weights
 # are imported, and the teacher is not called during this build or during inference.
-# The default is 3000 cumulative training steps; override with a build argument if needed.
-ARG FROSS_TRAIN_STEPS=3000
+# Default to a bounded deployment build. Set FROSS_TRAIN_STEPS=3000 only when a long training build is acceptable.
+ARG FROSS_TRAIN_STEPS=600
 ARG FROSS_VOCAB_SIZE=5000
 ARG FROSS_TRAIN_THREADS=2
 
