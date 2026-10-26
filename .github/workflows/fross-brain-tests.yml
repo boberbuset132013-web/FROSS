@@ -176,6 +176,12 @@ jobs:
           assert "function frossLimitHistory(history" in worker
           assert 'maxlength="30000"' in page
           assert "history=recentChatContext(activeMessages,5)" in page
+          assert "const CHAT_TOKEN_LIMIT=1000000" in page and "estimateChatTokens" in page, "Chat storage should use a token-based limit rather than a message count"
+          assert 'name.textContent=item.role==="user"?"Ты":"FROSS"' in page, "Assistant label should not expose model details"
+          assert 'function showTyping(message="")' in page and '"Ищу в интернете"' in page and '"Составляю ответ"' in page, "Typing status should use concise user-facing phrases"
+          assert "message.show-actions .message-actions" in page, "Clicking a message should reveal its copy action"
+          assert "request.resource.data.tokenCount" in rules and "resource.data.userMessageCount < 60" not in rules, "Firestore must allow token-based chats without the old 60-message cutoff"
+          assert "MAX_REPLY_CHARS = 50000" in server
           assert "request.resource.data.content.size() <= 50000" in rules
           assert "request.resource.data.content.size() <= 50000" in rules
           assert '"crons": ["0 3 * * *"]' in wrangler
