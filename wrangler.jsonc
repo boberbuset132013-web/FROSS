@@ -6,10 +6,14 @@
   "workers_dev": true,
   "previews": {},
   "secrets": {
-    "required": ["FROSS_BRAIN_SERVICE_TOKEN"]
+    "required": [
+      "FROSS_BRAIN_SERVICE_TOKEN"
+    ]
   },
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": [
+      "0 3 * * *"
+    ]
   },
   "assets": {
     "directory": "./public",
@@ -22,5 +26,8 @@
       "/file/*",
       "/webhook*"
     ]
+  },
+  "ai": {
+    "binding": "AI"
   }
 }
