@@ -47,3 +47,41 @@ jobs:
           echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
       - name: Train small test model, export ONNX, and compare native logits
         run: python -m unittest discover -s tests -v
+      - name: Build and smoke-test the production Docker image
+        run: |
+          docker build --build-arg FROSS_TRAIN_STEPS=2 -f services/python-brain/Dockerfile -t fross-brain-smoke .
+          docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test fross-brain-smoke
+          cleanup() {
+            docker logs fross-brain-smoke || true
+            docker stop fross-brain-smoke >/dev/null 2>&1 || true
+            docker rm fross-brain-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:10000/health > "$RUNNER_TEMP/fross-health.json"; then
+              break
+            fi
+            sleep 2
+          done
+          test -s "$RUNNER_TEMP/fross-health.json"
+          python - "$RUNNER_TEMP/fross-health.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              health = json.load(stream)
+          assert health.get("ok") is True, health
+          assert health.get("version") == "1.3", health
+          assert health.get("inferenceBackend") == "cpp-onnx", health
+          assert health.get("cppRuntimeLoaded") is True, health
+          assert health.get("generationModelStatus", {}).get("loaded") is True, health
+          print("Docker health check passed: C++ ONNX inference is active.")
+          PY
+          curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
+          python - "$RUNNER_TEMP/fross-chat.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              response = json.load(stream)
+          assert response.get("handled") is True, response
+          assert "Привет" in response.get("reply", ""), response
+          assert response.get("generationModel") == "FROSS Transformer 1.3", response
+          print("Docker chat smoke test passed.")
+          PY
