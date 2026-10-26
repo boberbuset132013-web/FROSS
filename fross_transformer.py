@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Transformer 1.3: a small decoder-only language model trained from random weights.
+"""FROSS Transformer Brain 1.4: a small decoder-only language model trained from random weights.
 
 No pretrained checkpoint, hosted LLM, or downloaded model is used. A BPE tokenizer
 and a causal Transformer are learned from the repository's own text corpus.
@@ -23,7 +23,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-VERSION = "FROSS Transformer 1.3"
+VERSION = "FROSS Transformer 1.4"
 
 
 def _preferred_device() -> torch.device:
@@ -69,26 +69,43 @@ DEFAULT_CORPUS = Path(__file__).with_name("data") / "fross_corpus.jsonl"
 DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
 MAX_GENERATION_TOKENS = 5000
 
+# Sized for the 1 GiB / low-CPU Hostless runtime: wider and deeper than Brain 1.3
+# while keeping CPU training/inference practical. Embeddings are weight-tied.
 DEFAULT_CONFIG = {
     "block_size": 320,
-    "n_embd": 128,
-    "n_head": 4,
-    "n_layer": 5,
+    "n_embd": 192,
+    "n_head": 6,
+    "n_layer": 6,
     "dropout": 0.08,
 }
 
 
-class BPETokenizer:
-    """A compact character-seeded BPE tokenizer learned only from the local corpus."""
+_PRETOKEN_PATTERN = re.compile(r"\s+|[^\W_]+|_+|[^\w\s]+", flags=re.UNICODE)
 
-    def __init__(self, base_chars: str = BASE_CHARS, merges: list[tuple[int, int]] | None = None):
+
+class BPETokenizer:
+    """BPE tokenizer trained on word/whitespace/punctuation pieces.
+
+    New checkpoints use pretokenized=True so BPE never merges across word boundaries.
+    Older checkpoints omit that flag and retain their original character-stream encoding.
+    """
+
+    def __init__(
+        self,
+        base_chars: str = BASE_CHARS,
+        merges: list[tuple[int, int]] | None = None,
+        pretokenized: bool = False,
+        max_piece_chars: int = 24,
+    ):
         self.base_chars = "".join(dict.fromkeys(base_chars))
         self.char_to_id = {char: index + 4 for index, char in enumerate(self.base_chars)}
         self.merges: list[tuple[int, int]] = []
         self.pieces = list(SPECIAL_TOKENS) + list(self.base_chars)
+        self.pretokenized = bool(pretokenized)
+        self.max_piece_chars = max(2, int(max_piece_chars))
         for left, right in (merges or []):
             left, right = int(left), int(right)
-            if left >= len(self.pieces) or right >= len(self.pieces):
+            if left < 0 or right < 0 or left >= len(self.pieces) or right >= len(self.pieces):
                 raise ValueError("Invalid BPE merge in tokenizer checkpoint.")
             self.merges.append((left, right))
             self.pieces.append(self.pieces[left] + self.pieces[right])
@@ -98,26 +115,69 @@ class BPETokenizer:
         return len(self.pieces)
 
     @classmethod
-    def train(cls, texts: list[str], merge_count: int = 384, min_frequency: int = 2) -> "BPETokenizer":
-        tokenizer = cls()
-        sequences = [
-            [tokenizer.char_to_id.get(char, UNK_ID) for char in text]
-            for text in texts if text
-        ]
+    def train(
+        cls,
+        texts: list[str],
+        merge_count: int | None = None,
+        min_frequency: int | None = None,
+        target_vocab_size: int | None = None,
+        max_piece_chars: int = 24,
+    ) -> "BPETokenizer":
+        """Train a weighted BPE vocabulary, optionally targeting an exact vocabulary size."""
+        tokenizer = cls(pretokenized=True, max_piece_chars=max_piece_chars)
+        base_vocab_size = len(tokenizer.pieces)
+        if target_vocab_size is not None:
+            target_vocab_size = int(target_vocab_size)
+            if target_vocab_size < base_vocab_size:
+                raise ValueError(
+                    f"target_vocab_size must be at least {base_vocab_size} for the base character set"
+                )
+        if merge_count is None:
+            merge_count = (
+                max(0, target_vocab_size - base_vocab_size)
+                if target_vocab_size is not None else 384
+            )
+        merge_count = max(0, int(merge_count))
+        threshold = max(1, int(min_frequency if min_frequency is not None else (
+            1 if target_vocab_size is not None else 2
+        )))
+
+        # Count distinct pre-tokenized word-like pieces. We weight pair counts by
+        # corpus frequency, so repeated words influence BPE without repeatedly
+        # scanning identical character sequences.
+        segment_counts: Counter[str] = Counter()
+        for text in texts:
+            segment_counts.update(_PRETOKEN_PATTERN.findall(str(text)))
+        sequences: list[tuple[list[int], int]] = []
+        for segment, frequency in segment_counts.items():
+            sequence = [tokenizer.char_to_id.get(char, UNK_ID) for char in segment]
+            if sequence:
+                sequences.append((sequence, int(frequency)))
+
+        pieces = list(tokenizer.pieces)
         learned: list[tuple[int, int]] = []
-        for _ in range(max(0, int(merge_count))):
+        for _ in range(merge_count):
             counts: Counter[tuple[int, int]] = Counter()
-            for sequence in sequences:
-                counts.update(zip(sequence, sequence[1:]))
+            for sequence, weight in sequences:
+                for pair in zip(sequence, sequence[1:]):
+                    left, right = pair
+                    # Do not create trainable tokens that embed the literal <unk> marker.
+                    if left == UNK_ID or right == UNK_ID:
+                        continue
+                    if len(pieces[left]) + len(pieces[right]) <= tokenizer.max_piece_chars:
+                        counts[pair] += weight
             if not counts:
                 break
             pair, frequency = counts.most_common(1)[0]
-            if frequency < min_frequency:
+            if frequency < threshold:
                 break
+
+            left, right = pair
+            new_id = len(pieces)
             learned.append(pair)
-            new_id = 4 + len(tokenizer.base_chars) + len(learned) - 1
-            merged: list[list[int]] = []
-            for sequence in sequences:
+            pieces.append(pieces[left] + pieces[right])
+            merged_sequences: list[tuple[list[int], int]] = []
+            for sequence, weight in sequences:
                 result: list[int] = []
                 index = 0
                 while index < len(sequence):
@@ -127,25 +187,52 @@ class BPETokenizer:
                     else:
                         result.append(sequence[index])
                         index += 1
-                merged.append(result)
-            sequences = merged
-        return cls(tokenizer.base_chars, learned)
+                merged_sequences.append((result, weight))
+            sequences = merged_sequences
+
+        return cls(
+            tokenizer.base_chars,
+            learned,
+            pretokenized=True,
+            max_piece_chars=max_piece_chars,
+        )
 
     def encode(self, text: str) -> list[int]:
-        sequence = [self.char_to_id.get(char, UNK_ID) for char in str(text)]
-        for merge_index, pair in enumerate(self.merges):
-            new_id = 4 + len(self.base_chars) + merge_index
-            result: list[int] = []
-            index = 0
-            while index < len(sequence):
-                if index + 1 < len(sequence) and (sequence[index], sequence[index + 1]) == pair:
-                    result.append(new_id)
-                    index += 2
-                else:
-                    result.append(sequence[index])
-                    index += 1
-            sequence = result
-        return sequence
+        raw = str(text)
+        if not self.pretokenized:
+            # Backward compatibility for checkpoints trained before Brain 1.4.
+            sequence = [self.char_to_id.get(char, UNK_ID) for char in raw]
+            for merge_index, pair in enumerate(self.merges):
+                new_id = 4 + len(self.base_chars) + merge_index
+                result: list[int] = []
+                index = 0
+                while index < len(sequence):
+                    if index + 1 < len(sequence) and (sequence[index], sequence[index + 1]) == pair:
+                        result.append(new_id)
+                        index += 2
+                    else:
+                        result.append(sequence[index])
+                        index += 1
+                sequence = result
+            return sequence
+
+        encoded: list[int] = []
+        for segment in _PRETOKEN_PATTERN.findall(raw):
+            sequence = [self.char_to_id.get(char, UNK_ID) for char in segment]
+            for merge_index, pair in enumerate(self.merges):
+                new_id = 4 + len(self.base_chars) + merge_index
+                result = []
+                index = 0
+                while index < len(sequence):
+                    if index + 1 < len(sequence) and (sequence[index], sequence[index + 1]) == pair:
+                        result.append(new_id)
+                        index += 2
+                    else:
+                        result.append(sequence[index])
+                        index += 1
+                sequence = result
+            encoded.extend(sequence)
+        return encoded
 
     def decode(self, token_ids: list[int], stop_at_eos: bool = True) -> str:
         parts: list[str] = []
@@ -159,8 +246,12 @@ class BPETokenizer:
         return "".join(parts)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"base_chars": self.base_chars, "merges": [list(pair) for pair in self.merges]}
-
+        return {
+            "base_chars": self.base_chars,
+            "merges": [list(pair) for pair in self.merges],
+            "pretokenized": self.pretokenized,
+            "max_piece_chars": self.max_piece_chars,
+        }
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
@@ -376,7 +467,8 @@ def train_model(
     steps: int = 600,
     batch_size: int = 4,
     block_size: int = 320,
-    merge_count: int = 384,
+    merge_count: int | None = None,
+    target_vocab_size: int = 5000,
     seed: int = 1337,
 ) -> dict[str, Any]:
     if steps < 1 or batch_size < 1 or block_size < 32:
@@ -388,7 +480,12 @@ def train_model(
     random.shuffle(records)
     val_count = max(2, int(len(records) * 0.1))
     validation_records, train_records = records[:val_count], records[val_count:]
-    tokenizer = BPETokenizer.train([_format_record(row) for row in train_records], merge_count)
+    tokenizer = BPETokenizer.train(
+        [_format_record(row) for row in train_records],
+        merge_count=merge_count,
+        target_vocab_size=target_vocab_size if merge_count is None else None,
+        max_piece_chars=24,
+    )
     train_stream = _encode_stream(train_records, tokenizer)
     validation_stream = _encode_stream(validation_records, tokenizer)
     actual_block = min(block_size, int(DEFAULT_CONFIG["block_size"]))
@@ -467,6 +564,11 @@ def train_model(
             "training_steps": steps,
             "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
+            "requested_vocab_size": target_vocab_size if merge_count is None else None,
+            "vocab_target_reached": (
+                merge_count is not None or tokenizer.vocab_size == target_vocab_size
+            ),
+            "tokenizer_type": "word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe",
             "parameters": sum(p.numel() for p in model.parameters()),
             "trained_from_random_weights": True,
         },
@@ -719,7 +821,14 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=600)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
-    parser.add_argument("--merges", type=int, default=384)
+    parser.add_argument(
+        "--vocab-size", type=int, default=5000,
+        help="Target tokenizer vocabulary size; Brain 1.4 defaults to 5000 tokens.",
+    )
+    parser.add_argument(
+        "--merges", type=int, default=None,
+        help="Legacy override: train a fixed number of BPE merges instead of targeting vocab size.",
+    )
     parser.add_argument("--text", default="Объясни, как обучается нейросеть.")
     parser.add_argument("--max-new-tokens", type=int, default=None)
     parser.add_argument("--onnx-output", default=None)
@@ -740,6 +849,7 @@ def main() -> int:
             batch_size=args.batch_size,
             block_size=args.block_size,
             merge_count=args.merges,
+            target_vocab_size=args.vocab_size,
         )
         model, tokenizer, status = load_model(args.output)
         if model is None or tokenizer is None:
