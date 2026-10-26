@@ -30,8 +30,8 @@ struct Runtime {
         }
         options.SetIntraOpNumThreads(1);
         options.SetInterOpNumThreads(1);
-        options.SetExecutionMode(Ort::ExecutionMode::ORT_SEQUENTIAL);
-        options.SetGraphOptimizationLevel(Ort::GraphOptimizationLevel::ORT_ENABLE_ALL);
+        options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+        options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         session = std::make_unique<Ort::Session>(env, model_path, options);
 
         const auto input_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
