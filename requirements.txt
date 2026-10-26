@@ -1,0 +1,5 @@
+# Development and test dependencies. For production CPU deployment, use services/python-brain/Dockerfile.
+torch
+onnx>=1.16,<2
+onnxruntime>=1.20,<2
+numpy
