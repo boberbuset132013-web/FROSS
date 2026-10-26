@@ -18,7 +18,7 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 5)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 4)
         self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
-        self.assertEqual(transformer.MAX_GENERATION_TOKENS, 650)
+        self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
 
     def test_bpe_tokenizer_round_trip(self) -> None:
         samples = [
