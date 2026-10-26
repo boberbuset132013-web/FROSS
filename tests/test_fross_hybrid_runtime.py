@@ -58,6 +58,11 @@ class HybridRuntimeTests(unittest.TestCase):
         self.assertTrue(self.status["loaded"])
         self.assertGreater(self.metrics["parameters"], 0)
 
+    def test_bare_topic_expansion(self) -> None:
+        self.assertEqual(brain._expand_bare_topic("нейросеть"), "Объясни простыми словами, что такое нейросеть.")
+        self.assertEqual(brain._expand_bare_topic("Привет"), "Привет")
+        self.assertEqual(brain._expand_bare_topic("Почему?"), "Почему?")
+
     def test_social_greeting_is_stable(self) -> None:
         expected = "Привет! Я на связи. Что хочешь обсудить?"
         self.assertEqual(brain.generate_reply(self.model, self.tokenizer, "Привет", max_new_tokens=8), expected)
