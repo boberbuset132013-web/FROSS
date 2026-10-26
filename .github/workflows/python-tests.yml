@@ -34,3 +34,18 @@ jobs:
         run: python training/distillation/prepare_corpus.py --base data/fross_corpus.jsonl --teacher data/fross_teacher_corpus.jsonl --output "$RUNNER_TEMP/fross-training-corpus.jsonl"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  windows-powershell-parse:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Parse PowerShell training launcher script
+        shell: powershell
+        run: |
+          $path = Join-Path $PWD "training/windows/TRAIN_FROSS.ps1"
+          $source = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::ASCII)
+          $null = [scriptblock]::Create($source)
+          Write-Host "TRAIN_FROSS.ps1 parsed successfully."
+          if ($source -match "[^\x00-\x7F]") { throw "TRAIN_FROSS.ps1 must remain ASCII-only for Windows PowerShell 5.1." }
