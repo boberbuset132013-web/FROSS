@@ -34,7 +34,9 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 # Prefer the hosted checkpoint when it is a compatible FROSS 1.4 model.
 # If download/validation fails, the image still gets a bounded 600-step model.
 ARG FROSS_MODEL_URL=https://deliverbit.com/f/uMSeXVFA5w/fross-transformer
-ARG FROSS_REQUIRED_MODEL_STEPS=3000
+# Accept a compatible uploaded Brain 1.4 checkpoint from 600 steps upward to avoid
+# retraining during every deploy. The /health endpoint always reports its real step count.
+ARG FROSS_REQUIRED_MODEL_STEPS=600
 ARG FROSS_TRAIN_STEPS=600
 ARG FROSS_VOCAB_SIZE=5000
 ARG FROSS_TRAIN_THREADS=2
@@ -46,7 +48,7 @@ RUN python /app/training/distillation/prepare_corpus.py \
 
 RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
       echo "Attempting to download the hosted FROSS checkpoint..."; \
-      if curl -fL --silent --show-error --connect-timeout 8 --max-time 60 "${FROSS_MODEL_URL}" -o /app/fross-transformer.download; then \
+      if curl -fL --show-error --progress-bar --connect-timeout 8 --max-time 60 "${FROSS_MODEL_URL}" -o /app/fross-transformer.download; then \
         mv /app/fross-transformer.download /app/fross-transformer.pt; \
         if python -c "import torch, fross_transformer as t; c=torch.load('/app/fross-transformer.pt',map_location='cpu',weights_only=True); m=c.get('metrics',{}); assert c.get('version') == t.VERSION,c.get('version'); assert c.get('format_version') in (1,2); assert int(m.get('vocab_size',0)) == ${FROSS_VOCAB_SIZE},m; assert m.get('vocab_target_reached') is True,m; assert int(m.get('training_steps',0)) >= ${FROSS_REQUIRED_MODEL_STEPS},m; assert int(c.get('config',{}).get('block_size',0)) == 320; model,tok,status=t.load_model('/app/fross-transformer.pt'); assert model is not None and tok is not None,status; print('Compatible hosted checkpoint:',m.get('training_steps'),'steps')"; then \
           printf 'uploaded-checkpoint\n' > /app/fross-model-source.txt; \
