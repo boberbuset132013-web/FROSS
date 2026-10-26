@@ -539,9 +539,7 @@ def export_onnx_model(
     try:
         import onnx
         graph = onnx.load(str(target))
-        # ONNX Runtime 1.20.x (used by the lightweight C++ service image) supports
-        # ONNX IR up to version 10. The legacy exporter graph needs no newer IR
-        # features, so record the compatible version before validating and saving.
+        # Keep ONNX IR metadata on a widely supported version; this graph uses no newer IR features.
         graph.ir_version = min(int(graph.ir_version), 10)
         onnx.checker.check_model(graph)
         onnx.save(graph, str(target))
@@ -555,6 +553,30 @@ def export_onnx_model(
         "vocab_size": tokenizer.vocab_size,
         "onnx_ir_version": int(graph.ir_version),
     }
+
+
+
+def _expand_bare_topic(message: str) -> str:
+    """Make a one-word topic fit the explanatory question style used in training."""
+    original = str(message or "").strip()
+    normalized = re.sub(r"[.!?]+$", "", original.lower().replace("ё", "е")).strip()
+    if not normalized or len(normalized.split()) != 1:
+        return original
+    excluded = {
+        "да", "нет", "ага", "угу", "ок", "окей", "ладно", "хорошо", "хм",
+        "привет", "приветик", "здравствуй", "здравствуйте", "спасибо", "благодарю",
+        "пока", "стоп", "отмена", "помоги", "помогите", "сделай", "создай",
+        "напиши", "исправь", "удали", "добавь", "продолжи", "продолжай",
+        "переведи", "перевод", "почему", "зачем", "как", "что", "кто", "где",
+        "когда", "куда", "ты", "вы", "я", "мы", "он", "она", "они", "это",
+        "можно", "нельзя", "код", "тест",
+    }
+    if normalized in excluded or len(normalized) > 40:
+        return original
+    if not re.fullmatch(r"[a-zа-яё][a-zа-яё0-9_+#.-]*", normalized):
+        return original
+    return f"Объясни простыми словами, что такое {original.rstrip('.,!?')}."
+
 
 
 def _social_reply(message: str) -> str | None:
@@ -614,7 +636,7 @@ def generate_reply(
 
     block_size = int(model.config["block_size"])
     prompt_budget = max(1, block_size - 1)
-    latest_prompt_tokens = tokenizer.encode(_format_generation_prefix(message))
+    latest_prompt_tokens = tokenizer.encode(_format_generation_prefix(_expand_bare_topic(message)))
     if len(latest_prompt_tokens) > prompt_budget:
         # Preserve the beginning and ending (including the FROSS response prefix).
         prefix = tokenizer.encode("Пользователь: ")
