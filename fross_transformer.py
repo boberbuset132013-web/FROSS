@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Transformer 1.2: a small decoder-only language model trained from random weights.
+"""FROSS Transformer 1.3: a small decoder-only language model trained from random weights.
 
 No pretrained checkpoint, hosted LLM, or downloaded model is used. A BPE tokenizer
 and a causal Transformer are learned from the repository's own text corpus.
