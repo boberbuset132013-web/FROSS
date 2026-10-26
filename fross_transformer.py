@@ -124,7 +124,12 @@ class BPETokenizer:
         max_piece_chars: int = 24,
     ) -> "BPETokenizer":
         """Train a weighted BPE vocabulary, optionally targeting an exact vocabulary size."""
-        tokenizer = cls(pretokenized=True, max_piece_chars=max_piece_chars)
+        # Preserve every Unicode character present in the training text as a
+        # base token before BPE merges. This matters for scripts such as Chinese
+        # that are not in the small hand-written Latin/Cyrillic fallback alphabet.
+        corpus_characters = "".join(str(text) for text in texts)
+        base_chars = "".join(dict.fromkeys(BASE_CHARS + corpus_characters))
+        tokenizer = cls(base_chars=base_chars, pretokenized=True, max_piece_chars=max_piece_chars)
         base_vocab_size = len(tokenizer.pieces)
         if target_vocab_size is not None:
             target_vocab_size = int(target_vocab_size)
