@@ -50,11 +50,18 @@ RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
       echo "Attempting to download the hosted FROSS checkpoint..."; \
       if curl -fL --show-error --progress-bar --connect-timeout 8 --max-time 60 "${FROSS_MODEL_URL}" -o /app/fross-transformer.download; then \
         mv /app/fross-transformer.download /app/fross-transformer.pt; \
-        if python -c "import torch, fross_transformer as t; c=torch.load('/app/fross-transformer.pt',map_location='cpu',weights_only=True); m=c.get('metrics',{}); assert c.get('version') == t.VERSION,c.get('version'); assert c.get('format_version') in (1,2); assert int(m.get('vocab_size',0)) == ${FROSS_VOCAB_SIZE},m; assert m.get('vocab_target_reached') is True,m; assert int(m.get('training_steps',0)) >= ${FROSS_REQUIRED_MODEL_STEPS},m; assert int(c.get('config',{}).get('block_size',0)) == 320; model,tok,status=t.load_model('/app/fross-transformer.pt'); assert model is not None and tok is not None,status; print('Compatible hosted checkpoint:',m.get('training_steps'),'steps')"; then \
-          printf 'uploaded-checkpoint\n' > /app/fross-model-source.txt; \
+        printf 'uploaded-checkpoint\n' > /app/fross-model-source.candidate; \
+        if python /app/training/distillation/verify_checkpoint.py \
+          --checkpoint /app/fross-transformer.pt \
+          --model-source /app/fross-model-source.candidate \
+          --required-model-steps "${FROSS_REQUIRED_MODEL_STEPS}" \
+          --train-steps "${FROSS_TRAIN_STEPS}" \
+          --vocab-size "${FROSS_VOCAB_SIZE}"; then \
+          mv /app/fross-model-source.candidate /app/fross-model-source.txt; \
+          echo "Hosted FROSS checkpoint accepted."; \
         else \
-          rm -f /app/fross-transformer.pt; \
-          echo "Hosted checkpoint is incompatible or has fewer than ${FROSS_REQUIRED_MODEL_STEPS} steps; falling back to repository training."; \
+          rm -f /app/fross-transformer.pt /app/fross-model-source.candidate; \
+          echo "Hosted checkpoint validation failed; falling back to repository training."; \
         fi; \
       else \
         rm -f /app/fross-transformer.download; \
