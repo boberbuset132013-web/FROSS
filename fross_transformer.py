@@ -607,7 +607,7 @@ def generate_reply(
             context_parts.append(f"{role}: {content}")
 
     block_size = int(model.config["block_size"])
-    prompt_budget = max(32, block_size - 1)
+    prompt_budget = max(1, block_size - 1)
     latest_prompt_tokens = tokenizer.encode(_format_generation_prefix(message))
     if len(latest_prompt_tokens) > prompt_budget:
         # Preserve the beginning and ending (including the FROSS response prefix).
