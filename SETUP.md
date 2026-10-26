@@ -11,7 +11,7 @@
 
 При первом входе через Google аккаунт создаётся автоматически. Через email пользователь может зарегистрироваться, придумать пароль, войти позже и запросить письмо для сброса пароля. SMS/номер телефона не используются.
 
-## 2. FROSS Transformer 1.2 — собственная генеративная модель
+## 2. FROSS Transformer Brain 1.4 — собственная генеративная модель
 
 FROSS использует собственный decoder-only Transformer из `fross_transformer.py`. Готовые языковые модели, скачанные веса и внешние LLM API не подключаются. BPE-токенизатор строится по своему корпусу, веса инициализируются случайно и обучаются через cross-entropy, backpropagation и AdamW. В модели пять Transformer-блоков с четырьмя attention-головами в каждом; входной контекст — до 320 токенов, а длина генерации — до 5 000 новых токенов. Также есть causal multi-head self-attention (Query/Key/Value), embeddings, feed-forward слои, residual connections и LayerNorm.
 
@@ -28,7 +28,7 @@ Python-мозг уже собирается как Docker-приложение `
 3. В Cloudflare Dashboard открой **Workers & Pages → fross → Settings → Variables and Secrets** и добавь **Secret** с точно таким же именем `FROSS_BRAIN_SERVICE_TOKEN` и тем же значением. Не создавай обычную открытую Text variable для секрета.
    **Важно:** после сохранения Cloudflare намеренно скрывает значение секрета в интерфейсе — это не означает, что он удалился. В `wrangler.jsonc` указано, что этот секрет обязателен; развёртывание через Wrangler должно завершиться ошибкой, если секрет действительно отсутствует. Если после Deploy `pythonBrainConfigured` становится `false`, проверь, что открыт именно Worker `fross` и нужное окружение, затем заново добавь Secret и нажми **Deploy**.
 4. Если адрес Hostless изменится, добавь Text variable `FROSS_PYTHON_BRAIN_URL` со значением полного HTTPS URL до маршрута `/chat`, например `https://имя-приложения.hostless.app/chat`. При текущем адресе это необязательно, потому что Worker уже содержит безопасный URL по умолчанию.
-5. Выполни **Deploy** Worker в Cloudflare, если он не публикуется автоматически после обновления кода. В Hostless открой `https://fross-python-brain.hostless.app/health`: нужно увидеть `"generationModelLoaded": true` и `"generationModel": "FROSS Transformer 1.2"`.
+5. Выполни **Deploy** Worker в Cloudflare, если он не публикуется автоматически после обновления кода. В Hostless открой `https://fross-python-brain.hostless.app/health`: нужно увидеть `"generationModelLoaded": true` и `"generationModel": "FROSS Transformer 1.4"`.
 6. Проверь `https://fross.boberbuset132013.workers.dev/api/health`. Ожидаются `"pythonBrainConfigured": true`, а внутри `pythonBrainHealth` — `"reachable": true` и `"generationModelLoaded": true`. Если `pythonBrainConfigured` равно `false`, проверь, что одинаковый токен установлен в Hostless и Cloudflare. Никогда не отправляй значение секрета в чат или логи.
 
 ## 4. Память и фоновая библиотека знаний
@@ -69,14 +69,14 @@ Python-мозг уже собирается как Docker-приложение `
 
 3. Закоммить изменения `data/fross_corpus.jsonl` в ветку `main`.
 
-4. В Hostless открой приложение `fross-python-brain` и запусти **Rebuild / Redeploy** с последним коммитом. Его `services/python-brain/Dockerfile` заново обучает собственную модель на корпусе при сборке образа: сейчас задано 3000 шагов, batch size 4, контекст до 320 токенов, 4 attention-головы и 5 Transformer-блоков. Это обучение **с нуля**, а не продолжение с предыдущих весов. Убедись, что именно образ Python-сервиса пересобрался успешно.
+4. В Hostless открой приложение `fross-python-brain` и запусти **Rebuild / Redeploy** с последним коммитом. Его `services/python-brain/Dockerfile` заново обучает собственную модель на корпусе при сборке образа: для Brain 1.4 на первом этапе задано 600 шагов, batch size 4, контекст 320 токенов, словарь 5000 токенов, размер представления 192, 6 attention-голов и 6 Transformer-блоков. После проверки качества отдельными этапами планируются 3000, затем 5000 шагов. Это обучение **с нуля**, а не продолжение с предыдущих весов. Убедись, что именно образ Python-сервиса пересобрался успешно.
 
 5. После сборки открой `https://fross-python-brain.hostless.app/health` и проверь `generationModelLoaded: true`, а также `training_examples` и `training_steps` в статусе модели. Затем проверь несколько запросов, которых не было в обучающих примерах, и оцени не только гладкость текста, но и правильность ответа.
 
 Для локального запуска обучения (при установленном Python и PyTorch) используется команда, аналогичная Dockerfile:
 
 ~~~bash
-python fross_transformer.py train --corpus data/fross_corpus.jsonl --output fross-transformer.pt --steps 3000 --batch-size 4 --block-size 320 --merges 384
+python fross_transformer.py train --corpus data/fross_corpus.jsonl --output fross-transformer.pt --steps 600 --batch-size 4 --block-size 320 --vocab-size 5000
 ~~~
 
 Для быстрой диагностики перед полноценным обучением:
