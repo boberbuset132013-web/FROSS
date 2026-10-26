@@ -139,5 +139,67 @@ class TransformerTests(unittest.TestCase):
         self.assertNotIn("\n\n\n", cleaned)
 
 
+    def test_training_resumes_from_saved_optimizer_and_rng_state(self) -> None:
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus_path = root / "corpus.jsonl"
+            checkpoint_path = root / "checkpoint.pt"
+            records = [
+                {
+                    "user": f"вопрос {i}: объясни Python функции и массивы",
+                    "assistant": f"ответ {i}: функция выполняет задачу и возвращает результат",
+                }
+                for i in range(40)
+            ]
+            corpus_path.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in records),
+                encoding="utf-8",
+            )
+            tiny_config = {
+                "block_size": 32,
+                "n_embd": 16,
+                "n_head": 4,
+                "n_layer": 1,
+                "dropout": 0.0,
+            }
+            with patch.dict(transformer.DEFAULT_CONFIG, tiny_config, clear=True):
+                first = transformer.train_model(
+                    corpus_path,
+                    checkpoint_path,
+                    steps=1,
+                    batch_size=1,
+                    block_size=32,
+                    target_vocab_size=256,
+                    seed=91,
+                    schedule_steps=2,
+                )
+                self.assertEqual(first["training_steps"], 1)
+                self.assertEqual(first["steps_this_run"], 1)
+
+                continued = transformer.train_model(
+                    corpus_path,
+                    checkpoint_path,
+                    steps=2,
+                    batch_size=1,
+                    block_size=32,
+                    target_vocab_size=256,
+                    seed=91,
+                    resume=True,
+                    schedule_steps=2,
+                )
+                self.assertEqual(continued["training_steps"], 2)
+                self.assertEqual(continued["steps_this_run"], 1)
+                self.assertEqual(continued["schedule_steps"], 2)
+
+                model, tokenizer, status = transformer.load_model(checkpoint_path)
+                self.assertIsNotNone(model)
+                self.assertIsNotNone(tokenizer)
+                self.assertTrue(status["loaded"])
+
+
 if __name__ == "__main__":
     unittest.main()
