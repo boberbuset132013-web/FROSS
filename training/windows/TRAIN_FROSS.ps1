@@ -15,37 +15,37 @@ $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $logDir = Join-Path $workDir "logs"
 
 if (-not (Test-Path $pythonScript)) {
-    throw "Не найден fross_transformer.py. Скачай и распакуй весь репозиторий, затем запускай BAT из папки training\windows."
+    throw "Missing fross_transformer.py. Extract the whole repository ZIP and run this from training\windows."
 }
 if (-not (Test-Path $corpus)) {
-    throw "Не найден корпус data\fross_corpus.jsonl."
+    throw "Missing data\fross_corpus.jsonl."
 }
 
 New-Item -ItemType Directory -Force -Path $workDir, $logDir | Out-Null
 
 if (-not (Test-Path $pythonExe)) {
-    Write-Host "Создаю отдельное Python-окружение для локального обучения..."
+    Write-Host "Creating an isolated Python environment for local training..."
     $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pyLauncher) {
         & $pyLauncher.Source -3 -m venv $venvDir
-        if ($LASTEXITCODE -ne 0) { throw "Не удалось создать venv через py -3." }
+        if ($LASTEXITCODE -ne 0) { throw "Could not create the venv using py -3." }
     } else {
         $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $pythonCommand) { throw "Python не найден. Установи Python 3.12+ с python.org и повтори." }
+        if (-not $pythonCommand) { throw "Python was not found. Install Python 3.12+ from python.org and retry." }
         & $pythonCommand.Source -m venv $venvDir
-        if ($LASTEXITCODE -ne 0) { throw "Не удалось создать venv через python." }
+        if ($LASTEXITCODE -ne 0) { throw "Could not create the venv using python." }
     }
 }
 
-Write-Host "Python: $pythonExe"
+Write-Host "Python executable: $pythonExe"
 & $pythonExe -m pip install --upgrade pip
-if ($LASTEXITCODE -ne 0) { throw "Не удалось обновить pip." }
+if ($LASTEXITCODE -ne 0) { throw "Could not upgrade pip." }
 
 & $pythonExe -c "import torch" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Устанавливаю CPU-версию PyTorch. Скачивание может занять некоторое время..."
+    Write-Host "Installing CPU-only PyTorch..."
     & $pythonExe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-    if ($LASTEXITCODE -ne 0) { throw "Не удалось установить PyTorch CPU. Проверь интернет и версию Python." }
+    if ($LASTEXITCODE -ne 0) { throw "Could not install CPU PyTorch. Check internet access and your Python version." }
 }
 
 $env:FROSS_DEVICE = "cpu"
@@ -54,7 +54,7 @@ $env:FROSS_TORCH_THREADS = "2"
 switch ($Stage) {
     "600" {
         if (Test-Path $checkpoint) {
-            throw "Чекпоинт уже существует: $checkpoint. Чтобы не потерять обучение, запусти CONTINUE_TO_3000.bat или перемести этот файл вручную."
+            throw "A checkpoint already exists at $checkpoint. To avoid overwriting work, run CONTINUE_TO_3000.bat or move the checkpoint manually."
         }
         $arguments = @(
             $pythonScript, "train",
@@ -69,11 +69,11 @@ switch ($Stage) {
         )
         $logPath = Join-Path $logDir "stage-600.log"
         Write-Host ""
-        Write-Host "Этап 1/2: обучение с нуля до 600 шагов; расписание рассчитано на 3000."
+        Write-Host "Stage 1/2: training from scratch to 600 steps with a 3000-step schedule."
     }
     "3000" {
         if (-not (Test-Path $checkpoint)) {
-            throw "Чекпоинт не найден. Сначала успешно запусти START_TRAIN_600.bat."
+            throw "Checkpoint not found. Run START_TRAIN_600.bat successfully first."
         }
         $arguments = @(
             $pythonScript, "train",
@@ -89,37 +89,37 @@ switch ($Stage) {
         )
         $logPath = Join-Path $logDir "stage-3000.log"
         Write-Host ""
-        Write-Host "Этап 2/2: продолжаю с 600 до суммарных 3000 шагов."
+        Write-Host "Stage 2/2: resuming from 600 to 3000 total steps."
     }
     "check" {
         if (-not (Test-Path $checkpoint)) {
-            throw "Чекпоинт не найден. Сначала заверши обучение."
+            throw "Checkpoint not found. Complete training first."
         }
         $arguments = @(
             $pythonScript, "generate",
             "--output", $checkpoint,
-            "--text", "Привет, FROSS! Объясни простыми словами, что такое нейросеть.",
+            "--text", "Hello FROSS! Explain what a neural network is in simple terms.",
             "--max-new-tokens", "64"
         )
         $logPath = Join-Path $logDir "checkpoint-check.log"
         Write-Host ""
-        Write-Host "Проверяю, что чекпоинт открывается и модель генерирует ответ."
+        Write-Host "Checking that the checkpoint loads and the model can generate a reply."
     }
 }
 
-Write-Host "Лог: $logPath"
+Write-Host "Log file: $logPath"
 & $pythonExe @arguments 2>&1 | Tee-Object -FilePath $logPath
 if ($LASTEXITCODE -ne 0) {
-    throw "Команда завершилась с ошибкой. Скопируй лог $logPath для диагностики."
+    throw "The command failed. Copy the log file at $logPath for diagnosis."
 }
 
 if ($Stage -eq "600") {
     Write-Host ""
-    Write-Host "Этап 600 завершён. Следующий шаг — CONTINUE_TO_3000.bat."
+    Write-Host "Stage 600 complete. Next, run CONTINUE_TO_3000.bat."
 } elseif ($Stage -eq "3000") {
     Write-Host ""
-    Write-Host "Готово: чекпоинт обучен до суммарных 3000 шагов: $checkpoint"
+    Write-Host "Done. Checkpoint trained to 3000 total steps: $checkpoint"
 } else {
     Write-Host ""
-    Write-Host "Проверка завершена. Выше показан тестовый ответ модели."
+    Write-Host "Checkpoint check complete. The generated sample is shown above."
 }
