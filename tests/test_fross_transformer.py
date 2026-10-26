@@ -44,7 +44,7 @@ class TransformerTests(unittest.TestCase):
         self.assertTrue(tokenizer.pretokenized)
         for piece in tokenizer.pieces[4:]:
             self.assertFalse(any(ch.isspace() for ch in piece) and any(ch.isalpha() for ch in piece))
-        sample = "Привет, FROSS!\\nСлово и word42."
+        sample = "Привет, FROSS!\nСлово и word42."
         self.assertEqual(tokenizer.decode(tokenizer.encode(sample)), sample)
 
     def test_generation_prefix_matches_training_format(self) -> None:
