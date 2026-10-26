@@ -1,0 +1,49 @@
+name: FROSS hybrid brain tests
+
+on:
+  pull_request:
+    paths:
+      - "fross_transformer.py"
+      - "services/python-brain/**"
+      - "tests/**"
+      - "data/fross_corpus.jsonl"
+      - ".github/workflows/fross-hybrid-brain.yml"
+  push:
+    branches: [main]
+    paths:
+      - "fross_transformer.py"
+      - "services/python-brain/**"
+      - "tests/**"
+      - "data/fross_corpus.jsonl"
+      - ".github/workflows/fross-hybrid-brain.yml"
+
+jobs:
+  train-export-native-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install CPU training and ONNX test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy
+      - name: Download pinned ONNX Runtime C++ library
+        run: |
+          curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/onnxruntime-linux-x64-1.20.1/lib:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+      - name: Compile C++ runtime
+        run: |
+          g++ -std=c++17 -O2 -fPIC -shared services/python-brain/cpp_runtime.cpp \
+            -I"$RUNNER_TEMP/onnxruntime-linux-x64-1.20.1/include" \
+            -L"$RUNNER_TEMP/onnxruntime-linux-x64-1.20.1/lib" -lonnxruntime \
+            -Wl,-rpath,"$RUNNER_TEMP/onnxruntime-linux-x64-1.20.1/lib" \
+            -o "$RUNNER_TEMP/libfross_cpp.so"
+          echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
+      - name: Train small test model, export ONNX, and compare native logits
+        run: python -m unittest discover -s tests -v
