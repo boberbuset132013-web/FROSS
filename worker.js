@@ -10,6 +10,17 @@ const FROSS_MAX_RESULTS_PER_PROVIDER = 5;
 const FROSS_DEFAULT_PYTHON_BRAIN_URL = "https://fross-python-brain.hostless.app/chat";
 const FROSS_MIN_BRAIN_TOKEN_LENGTH = 16;
 
+const FROSS_TEACHER_TRAINING_MODELS = Object.freeze([
+  { id: "@cf/zai-org/glm-4.7-flash", name: "GLM 4.7 Flash" },
+  { id: "@cf/google/gemma-4-26b-a4b-it", name: "Gemma 4 26B" },
+  { id: "@cf/nvidia/nemotron-3-120b-a12b", name: "Nemotron 3 120B" },
+  { id: "@cf/qwen/qwen3-30b-a3b-fp8", name: "Qwen 3 30B" },
+  { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", name: "Llama 3.3 70B Fast" },
+  { id: "@cf/mistralai/mistral-small-3.1-24b-instruct", name: "Mistral Small 3.1" },
+  { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
+  { id: "@cf/openai/gpt-oss-120b", name: "GPT-OSS 120B" }
+]);
+
 // ================= ОСНОВНОЙ ОБРАБОТЧИК =================
 export default {
   async scheduled(controller, env, ctx) {
@@ -53,6 +64,8 @@ export default {
         chatMemoryUserMessages: FROSS_MAX_HISTORY_USER_MESSAGES
       }, 200, request);
     });
+    if (path === "/api/teacher-training/status") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStatus(request, env));
+    if (path === "/api/teacher-training/step") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStep(request, env));
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
     if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
     if (path === "/api/auto-study") return frossApiGuard(path, request, () => handleFrossAutoStudy(request, env, ctx));
@@ -1328,6 +1341,191 @@ async function handleFrossAutoStudy(request, env, ctx) {
   } finally {
     if (reservation.fallbackMode) frossFallbackStudyInProgress = false;
   }
+}
+
+async function handleFrossTeacherTrainingStatus(request, env) {
+  if (request.method !== "GET") {
+    return frossJson({ ok: false, error: "Use GET /api/teacher-training/status." }, 405, request);
+  }
+  return frossJson({
+    ok: true,
+    aiBindingConfigured: Boolean(env.AI && typeof env.AI.run === "function"),
+    trainingTokenConfigured: typeof env.FROSS_TRAINING_TOKEN === "string" && env.FROSS_TRAINING_TOKEN.trim().length >= 32,
+    models: FROSS_TEACHER_TRAINING_MODELS,
+    dailyQuotaNote: "Model fallback handles per-model capacity; the account-wide daily Workers AI allocation is shared by all models."
+  }, 200, request);
+}
+
+function frossConstantTimeSecretEquals(expected, actual) {
+  if (typeof expected !== "string" || typeof actual !== "string" || expected.length < 32 || expected.length !== actual.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ actual.charCodeAt(i);
+  return mismatch === 0;
+}
+
+function frossTeacherQuotaExceeded(message) {
+  return /(neuron|daily.{0,30}(quota|limit|allocation)|(?:quota|allocation).{0,30}(daily|exceed|limit)|exceeded.{0,30}(free|daily).{0,30}(allocation|quota)|insufficient.{0,20}credits|account.{0,20}(quota|allocation)|usage.{0,20}limit)/i.test(String(message || ""));
+}
+
+function frossTeacherExtractText(result) {
+  if (typeof result === "string") return result;
+  if (typeof result?.response === "string") return result.response;
+  if (typeof result?.output_text === "string") return result.output_text;
+  const content = result?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map(item => typeof item?.text === "string" ? item.text : "").join("\n");
+  return "";
+}
+
+function frossTeacherParseExamples(raw, count) {
+  if (typeof raw !== "string" || !raw.trim()) throw new Error("Модель вернула пустой ответ.");
+  const fence = String.fromCharCode(96).repeat(3);
+  let text = raw.trim();
+  if (text.startsWith(fence)) {
+    text = text.replace(new RegExp("^" + fence + "(?:json)?\\s*", "i"), "");
+    text = text.replace(new RegExp("\\s*" + fence + "$"), "").trim();
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const firstObject = text.indexOf("{");
+    const lastObject = text.lastIndexOf("}");
+    const firstArray = text.indexOf("[");
+    const lastArray = text.lastIndexOf("]");
+    const candidate = firstObject >= 0 && lastObject > firstObject
+      ? text.slice(firstObject, lastObject + 1)
+      : (firstArray >= 0 && lastArray > firstArray ? text.slice(firstArray, lastArray + 1) : "");
+    if (!candidate) throw new Error("Модель вернула не JSON.");
+    try { parsed = JSON.parse(candidate); }
+    catch { throw new Error("Не удалось разобрать JSON модели."); }
+  }
+  const candidates = Array.isArray(parsed) ? parsed : parsed?.examples;
+  if (!Array.isArray(candidates)) throw new Error("В JSON модели отсутствует массив examples.");
+  const output = [];
+  const seen = new Set();
+  for (const item of candidates) {
+    if (!item || typeof item.user !== "string" || typeof item.assistant !== "string") continue;
+    const user = item.user.replace(/\s+/g, " ").trim();
+    const assistant = item.assistant.trim();
+    if (user.length < 8 || user.length > 1200 || assistant.length < 30 || assistant.length > 5000) continue;
+    const key = user.toLowerCase().replace(/ё/g, "е");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({ user, assistant });
+    if (output.length >= count) break;
+  }
+  if (!output.length) throw new Error("Модель не вернула ни одной подходящей пары вопрос–ответ.");
+  return output;
+}
+
+async function handleFrossTeacherTrainingStep(request, env) {
+  if (request.method !== "POST") {
+    return frossJson({ ok: false, error: "Use POST /api/teacher-training/step." }, 405, request);
+  }
+  const expected = typeof env.FROSS_TRAINING_TOKEN === "string" ? env.FROSS_TRAINING_TOKEN.trim() : "";
+  if (expected.length < 32) {
+    return frossJson({
+      ok: false,
+      code: "training_token_not_configured",
+      error: "Сначала добавь секрет FROSS_TRAINING_TOKEN (не менее 32 символов) в Cloudflare Worker fross → Settings → Variables and Secrets, затем опубликуй Worker."
+    }, 503, request);
+  }
+  const authorization = request.headers.get("Authorization") || "";
+  const provided = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  if (!frossConstantTimeSecretEquals(expected, provided)) {
+    return frossJson({ ok: false, code: "training_auth_failed", error: "Ключ запуска обучения не совпадает с секретом Worker." }, 401, request);
+  }
+  if (!env.AI || typeof env.AI.run !== "function") {
+    return frossJson({
+      ok: false,
+      code: "ai_binding_not_configured",
+      error: "Workers AI binding не настроен. Добавь binding AI в wrangler.jsonc и опубликуй Worker."
+    }, 503, request);
+  }
+
+  let body;
+  try { body = await request.json(); }
+  catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
+
+  const topic = frossClean(typeof body?.topic === "string" ? body.topic : "").slice(0, 160);
+  const requestedCount = Number(body?.count);
+  const count = Math.max(1, Math.min(4, Number.isFinite(requestedCount) ? Math.floor(requestedCount) : 3));
+  const requestedStart = Number(body?.modelIndex);
+  const startValue = Number.isFinite(requestedStart) ? Math.floor(requestedStart) : 0;
+  const startIndex = ((startValue % FROSS_TEACHER_TRAINING_MODELS.length) + FROSS_TEACHER_TRAINING_MODELS.length) % FROSS_TEACHER_TRAINING_MODELS.length;
+  if (topic.length < 3) return frossJson({ ok: false, error: "Тема должна содержать не менее трёх символов." }, 400, request);
+
+  const systemPrompt = [
+    "Ты — модель-учитель, которая создаёт качественные текстовые учебные примеры для более маленькой модели-ученика FROSS.",
+    "Это подготовка данных supervised fine-tuning: сформируй примеры вопрос-ответ. Не обучайся сам и не передавай веса.",
+    "Выводи только валидный JSON-объект вида {\"examples\":[{\"user\":\"...\",\"assistant\":\"...\"}]}, без markdown и без текста вокруг.",
+    "Каждый user — естественный самостоятельный запрос на русском языке (иногда короткая письменная языковая задача по теме); assistant — точный, полезный, связный ответ.",
+    "Вариируй формулировки, намерения и длину; добавляй небольшой проверяемый пример, когда полезно.",
+    "Для кода не утверждай, что запускал его, если это не так. Не выдумывай актуальные факты, источники, ссылки или частные данные.",
+    "Не повторяй один и тот же вопрос; не добавляй пароль, токен, личные данные, вредоносные инструкции или опасные советы.",
+    "Ответ должен быть достаточно подробным, чтобы модель могла научиться полезному поведению, но обычно не длиннее 700 слов."
+  ].join(" ");
+
+  const userPrompt = "Создай ровно " + count + " различных обучающих примеров по теме: " + topic + ". " +
+    "Проверь, что каждый ответ непосредственно отвечает на вопрос. Верни только JSON с массивом examples.";
+
+  const failures = [];
+  for (let offset = 0; offset < FROSS_TEACHER_TRAINING_MODELS.length; offset++) {
+    const modelIndex = (startIndex + offset) % FROSS_TEACHER_TRAINING_MODELS.length;
+    const model = FROSS_TEACHER_TRAINING_MODELS[modelIndex];
+    try {
+      const result = await env.AI.run(model.id, {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.35,
+        top_p: 0.9,
+        max_tokens: 2600
+      });
+      if (result && result.success === false) {
+        const modelError = Array.isArray(result.errors) ? result.errors.map(item => item?.message || item?.code || "").join("; ") : "Модель вернула ошибку.";
+        throw new Error(modelError || "Модель вернула ошибку.");
+      }
+      const responseText = frossTeacherExtractText(result);
+      const examples = frossTeacherParseExamples(responseText, count);
+      return frossJson({
+        ok: true,
+        model: model.id,
+        modelName: model.name,
+        attemptedModels: failures.map(item => item.model).concat(model.id),
+        nextModelIndex: (modelIndex + 1) % FROSS_TEACHER_TRAINING_MODELS.length,
+        topic,
+        requestedCount: count,
+        examples,
+        generatedCount: examples.length,
+        note: "Учитель создал текстовые примеры. Веса FROSS ещё не изменялись."
+      }, 200, request);
+    } catch (error) {
+      const message = String(error?.message || error || "Unknown Workers AI error").replace(/\s+/g, " ").slice(0, 220);
+      if (frossTeacherQuotaExceeded(message)) {
+        console.warn("[FROSS teacher-training] account quota stopped", JSON.stringify({ model: model.id, message }));
+        return frossJson({
+          ok: false,
+          code: "account_quota_exhausted",
+          error: "Похоже, исчерпан общий дневной лимит/квота Workers AI аккаунта. Переключение моделей этот лимит не обойдёт. Уже сохранённые примеры останутся в браузере; продолжи после сброса лимита или проверь usage в Cloudflare.",
+          model: model.id,
+          message
+        }, 429, request);
+      }
+      failures.push({ model: model.id, message });
+      console.warn("[FROSS teacher-training] model failed, trying fallback", JSON.stringify({ model: model.id, message }));
+    }
+  }
+
+  return frossJson({
+    ok: false,
+    code: "all_teacher_models_unavailable",
+    error: "Все выбранные модели учителя сейчас недоступны. Данные в браузере сохранены; можно повторить запуск позже.",
+    failures,
+    nextModelIndex: (startIndex + 1) % FROSS_TEACHER_TRAINING_MODELS.length
+  }, 503, request);
 }
 
 async function handleFrossTrain(request, env) {
