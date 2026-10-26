@@ -39,12 +39,15 @@ class TransformerTests(unittest.TestCase):
 
         # Enough distinct word forms to test an exact target without a large training run.
         words = [f"слово{a}{b}word" for a, b in itertools.product(string.ascii_lowercase, repeat=2)]
+        words.extend(["你好，世界", "谢谢你", "常见"])
         tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=256)
         self.assertEqual(tokenizer.vocab_size, 256)
         self.assertTrue(tokenizer.pretokenized)
         for piece in tokenizer.pieces[4:]:
             self.assertFalse(any(ch.isspace() for ch in piece) and any(ch.isalpha() for ch in piece))
-        sample = "Привет, FROSS!\nСлово и word42."
+        self.assertIn("你", tokenizer.char_to_id)
+        self.assertIn("好", tokenizer.char_to_id)
+        sample = "Привет, FROSS!\nСлово и word42. 你好，世界"
         self.assertEqual(tokenizer.decode(tokenizer.encode(sample)), sample)
 
     def test_generation_prefix_matches_training_format(self) -> None:
