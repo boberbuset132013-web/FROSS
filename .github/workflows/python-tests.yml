@@ -28,6 +28,22 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Install ONNX test dependencies
         run: python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy
+      - name: Validate JavaScript and Wrangler configuration
+        run: |
+          node --input-type=module --check < worker.js
+          python -c "import json; json.load(open('wrangler.jsonc', encoding='utf-8'))"
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          html = Path("public/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.DOTALL | re.IGNORECASE)
+          if len(scripts) != 1:
+              raise SystemExit(f"Expected one inline script; found {len(scripts)}")
+          out = Path(os.environ["RUNNER_TEMP"]) / "fross-training-ui.js"
+          out.write_text(scripts[0], encoding="utf-8")
+          print(f"Extracted temporary UI script to {out}")
+          PY
+          node --check "$RUNNER_TEMP/fross-training-ui.js"
       - name: Compile Python sources
         run: python -m compileall -q fross_transformer.py training/distillation tests
       - name: Validate and merge teacher corpus
