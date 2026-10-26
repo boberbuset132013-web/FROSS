@@ -248,6 +248,11 @@ body.light-theme .knowledge-item-meta{color:#71768a}
 body.light-theme .knowledge-delete{background:#fff;color:#4b4d61;border-color:#d7d9e6}
 @media(max-width:520px){.training-form{flex-direction:column;align-items:stretch}.training-run{width:100%}.training-modal-card{padding:14px}}
 
+/* Brain training is local-only now; hide browser-side learning controls. */
+#publicKnowledgeBtn,
+#settingsLearningBtn,
+#trainingModal { display: none !important; }
+
 /* FROSS visual refresh: ambient depth, restrained motion, clearer focus states */
 :root{
   --fross-accent:#a78bfa;
