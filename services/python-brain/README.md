@@ -23,8 +23,8 @@ The image trains the model during the build, exports `/app/fross-transformer.onn
 
 Open `/health` on the Python brain service. A successful hybrid deployment should report:
 
-- `version: "1.3"`
-- `generationModel: "FROSS Transformer 1.3"`
+- `version: "1.4"`
+- `generationModel: "FROSS Transformer 1.4"`
 - `inferenceBackend: "cpp-onnx"`
 - `cppRuntimeLoaded: true`
 - `generationModelStatus.loaded: true`
