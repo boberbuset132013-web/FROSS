@@ -566,7 +566,7 @@ def train_model(
             "vocab_size": tokenizer.vocab_size,
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
             "vocab_target_reached": (
-                merge_count is not None or tokenizer.vocab_size == target_vocab_size
+                tokenizer.vocab_size == target_vocab_size if merge_count is None else None
             ),
             "tokenizer_type": "word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe",
             "parameters": sum(p.numel() for p in model.parameters()),
