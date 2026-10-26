@@ -15,9 +15,11 @@ import fross_transformer as transformer
 
 class TransformerTests(unittest.TestCase):
     def test_default_architecture_and_generation_budget(self) -> None:
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 5)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 4)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
         self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
+        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.4")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
 
     def test_bpe_tokenizer_round_trip(self) -> None:
@@ -30,6 +32,20 @@ class TransformerTests(unittest.TestCase):
         tokenizer = transformer.BPETokenizer.train(samples * 3, merge_count=32, min_frequency=2)
         for text in samples:
             self.assertEqual(tokenizer.decode(tokenizer.encode(text)), text)
+
+    def test_brain_14_can_reach_target_vocabulary_without_merging_across_words(self) -> None:
+        import itertools
+        import string
+
+        # Enough distinct word forms to test an exact target without a large training run.
+        words = [f"слово{a}{b}word" for a, b in itertools.product(string.ascii_lowercase, repeat=2)]
+        tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=256)
+        self.assertEqual(tokenizer.vocab_size, 256)
+        self.assertTrue(tokenizer.pretokenized)
+        for piece in tokenizer.pieces[4:]:
+            self.assertFalse(any(ch.isspace() for ch in piece) and any(ch.isalpha() for ch in piece))
+        sample = "Привет, FROSS!\\nСлово и word42."
+        self.assertEqual(tokenizer.decode(tokenizer.encode(sample)), sample)
 
     def test_generation_prefix_matches_training_format(self) -> None:
         record = {"user": "Привет, FROSS.", "assistant": "Привет!"}
