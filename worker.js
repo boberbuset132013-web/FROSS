@@ -3,7 +3,7 @@ import { frossCorrectText } from "./fross-brain.js";
 // FROSS: ограничиваем время каждого поискового запроса.
 const FROSS_FETCH_TIMEOUT_MS = 4500;
 const FROSS_MAX_MESSAGE_LENGTH = 30000;
-const FROSS_MAX_REPLY_LENGTH = 25000;
+const FROSS_MAX_REPLY_LENGTH = 50000;
 const FROSS_MAX_SEARCH_QUERY_LENGTH = 400;
 const FROSS_MAX_HISTORY_USER_MESSAGES = 5;
 const FROSS_MAX_RESULTS_PER_PROVIDER = 5;

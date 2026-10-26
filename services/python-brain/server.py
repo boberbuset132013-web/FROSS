@@ -27,7 +27,7 @@ TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Python Transformer Brain 1.2"
-MAX_REPLY_CHARS = 25000
+MAX_REPLY_CHARS = 50000
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
 
@@ -61,6 +61,8 @@ class Handler(BaseHTTPRequestHandler):
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
             "device": TRANSFORMER_STATUS.get("device", "cpu"),
+            "maxGenerationTokens": transformer.MAX_GENERATION_TOKENS,
+            "maxReplyChars": MAX_REPLY_CHARS,
         })
 
     def do_POST(self) -> None:

@@ -53,19 +53,31 @@ service cloud.firestore {
       allow create: if signedInAs(userId)
         && request.resource.data.ownerUid == userId
         && request.resource.data.userMessageCount == 0
+        && (!request.resource.data.keys().hasAny(['tokenCount']) || request.resource.data.tokenCount == 0)
         && request.resource.data.status == 'open'
         && request.resource.data.lastUserMessageId == '';
 
       allow update: if signedInAs(userId) && (
         (
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['userMessageCount', 'status', 'lastUserMessageId', 'updatedAt'])
+            .hasOnly(['userMessageCount', 'tokenCount', 'status', 'lastUserMessageId', 'updatedAt'])
           && request.resource.data.userMessageCount == resource.data.userMessageCount + 1
-          && resource.data.userMessageCount < 60
+          && request.resource.data.tokenCount is number
+          && request.resource.data.tokenCount >= (resource.data.keys().hasAny(['tokenCount']) ? resource.data.tokenCount : 0)
+          && request.resource.data.tokenCount <= 1000000
           && request.resource.data.lastUserMessageId is string
           && request.resource.data.lastUserMessageId.size() > 0
           && request.resource.data.status ==
-            (request.resource.data.userMessageCount >= 60 ? 'closed' : 'open')
+            (request.resource.data.tokenCount >= 1000000 ? 'closed' : 'open')
+        )
+        ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['tokenCount', 'status', 'updatedAt'])
+          && request.resource.data.tokenCount is number
+          && request.resource.data.tokenCount >= (resource.data.keys().hasAny(['tokenCount']) ? resource.data.tokenCount : 0)
+          && request.resource.data.status ==
+            (request.resource.data.tokenCount >= 1000000 ? 'closed' : 'open')
         )
         ||
         (
@@ -84,7 +96,7 @@ service cloud.firestore {
 
         allow create: if signedInAs(userId)
           && request.resource.data.content is string
-          && request.resource.data.content.size() <= 30000
+          && request.resource.data.content.size() <= 50000
           && request.resource.data.createdAt is timestamp
           && (
             (
@@ -100,7 +112,7 @@ service cloud.firestore {
             ||
             (
               request.resource.data.role == 'assistant'
-              && request.resource.data.content.size() <= 25000
+              && request.resource.data.content.size() <= 50000
               && getAfter(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))
                 .data.userMessageCount ==
                 get(/databases/$(database)/documents/users/$(userId)/chats/$(chatId))

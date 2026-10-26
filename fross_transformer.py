@@ -67,7 +67,7 @@ BASE_CHARS = "".join(dict.fromkeys(
 ))
 DEFAULT_CORPUS = Path(__file__).with_name("data") / "fross_corpus.jsonl"
 DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
-MAX_GENERATION_TOKENS = 650
+MAX_GENERATION_TOKENS = 5000
 
 DEFAULT_CONFIG = {
     "block_size": 320,
