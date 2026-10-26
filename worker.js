@@ -48,7 +48,7 @@ export default {
 
     // 3. FROSS API: JSON-ошибки вместо HTML-страниц Cloudflare.
     if (path === "/api/health") return frossApiGuard(path, request, async () => {
-      const pythonBrainHealth = await frossProbePythonHealth(frossPythonBrainUrl(env));
+      const pythonBrainHealth = await frossProbePythonHealth(frossPythonBrainUrl(env), frossBrainServiceToken(env));
       return frossJson({
         ok: true,
         worker: "FROSS",
@@ -1704,24 +1704,27 @@ async function frossCallBrainService(endpoint, token, payload, timeoutMs = 18000
   }
 }
 
-async function frossProbePythonHealth(endpoint, timeoutMs = 2500) {
+async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
   if (typeof endpoint !== "string" || !endpoint.trim()) {
-    return { configured: false, reachable: false, generationModelLoaded: false };
+    return { configured: false, reachable: false, authenticated: false, generationModelLoaded: false };
   }
   let healthUrl;
+  let serviceBasePath = "";
   try {
     healthUrl = new URL(endpoint);
     if (healthUrl.protocol !== "https:" || healthUrl.username || healthUrl.password || healthUrl.hash) {
-      return { configured: true, reachable: false, error: "Python service URL must be HTTPS without credentials." };
+      return { configured: true, reachable: false, authenticated: false, error: "Python service URL must be HTTPS without credentials." };
     }
-    const basePath = healthUrl.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
-    healthUrl.pathname = (basePath || "") + "/health";
+    serviceBasePath = healthUrl.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
+    healthUrl.pathname = (serviceBasePath || "") + "/health";
     healthUrl.search = "";
   } catch {
-    return { configured: true, reachable: false, error: "Invalid Python service URL." };
+    return { configured: true, reachable: false, authenticated: false, error: "Invalid Python service URL." };
   }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let healthData = null;
   try {
     const response = await fetch(healthUrl.toString(), {
       method: "GET",
@@ -1731,26 +1734,71 @@ async function frossProbePythonHealth(endpoint, timeoutMs = 2500) {
     });
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
-      return { configured: true, reachable: false, httpStatus: response.status, generationModelLoaded: false };
+      return { configured: true, reachable: false, authenticated: false, httpStatus: response.status, generationModelLoaded: false };
     }
-    const data = await response.json();
+    healthData = await response.json();
+
+    const modelFields = {
+      engine: typeof healthData?.engine === "string" ? healthData.engine.slice(0, 100) : null,
+      version: typeof healthData?.version === "string" ? healthData.version.slice(0, 40) : null,
+      generationModelLoaded: healthData?.generationModelLoaded === true,
+      generationModel: typeof healthData?.generationModel === "string" ? healthData.generationModel.slice(0, 100) : null,
+      generationModelStatus: healthData?.generationModelStatus && typeof healthData.generationModelStatus === "object"
+        ? healthData.generationModelStatus
+        : null,
+      inferenceBackend: typeof healthData?.inferenceBackend === "string" ? healthData.inferenceBackend.slice(0, 40) : null,
+      cppRuntimeLoaded: healthData?.cppRuntimeLoaded === true,
+      cppRuntimeStatus: typeof healthData?.cppRuntimeStatus === "string" ? healthData.cppRuntimeStatus.slice(0, 80) : null
+    };
+
+    if (typeof token !== "string" || token.trim().length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
+      return {
+        configured: true, reachable: true, authenticated: false, ready: false,
+        httpStatus: response.status,
+        authError: "Worker FROSS_BRAIN_SERVICE_TOKEN is missing or too short.",
+        ...modelFields
+      };
+    }
+
+    const readyUrl = new URL(healthUrl.toString());
+    readyUrl.pathname = (serviceBasePath || "") + "/ready";
+    const readyResponse = await fetch(readyUrl.toString(), {
+      method: "POST",
+      headers: { "Accept": "application/json", "Authorization": "Bearer " + token },
+      cache: "no-store",
+      signal: controller.signal
+    });
+    let readyData = null;
+    if (readyResponse.ok) {
+      try { readyData = await readyResponse.json(); } catch { readyData = null; }
+    } else {
+      await readyResponse.body?.cancel().catch(() => {});
+    }
+    const authenticated = readyResponse.ok && readyData?.authenticated === true;
     return {
       configured: true,
       reachable: true,
+      authenticated,
+      ready: authenticated && readyData?.ok === true,
       httpStatus: response.status,
-      engine: typeof data?.engine === "string" ? data.engine.slice(0, 100) : null,
-      generationModelLoaded: data?.generationModelLoaded === true,
-      generationModel: typeof data?.generationModel === "string" ? data.generationModel.slice(0, 100) : null,
-      generationModelStatus: data?.generationModelStatus && typeof data.generationModelStatus === "object"
-        ? data.generationModelStatus
-        : null
+      readyHttpStatus: readyResponse.status,
+      ...(authenticated ? {} : { authError: readyResponse.status === 401
+        ? "Worker and Python brain service tokens do not match."
+        : readyResponse.status === 503
+          ? "Python brain service token is not configured in Hostless."
+          : "Authenticated readiness check failed." }),
+      ...modelFields,
+      ...(readyData?.generationModelStatus && typeof readyData.generationModelStatus === "object"
+        ? { readinessModelStatus: readyData.generationModelStatus }
+        : {})
     };
   } catch (error) {
     return {
       configured: true,
-      reachable: false,
-      generationModelLoaded: false,
-      error: error?.name === "AbortError" ? "Python health check timed out." : "Python service is unreachable."
+      reachable: healthData !== null,
+      authenticated: false,
+      generationModelLoaded: healthData?.generationModelLoaded === true,
+      error: error?.name === "AbortError" ? "Python health/readiness check timed out." : "Python service is unreachable."
     };
   } finally {
     clearTimeout(timer);
