@@ -41,9 +41,9 @@ export default {
       return frossJson({
         ok: true,
         worker: "FROSS",
-        version: "1.2",
-        brainVersion: "1.2",
-        build: "fross-python-transformer-2026-10-25",
+        version: "1.3",
+        brainVersion: "1.3",
+        build: "fross-hybrid-cpp-2026-10-26",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
         pythonBrainHealth,
@@ -109,7 +109,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Transformer Brain 1.2 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
+  description: "FROSS Hybrid Transformer Brain 1.3 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -658,7 +658,7 @@ async function handleFrossIdentity(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Transformer Brain 1.2", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
+  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Hybrid Transformer Brain 1.3", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
 }
 
 function frossIsPublicTrainingUrl(value) {
@@ -1357,7 +1357,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Transformer Brain 1.2",
+    engine: "FROSS Hybrid Transformer Brain 1.3",
     topic,
     notes,
     count: notes.length,
@@ -1719,7 +1719,7 @@ async function handleFrossApi(request, env) {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS Transformer Brain 1.2",
+      engine: "FROSS Hybrid Transformer Brain 1.3",
       remoteBrainConfigured: remote.configured,
       kind: remote.kind || "generation-unavailable",
       generationModel: "FROSS Transformer 1.2 trained from scratch",

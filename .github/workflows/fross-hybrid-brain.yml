@@ -1,0 +1,98 @@
+name: FROSS hybrid brain tests
+
+on:
+  pull_request:
+    paths:
+      - "fross_transformer.py"
+      - "services/python-brain/**"
+      - "tests/**"
+      - "data/fross_corpus.jsonl"
+      - ".github/workflows/fross-hybrid-brain.yml"
+  push:
+    branches: [main]
+    paths:
+      - "fross_transformer.py"
+      - "services/python-brain/**"
+      - "tests/**"
+      - "data/fross_corpus.jsonl"
+      - ".github/workflows/fross-hybrid-brain.yml"
+
+jobs:
+  train-export-native-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install CPU training and ONNX test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy
+      - name: Download pinned ONNX Runtime C++ library
+        run: |
+          curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v1.31.0/onnxruntime-linux-x64-1.31.0.tgz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/onnxruntime-linux-x64-1.31.0/lib:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+      - name: Compile C++ runtime
+        run: |
+          g++ -std=c++17 -O2 -fPIC -shared services/python-brain/cpp_runtime.cpp \
+            -I"$RUNNER_TEMP/onnxruntime-linux-x64-1.31.0/include" \
+            -L"$RUNNER_TEMP/onnxruntime-linux-x64-1.31.0/lib" -lonnxruntime \
+            -Wl,-rpath,"$RUNNER_TEMP/onnxruntime-linux-x64-1.31.0/lib" \
+            -o "$RUNNER_TEMP/libfross_cpp.so"
+          echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
+      - name: Train small test model, export ONNX, and compare native logits
+        run: python -m unittest discover -s tests -v
+      - name: Build and smoke-test the production Docker image
+        run: |
+          docker build --build-arg FROSS_TRAIN_STEPS=2 -f services/python-brain/Dockerfile -t fross-brain-smoke .
+          docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test -e FROSS_MAX_GENERATION_TOKENS=12 fross-brain-smoke
+          cleanup() {
+            docker logs fross-brain-smoke || true
+            docker stop fross-brain-smoke >/dev/null 2>&1 || true
+            docker rm fross-brain-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:10000/health > "$RUNNER_TEMP/fross-health.json"; then
+              break
+            fi
+            sleep 2
+          done
+          test -s "$RUNNER_TEMP/fross-health.json"
+          python - "$RUNNER_TEMP/fross-health.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              health = json.load(stream)
+          assert health.get("ok") is True, health
+          assert health.get("version") == "1.3", health
+          assert health.get("inferenceBackend") == "cpp-onnx", health
+          assert health.get("cppRuntimeLoaded") is True, health
+          assert health.get("generationModelStatus", {}).get("loaded") is True, health
+          print("Docker health check passed: C++ ONNX inference is active.")
+          PY
+          curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
+          python - "$RUNNER_TEMP/fross-chat.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              response = json.load(stream)
+          assert response.get("handled") is True, response
+          assert "Привет" in response.get("reply", ""), response
+          assert response.get("generationModel") == "FROSS Transformer 1.3", response
+          print("Docker greeting smoke test passed.")
+          PY
+          curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Что такое нейросеть?"}' > "$RUNNER_TEMP/fross-question.json"
+          python - "$RUNNER_TEMP/fross-question.json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              response = json.load(stream)
+          assert response.get("handled") is True, response
+          assert response.get("reply", "").strip(), response
+          assert response.get("engine") == "FROSS Hybrid Transformer Brain 1.3", response
+          assert response.get("generationModel") == "FROSS Transformer 1.3", response
+          print("Docker C++ inference smoke test passed.")
+          PY
