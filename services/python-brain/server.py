@@ -52,6 +52,13 @@ MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.3"
 MAX_REPLY_CHARS = 50000
+try:
+    GENERATION_TOKEN_LIMIT = max(
+        1,
+        min(transformer.MAX_GENERATION_TOKENS, int(os.environ.get("FROSS_MAX_GENERATION_TOKENS", "5000"))),
+    )
+except (TypeError, ValueError):
+    GENERATION_TOKEN_LIMIT = transformer.MAX_GENERATION_TOKENS
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
 
@@ -85,7 +92,7 @@ class Handler(BaseHTTPRequestHandler):
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
             "device": TRANSFORMER_STATUS.get("device", "cpu"),
-            "maxGenerationTokens": transformer.MAX_GENERATION_TOKENS,
+            "maxGenerationTokens": GENERATION_TOKEN_LIMIT,
             "maxReplyChars": MAX_REPLY_CHARS,
             "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
             "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
@@ -173,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=transformer.MAX_GENERATION_TOKENS,
+                    max_new_tokens=GENERATION_TOKEN_LIMIT,
                     native_runtime=NATIVE_RUNTIME,
                 ).strip()
         except Exception as exc:
