@@ -164,9 +164,13 @@ def main():
         else:
             print("No unique valid examples in this batch; trying another topic.", flush=True)
 
-    print(json.dumps({"ok": created > 0, "requested": args.count, "created": created,
-                      "teacher_model": args.model, "output": str(output)}, ensure_ascii=False, indent=2))
-    return 0 if created > 0 else 1
+    complete = created >= args.count
+    print(json.dumps({"ok": complete, "requested": args.count, "created": created,
+                      "complete": complete, "teacher_model": args.model, "output": str(output)},
+                     ensure_ascii=False, indent=2))
+    if not complete:
+        print("The requested count was not reached. Existing examples were saved; re-run to add more.", file=sys.stderr)
+    return 0 if complete else 1
 
 if __name__ == "__main__":
     raise SystemExit(main())
