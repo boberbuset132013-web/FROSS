@@ -100,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def do_POST(self) -> None:
-        if self.path != "/chat":
+        if self.path not in ("/chat", "/ready"):
             respond(self, 404, {"handled": False, "error": "Not found"})
             return
         if not SERVICE_TOKEN:
@@ -108,6 +108,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
             respond(self, 401, {"handled": False, "error": "Unauthorized"})
+            return
+
+        # This authenticated readiness route proves Worker/Hostless token agreement
+        # and confirms model status without generating text or consuming inference time.
+        if self.path == "/ready":
+            respond(self, 200, {
+                "ok": True,
+                "engine": ENGINE_NAME,
+                "version": "1.4",
+                "authenticated": True,
+                "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
+                "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
+                "generationModelStatus": TRANSFORMER_STATUS,
+                "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
+                "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
+                "cppRuntimeStatus": CPP_RUNTIME_STATUS,
+            })
             return
 
         try:
