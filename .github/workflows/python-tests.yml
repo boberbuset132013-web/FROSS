@@ -36,7 +36,7 @@ jobs:
           import os, re
           from pathlib import Path
           html = Path("public/index.html").read_text(encoding="utf-8")
-          scripts = re.findall(r"<script\\b[^>]*>(.*?)</script>", html, flags=re.DOTALL | re.IGNORECASE)
+          scripts = re.findall(r"<script\b[^>]*>(.*?)</script>", html, flags=re.DOTALL | re.IGNORECASE)
           if len(scripts) != 1:
               raise SystemExit(f"Expected one inline script; found {len(scripts)}")
           out = Path(os.environ["RUNNER_TEMP"]) / "fross-training-ui.js"
