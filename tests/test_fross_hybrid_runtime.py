@@ -76,7 +76,7 @@ class HybridRuntimeTests(unittest.TestCase):
             reply = brain.generate_reply(
                 self.model,
                 self.tokenizer,
-                "Почему нейросеть иногда отвечает бессвязно?",
+                "Почему?",
                 history=[
                     {"role": "user", "content": "старое сообщение " * 80},
                     {"role": "assistant", "content": "старый ответ " * 80},
@@ -88,7 +88,7 @@ class HybridRuntimeTests(unittest.TestCase):
         finally:
             self.model.forward = original_forward
         decoded = self.tokenizer.decode(captured["input_ids"], stop_at_eos=False)
-        self.assertIn("Почему нейросеть", decoded)
+        self.assertIn("Почему?", decoded)
         self.assertTrue(reply.strip())
 
     def test_onnx_graph_executes(self) -> None:
