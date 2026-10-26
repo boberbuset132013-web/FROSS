@@ -9,7 +9,7 @@ RUN apt-get update \
 RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && python -m pip install --no-cache-dir "onnx>=1.16,<2"
 
-ARG ONNXRUNTIME_VERSION=1.20.1
+ARG ONNXRUNTIME_VERSION=1.31.0
 RUN mkdir -p /opt/onnxruntime \
     && curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz" \
        | tar -xz --strip-components=1 -C /opt/onnxruntime
