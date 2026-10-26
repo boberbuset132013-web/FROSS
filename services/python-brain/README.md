@@ -31,6 +31,8 @@ Open `/health` on the Python brain service. A successful hybrid deployment shoul
 
 If `inferenceBackend` is `python-torch`, inspect `cppRuntimeStatus` and hosting build logs. The service falls back to Python if the native library cannot be loaded so the health route remains available.
 
-## Automated checks
+## Local development and automated checks
+
+Install development/test dependencies with `python -m pip install -r requirements.txt`. Production uses the CPU-specific PyTorch wheel and pinned native runtime in the Dockerfile instead.
 
 The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains a small temporary model, verifies checkpoint loading, checks prompt-context preservation, exports and executes ONNX, compiles C++, and compares C++ logits with Python logits from the same weights.
