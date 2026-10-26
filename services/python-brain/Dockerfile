@@ -31,7 +31,7 @@ ARG FROSS_TRAIN_STEPS=3000
 RUN python /app/fross_transformer.py train --corpus /app/data/fross_corpus.jsonl \
        --output /app/fross-transformer.pt --steps ${FROSS_TRAIN_STEPS} --batch-size 4 --block-size 320 --merges 384 \
     && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
-    && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Как работает attention?')" \
+    && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Как работает attention?' --max-new-tokens 16)" \
     && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))"
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
