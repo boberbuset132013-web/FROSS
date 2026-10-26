@@ -66,7 +66,7 @@ jobs:
         run: node --input-type=module --check < fross-brain.js
       - name: Check Worker syntax
         run: node --input-type=module --check < worker.js
-      - name: Check learning pipeline and message limits
+      - name: Check learning pipeline and token-based chat limits
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -143,7 +143,7 @@ jobs:
           assert 'VERSION = "FROSS Transformer 1.2"' in transformer and '"block_size": 320' in transformer and '"n_layer": 5' in transformer, "Transformer version, context window and depth must match Brain 1.2"
           assert "FROSS Brain 1.2 — обычный рабочий план 7 этапов" in transformer and "FROSS Brain 1.2 — расширенный рабочий план 14 этапов" in transformer, "Model prompt must guide both stage plans"
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
-          assert 'FROSS Python Transformer Brain 1.2' in server and 'max_new_tokens=transformer.MAX_GENERATION_TOKENS' in server, "Python service must match Brain 1.2 and 650-token generation budget"
+          assert 'FROSS Python Transformer Brain 1.2' in server and 'max_new_tokens=transformer.MAX_GENERATION_TOKENS' in server, "Python service must match Brain 1.2 and 5000-token generation budget"
           assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
           assert 'id="autoStudyStopBtn"' in page and "function startAutoStudy()" in page and "function stopAutoStudy()" in page, "Automatic learning must expose Start and Stop"
           assert "FROSS_AUTO_STUDY_STORAGE_KEY" in page and "resumeAutoStudySetting()" in page, "Automatic learning state should resume from browser storage"
@@ -151,8 +151,8 @@ jobs:
           assert "hostCounts" in worker and "boilerplate" in worker and "frossMergeTrainingCandidates(unit.topic, searchResults, 7)" in worker, "Study notes should filter boilerplate and use diverse sources"
           assert "sourceText.trim().length < 45" in worker and 'String(note.snippet || "").trim().length >= 45' in worker, "Study notes must contain readable source text, not just links"
           assert "def _response_strategy(message: str)" in transformer and "prompt_parts.append(_response_strategy(message))" in transformer, "Brain 1.2 should route output by user intent"
-          assert "MAX_GENERATION_TOKENS = 650" in transformer and "min(int(max_tokens), MAX_GENERATION_TOKENS)" in transformer, "Generation must support up to 650 new tokens"
-          assert "max_new_tokens=transformer.MAX_GENERATION_TOKENS" in server, "Python service must use the shared 650-token cap"
+          assert "MAX_GENERATION_TOKENS = 5000" in transformer and "min(int(max_tokens), MAX_GENERATION_TOKENS)" in transformer, "Generation must support up to 5000 new tokens"
+          assert "max_new_tokens=transformer.MAX_GENERATION_TOKENS" in server, "Python service must use the shared 5000-token cap"
           assert "--steps 3000 --batch-size 4 --block-size 320" in Path("services/python-brain/Dockerfile").read_text(encoding="utf-8"), "Docker build must retrain the updated five-block model"
           knowledge_index = json.loads(Path("memory/knowledge/index.json").read_text(encoding="utf-8"))
           assert len(knowledge_index.get("topics", [])) >= 4, "Shared GitHub knowledge index should be initialized"
@@ -171,13 +171,13 @@ jobs:
           auto_study = worker.split("async function handleFrossAutoStudy(request, env, ctx) {", 1)[1].split("async function handleFrossTrain(request, env) {", 1)[0]
           assert "frossVerifyFirebaseToken" not in auto_study, "Guest knowledge button must not require sign-in"
           assert "const FROSS_MAX_MESSAGE_LENGTH = 30000;" in worker
-          assert "const FROSS_MAX_REPLY_LENGTH = 25000;" in worker
+          assert "const FROSS_MAX_REPLY_LENGTH = 50000;" in worker
           assert "const history = frossLimitHistory(body.history);" in worker
           assert "function frossLimitHistory(history" in worker
           assert 'maxlength="30000"' in page
           assert "history=recentChatContext(activeMessages,5)" in page
-          assert "request.resource.data.content.size() <= 30000" in rules
-          assert "request.resource.data.content.size() <= 25000" in rules
+          assert "request.resource.data.content.size() <= 50000" in rules
+          assert "request.resource.data.content.size() <= 50000" in rules
           assert '"crons": ["0 3 * * *"]' in wrangler
           assert '"secrets"' in wrangler and '"FROSS_BRAIN_SERVICE_TOKEN"' in wrangler, "Worker deploy must require the Python brain token"
           assert "25 000 символов" in character and "30 000 символов" in character
