@@ -1775,23 +1775,30 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 4000) {
       await readyResponse.body?.cancel().catch(() => {});
     }
     const authenticated = readyResponse.ok && readyData?.authenticated === true;
-    return {
+    const modelLoaded = readyData?.generationModelLoaded === true;
+    const healthResult = {
       configured: true,
       reachable: true,
       authenticated,
-      ready: authenticated && readyData?.ok === true,
+      ready: authenticated && readyData?.ok === true && modelLoaded,
+      modelReady: modelLoaded,
       httpStatus: response.status,
       readyHttpStatus: readyResponse.status,
-      ...(authenticated ? {} : { authError: readyResponse.status === 401
-        ? "Worker and Python brain service tokens do not match."
-        : readyResponse.status === 503
-          ? "Python brain service token is not configured in Hostless."
-          : "Authenticated readiness check failed." }),
       ...modelFields,
       ...(readyData?.generationModelStatus && typeof readyData.generationModelStatus === "object"
         ? { readinessModelStatus: readyData.generationModelStatus }
         : {})
     };
+    if (!authenticated) {
+      healthResult.authError = readyResponse.status === 401
+        ? "Worker and Python brain service tokens do not match."
+        : readyResponse.status === 503
+          ? "Python brain service token is not configured in Hostless."
+          : "Authenticated readiness check failed.";
+    } else if (!modelLoaded) {
+      healthResult.readyError = "Python brain accepted the token, but its generation model is not loaded.";
+    }
+    return healthResult;
   } catch (error) {
     return {
       configured: true,
