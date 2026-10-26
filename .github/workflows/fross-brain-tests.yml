@@ -1,6 +1,22 @@
 name: FROSS Brain checks
 
 on:
+  pull_request:
+    paths:
+      - "fross-brain.js"
+      - "worker.js"
+      - "public/**"
+      - "firestore.rules"
+      - "SETUP.md"
+      - "FROSS_CHARACTER.md"
+      - "wrangler.jsonc"
+      - "services/**"
+      - "render.yaml"
+      - "hostless.yaml"
+      - "fross_transformer.py"
+      - "data/**"
+      - "tests/**"
+      - ".github/workflows/fross-brain-tests.yml"
   push:
     branches: [main]
     paths:
