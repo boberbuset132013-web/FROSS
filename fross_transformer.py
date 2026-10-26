@@ -556,7 +556,7 @@ def _social_reply(message: str) -> str | None:
     normalized = str(message or "").lower().replace("ё", "е").strip()
     normalized = re.sub(r"[!?,.;:]+", " ", normalized)
     normalized = " ".join(normalized.split())
-    normalized = re.sub(r"\\s+(фросс|fross)$", "", normalized)
+    normalized = re.sub(r"\s+(фросс|fross)$", "", normalized)
     if normalized in {"привет", "приветик", "здравствуй", "здравствуйте", "доброе утро", "добрый день", "добрый вечер", "hello", "hi"}:
         return "Привет! Я на связи. Что хочешь обсудить?"
     if normalized in {"спасибо", "спасибо большое", "благодарю", "thanks", "thank you"}:
