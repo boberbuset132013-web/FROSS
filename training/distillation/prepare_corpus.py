@@ -91,8 +91,6 @@ def merge_records(base_records: list[dict[str, Any]], teacher_records: list[dict
             continue
         seen.add(key)
         merged.append(row)
-    if len(merged) < 8:
-        raise ValueError(f"At least 8 unique examples are required; found {len(merged)}.")
     return merged, duplicates
 
 def write_jsonl_atomic(path: str | Path, records: list[dict[str, Any]]) -> str:
@@ -121,6 +119,8 @@ def main() -> int:
     base = read_corpus(args.base)
     teacher = read_corpus(args.teacher, required=False)
     merged, duplicates = merge_records(base, teacher)
+    if len(merged) < 8:
+        raise ValueError(f"At least 8 unique examples are required; found {len(merged)}.")
     digest = write_jsonl_atomic(args.output, merged)
     print(json.dumps({
         "ok": True, "base_examples": len(base), "teacher_examples": len(teacher),
