@@ -167,6 +167,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "generation-model-unavailable",
+                "generationModel": transformer.VERSION,
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -190,6 +191,7 @@ class Handler(BaseHTTPRequestHandler):
                 "engine": ENGINE_NAME,
                 "kind": "generation-error",
                 "diagnostic": type(exc).__name__,
+                "generationModel": transformer.VERSION,
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -199,6 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "empty-generation",
+                "generationModel": transformer.VERSION,
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
