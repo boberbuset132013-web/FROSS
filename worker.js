@@ -1364,7 +1364,7 @@ function frossConstantTimeSecretEquals(expected, actual) {
 }
 
 function frossTeacherQuotaExceeded(message) {
-  return /(neuron|daily.{0,30}(quota|limit|allocation)|(?:quota|allocation).{0,30}(daily|exceed|limit)|exceeded.{0,30}(free|daily).{0,30}(allocation|quota)|insufficient.{0,20}credits|account.{0,20}(quota|allocation)|usage.{0,20}limit)/i.test(String(message || ""));
+  return /(neuron|daily.{0,30}(quota|limit|allocation)|(?:quota|allocation).{0,30}(daily|exceed|limit)|exceeded.{0,30}(free|daily).{0,30}(allocation|quota)|insufficient.{0,20}credits|account.{0,20}(quota|allocation))/i.test(String(message || ""));
 }
 
 function frossTeacherExtractText(result) {
