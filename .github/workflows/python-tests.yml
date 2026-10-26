@@ -32,6 +32,11 @@ jobs:
         run: python -m compileall -q fross_transformer.py training/distillation tests
       - name: Validate and merge teacher corpus
         run: python training/distillation/prepare_corpus.py --base data/fross_corpus.jsonl --teacher data/fross_teacher_corpus.jsonl --output "$RUNNER_TEMP/fross-training-corpus.jsonl"
+      - name: Check the real training corpus reaches Brain 1.4 vocabulary target
+        env:
+          FROSS_DEVICE: cpu
+        run: |
+          python -c "import os, random; import fross_transformer as t; rows=t._load_corpus(os.path.join(os.environ['RUNNER_TEMP'], 'fross-training-corpus.jsonl')); random.seed(1337); random.shuffle(rows); count=max(2, int(len(rows)*0.1)); texts=[t._format_record(row) for row in rows[count:]]; tok=t.BPETokenizer.train(texts, target_vocab_size=5000, max_piece_chars=24); print('Actual corpus vocabulary:', tok.vocab_size); assert tok.vocab_size == 5000, f'Vocabulary target not reached: {tok.vocab_size}/5000'"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
