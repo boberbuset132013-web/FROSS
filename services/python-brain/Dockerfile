@@ -27,10 +27,11 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
       -I/opt/onnxruntime/include -L/opt/onnxruntime/lib -lonnxruntime \
       -Wl,-rpath,/opt/onnxruntime/lib -o /app/libfross_cpp.so
 
-# The FROSS student is trained from random initialization on validated original and
+# Train the FROSS student from random initialization on validated original and
 # teacher-generated text examples. Only text data is transferred: no teacher weights
 # are imported, and the teacher is not called during this build or during inference.
-ARG FROSS_TRAIN_STEPS=600
+# The default is 3000 cumulative training steps; override with a build argument if needed.
+ARG FROSS_TRAIN_STEPS=3000
 ARG FROSS_VOCAB_SIZE=5000
 RUN python /app/training/distillation/prepare_corpus.py \
        --base /app/data/fross_corpus.jsonl \
