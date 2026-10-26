@@ -27,12 +27,15 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 
 # Weights are trained from random initialization on the local corpus, then exported
 # to ONNX. No pretrained model or hosted LLM API is downloaded or called.
-ARG FROSS_TRAIN_STEPS=3000
+ARG FROSS_TRAIN_STEPS=600
+ARG FROSS_VOCAB_SIZE=5000
 RUN python /app/fross_transformer.py train --corpus /app/data/fross_corpus.jsonl \
-       --output /app/fross-transformer.pt --steps ${FROSS_TRAIN_STEPS} --batch-size 4 --block-size 320 --merges 384 \
+       --output /app/fross-transformer.pt --steps ${FROSS_TRAIN_STEPS} --batch-size 4 --block-size 320 --vocab-size ${FROSS_VOCAB_SIZE} \
     && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
     && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Как работает attention?' --max-new-tokens 16)" \
-    && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))"
+    && python -c "import torch; c=torch.load('/app/fross-transformer.pt', map_location='cpu', weights_only=True); m=c['metrics']; assert m['vocab_size']==${FROSS_VOCAB_SIZE}, m; assert m['training_steps']==${FROSS_TRAIN_STEPS}, m; assert m['vocab_target_reached'], m; print('Brain 1.4 checkpoint verified:', m['vocab_size'], 'tokens,', m['parameters'], 'parameters,', m['training_steps'], 'steps')" \
+    && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))" \
+    && python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()"
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
 ENV FROSS_CPP_RUNTIME_LIBRARY=/app/libfross_cpp.so
