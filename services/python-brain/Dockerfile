@@ -17,6 +17,8 @@ ENV LD_LIBRARY_PATH=/opt/onnxruntime/lib
 
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/fross_corpus.jsonl /app/data/fross_corpus.jsonl
+COPY data/fross_teacher_corpus.jsonl /app/data/fross_teacher_corpus.jsonl
+COPY training/distillation/prepare_corpus.py /app/training/distillation/prepare_corpus.py
 COPY services/python-brain/server.py /app/server.py
 COPY services/python-brain/native_runtime.py /app/native_runtime.py
 COPY services/python-brain/cpp_runtime.cpp /app/cpp_runtime.cpp
@@ -25,11 +27,16 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
       -I/opt/onnxruntime/include -L/opt/onnxruntime/lib -lonnxruntime \
       -Wl,-rpath,/opt/onnxruntime/lib -o /app/libfross_cpp.so
 
-# Weights are trained from random initialization on the local corpus, then exported
-# to ONNX. No pretrained model or hosted LLM API is downloaded or called.
+# The FROSS student is trained from random initialization on validated original and
+# teacher-generated text examples. Only text data is transferred: no teacher weights
+# are imported, and the teacher is not called during this build or during inference.
 ARG FROSS_TRAIN_STEPS=600
 ARG FROSS_VOCAB_SIZE=5000
-RUN python /app/fross_transformer.py train --corpus /app/data/fross_corpus.jsonl \
+RUN python /app/training/distillation/prepare_corpus.py \
+       --base /app/data/fross_corpus.jsonl \
+       --teacher /app/data/fross_teacher_corpus.jsonl \
+       --output /app/data/fross_training_corpus.jsonl \
+    && python /app/fross_transformer.py train --corpus /app/data/fross_training_corpus.jsonl \
        --output /app/fross-transformer.pt --steps ${FROSS_TRAIN_STEPS} --batch-size 4 --block-size 320 --vocab-size ${FROSS_VOCAB_SIZE} \
     && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
     && python -c "import torch; c=torch.load('/app/fross-transformer.pt', map_location='cpu', weights_only=True); m=c['metrics']; assert m['vocab_size']==${FROSS_VOCAB_SIZE}, m; assert m['training_steps']==${FROSS_TRAIN_STEPS}, m; assert m['vocab_target_reached'], m; print('Brain 1.4 checkpoint verified:', m['vocab_size'], 'tokens,', m['parameters'], 'parameters,', m['training_steps'], 'steps')" \
