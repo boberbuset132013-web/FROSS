@@ -7,7 +7,10 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $pythonScript = Join-Path $repoRoot "fross_transformer.py"
-$corpus = Join-Path $repoRoot "data\fross_corpus.jsonl"
+$baseCorpus = Join-Path $repoRoot "data\fross_corpus.jsonl"
+$teacherCorpus = Join-Path $repoRoot "data\fross_teacher_corpus.jsonl"
+$prepareCorpus = Join-Path $repoRoot "training\distillation\prepare_corpus.py"
+$corpus = Join-Path $repoRoot ".fross-local-training\training-corpus.jsonl"
 $workDir = Join-Path $repoRoot ".fross-local-training"
 $checkpoint = Join-Path $workDir "fross-transformer.pt"
 $venvDir = Join-Path $repoRoot ".venv-training"
@@ -17,8 +20,14 @@ $logDir = Join-Path $workDir "logs"
 if (-not (Test-Path $pythonScript)) {
     throw "Missing fross_transformer.py. Extract the whole repository ZIP and run this from training\windows."
 }
-if (-not (Test-Path $corpus)) {
+if (-not (Test-Path $baseCorpus)) {
     throw "Missing data\fross_corpus.jsonl."
+}
+if (-not (Test-Path $teacherCorpus)) {
+    throw "Missing data\fross_teacher_corpus.jsonl. Re-download the current repository ZIP."
+}
+if (-not (Test-Path $prepareCorpus)) {
+    throw "Missing training\distillation\prepare_corpus.py. Re-download the current repository ZIP."
 }
 
 New-Item -ItemType Directory -Force -Path $workDir, $logDir | Out-Null
@@ -50,6 +59,11 @@ if ($LASTEXITCODE -ne 0) {
 
 $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
+
+Write-Host "Preparing the student training corpus from base and teacher examples..."
+& $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
+if ($LASTEXITCODE -ne 0) { throw "Could not validate and merge the training corpora." }
+
 
 switch ($Stage) {
     "600" {
