@@ -19,6 +19,7 @@ COPY fross_transformer.py /app/fross_transformer.py
 COPY data/fross_corpus.jsonl /app/data/fross_corpus.jsonl
 COPY data/fross_teacher_corpus.jsonl /app/data/fross_teacher_corpus.jsonl
 COPY training/distillation/prepare_corpus.py /app/training/distillation/prepare_corpus.py
+COPY training/distillation/verify_checkpoint.py /app/training/distillation/verify_checkpoint.py
 COPY services/python-brain/server.py /app/server.py
 COPY services/python-brain/native_runtime.py /app/native_runtime.py
 COPY services/python-brain/cpp_runtime.cpp /app/cpp_runtime.cpp
@@ -93,14 +94,16 @@ RUN if [ ! -f /app/fross-model-source.txt ]; then \
       printf 'repository-training steps=%s\n' "${FROSS_TRAIN_STEPS}" > /app/fross-model-source.txt; \
     fi
 
-RUN if grep -qx "uploaded-checkpoint" /app/fross-model-source.txt; then \
-      python -c "import torch, fross_transformer as t; c=torch.load('/app/fross-transformer.pt',map_location='cpu',weights_only=True); m=c['metrics']; assert c.get('version')==t.VERSION,c.get('version'); assert int(m['vocab_size'])==${FROSS_VOCAB_SIZE},m; assert int(m['training_steps'])>=${FROSS_REQUIRED_MODEL_STEPS},m; assert m['vocab_target_reached'],m; print('Verified hosted checkpoint:',m['training_steps'],'steps')"; \
-    else \
-      python -c "import torch; c=torch.load('/app/fross-transformer.pt', map_location='cpu', weights_only=True); m=c['metrics']; assert m['vocab_size']==${FROSS_VOCAB_SIZE}, m; assert m['training_steps']==${FROSS_TRAIN_STEPS}, m; assert m['vocab_target_reached'], m; print('Brain 1.4 checkpoint verified:', m['vocab_size'], 'tokens,', m['parameters'], 'parameters,', m['training_steps'], 'steps')"; \
-    fi \
+RUN python /app/training/distillation/verify_checkpoint.py \
+      --checkpoint /app/fross-transformer.pt \
+      --model-source /app/fross-model-source.txt \
+      --required-model-steps "${FROSS_REQUIRED_MODEL_STEPS}" \
+      --train-steps "${FROSS_TRAIN_STEPS}" \
+      --vocab-size "${FROSS_VOCAB_SIZE}" \
     && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
     && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))" \
-    && python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()
+    && python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()"
+
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
 ENV FROSS_CPP_RUNTIME_LIBRARY=/app/libfross_cpp.so
