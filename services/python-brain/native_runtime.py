@@ -24,7 +24,7 @@ class NativeRuntime:
         self._library = ctypes.CDLL(self.library_path)
         char_ptr = ctypes.POINTER(ctypes.c_char)
         self._library.fross_runtime_create.argtypes = [
-            ctypes.c_char_p, char_ptr, ctypes.c_size_t
+            ctypes.c_char_p, ctypes.c_size_t, ctypes.c_size_t, char_ptr, ctypes.c_size_t
         ]
         self._library.fross_runtime_create.restype = ctypes.c_void_p
         self._library.fross_runtime_destroy.argtypes = [ctypes.c_void_p]
@@ -42,7 +42,11 @@ class NativeRuntime:
 
         error = ctypes.create_string_buffer(1024)
         self._handle = self._library.fross_runtime_create(
-            self.model_path.encode("utf-8"), error, len(error)
+            self.model_path.encode("utf-8"),
+            self.block_size,
+            self.vocab_size,
+            error,
+            len(error),
         )
         if not self._handle:
             detail = error.value.decode("utf-8", errors="replace") or "unknown C++ runtime error"
