@@ -24,9 +24,33 @@ transformer.configure_runtime_threads()
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
 
+NATIVE_RUNTIME = None
+CPP_RUNTIME_STATUS = "disabled"
+if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "true", "yes"}:
+    try:
+        from native_runtime import NativeRuntime
+        ONNX_MODEL_PATH = os.environ.get(
+            "FROSS_ONNX_MODEL_PATH",
+            str(Path(TRANSFORMER_MODEL_PATH).with_suffix(".onnx")),
+        )
+        CPP_RUNTIME_LIBRARY = os.environ.get("FROSS_CPP_RUNTIME_LIBRARY", str(ROOT / "libfross_cpp.so"))
+        if TRANSFORMER_TOKENIZER is None or TRANSFORMER_MODEL is None:
+            raise RuntimeError("trained checkpoint is not loaded")
+        NATIVE_RUNTIME = NativeRuntime(
+            CPP_RUNTIME_LIBRARY,
+            ONNX_MODEL_PATH,
+            block_size=int(TRANSFORMER_MODEL.config["block_size"]),
+            vocab_size=TRANSFORMER_TOKENIZER.vocab_size,
+        )
+        CPP_RUNTIME_STATUS = "loaded"
+    except Exception as exc:
+        # Keep the service available on the known-good Python path if the native
+        # runtime cannot be loaded; the health endpoint makes this visible.
+        CPP_RUNTIME_STATUS = type(exc).__name__
+
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Python Transformer Brain 1.2"
+ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.3"
 MAX_REPLY_CHARS = 50000
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
@@ -43,7 +67,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Python-Transformer/1.2"
+    server_version = "FROSS-Hybrid-Transformer/1.3"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -56,13 +80,16 @@ class Handler(BaseHTTPRequestHandler):
         respond(self, 200, {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.2",
+            "version": "1.3",
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
             "device": TRANSFORMER_STATUS.get("device", "cpu"),
             "maxGenerationTokens": transformer.MAX_GENERATION_TOKENS,
             "maxReplyChars": MAX_REPLY_CHARS,
+            "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
+            "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
+            "cppRuntimeStatus": CPP_RUNTIME_STATUS,
         })
 
     def do_POST(self) -> None:
@@ -147,6 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                     knowledge=knowledge,
                     mode=mode,
                     max_new_tokens=transformer.MAX_GENERATION_TOKENS,
+                    native_runtime=NATIVE_RUNTIME,
                 ).strip()
         except Exception as exc:
             # Return only the exception class, never the prompt or internal traceback.
