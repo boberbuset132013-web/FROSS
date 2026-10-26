@@ -17,11 +17,11 @@ The Docker build context must be the **repository root** because the Dockerfile 
 - Port: `10000`
 - Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
 
-The image trains the model during the build, exports `/app/fross-transformer.onnx`, compiles `/app/libfross_cpp.so`, and enables the C++ backend.
+The image trains the model during the build, exports `/app/fross-transformer.onnx`, compiles `/app/libfross_cpp.so`, and enables the C++ backend. The default target is 600 steps to keep production deployments bounded. Set build arg `FROSS_TRAIN_STEPS=3000` only when a long training build is acceptable; for targets above 600, the Dockerfile saves a 600-step intermediate checkpoint and resumes its optimizer/RNG state to the cumulative target.
 
 ## Verify deployment
 
-Open `/health` on the Python brain service. A successful hybrid deployment should report:
+Open `/health` on the Python brain service to view model status. The authenticated `POST /ready` endpoint allows the Worker to verify the shared service token as well as model readiness. A successful hybrid deployment should report:
 
 - `version: "1.4"`
 - `generationModel: "FROSS Transformer 1.4"`
