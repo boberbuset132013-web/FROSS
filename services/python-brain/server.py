@@ -50,7 +50,7 @@ if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "tr
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.3"
+ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.4"
 MAX_REPLY_CHARS = 50000
 try:
     GENERATION_TOKEN_LIMIT = max(
@@ -74,7 +74,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Hybrid-Transformer/1.3"
+    server_version = "FROSS-Hybrid-Transformer/1.4"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -87,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
         respond(self, 200, {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.3",
+            "version": "1.4",
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
