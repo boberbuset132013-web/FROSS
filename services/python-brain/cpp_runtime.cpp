@@ -23,10 +23,13 @@ struct Runtime {
     std::size_t block_size = 0;
     std::size_t vocab_size = 0;
 
-    explicit Runtime(const char* model_path)
+    explicit Runtime(const char* model_path, std::size_t expected_block_size, std::size_t expected_vocab_size)
         : env(ORT_LOGGING_LEVEL_WARNING, "FROSS-C++-ONNX"), options() {
         if (model_path == nullptr || *model_path == '\0') {
             throw std::invalid_argument("ONNX model path is empty");
+        }
+        if (expected_block_size == 0 || expected_vocab_size == 0) {
+            throw std::invalid_argument("expected model dimensions must be positive");
         }
         options.SetIntraOpNumThreads(1);
         options.SetInterOpNumThreads(1);
@@ -36,17 +39,38 @@ struct Runtime {
 
         const auto input_info = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo();
         const auto input_shape = input_info.GetShape();
-        if (input_shape.size() != 2 || input_shape[0] != 1 || input_shape[1] <= 0) {
-            throw std::runtime_error("ONNX input must have fixed shape [1, block_size]");
+        if (input_shape.size() != 2) {
+            throw std::runtime_error("ONNX input must have rank 2: [batch, block_size]");
         }
-        block_size = static_cast<std::size_t>(input_shape[1]);
+        // Some PyTorch/ONNX exporter versions preserve symbolic dimensions even
+        // when the example input has fixed shape. Python passes the architecture's
+        // trusted dimensions, and we reject any conflicting static dimensions.
+        if (input_shape[0] > 0 && input_shape[0] != 1) {
+            throw std::runtime_error("ONNX model batch dimension is not 1");
+        }
+        if (input_shape[1] > 0 &&
+            static_cast<std::size_t>(input_shape[1]) != expected_block_size) {
+            throw std::runtime_error("ONNX model block size differs from checkpoint");
+        }
+        block_size = expected_block_size;
 
         const auto output_info = session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo();
         const auto output_shape = output_info.GetShape();
-        if (output_shape.size() != 3 || output_shape[0] != 1 || output_shape[1] != input_shape[1] || output_shape[2] <= 0) {
-            throw std::runtime_error("ONNX output must have shape [1, block_size, vocab_size]");
+        if (output_shape.size() != 3) {
+            throw std::runtime_error("ONNX output must have rank 3: [batch, block_size, vocab_size]");
         }
-        vocab_size = static_cast<std::size_t>(output_shape[2]);
+        if (output_shape[0] > 0 && output_shape[0] != 1) {
+            throw std::runtime_error("ONNX model output batch dimension is not 1");
+        }
+        if (output_shape[1] > 0 &&
+            static_cast<std::size_t>(output_shape[1]) != block_size) {
+            throw std::runtime_error("ONNX output block size differs from checkpoint");
+        }
+        if (output_shape[2] > 0 &&
+            static_cast<std::size_t>(output_shape[2]) != expected_vocab_size) {
+            throw std::runtime_error("ONNX vocabulary size differs from checkpoint");
+        }
+        vocab_size = expected_vocab_size;
     }
 
     std::vector<float> forward(const std::int64_t* token_ids, std::size_t actual_length) {
@@ -82,9 +106,15 @@ struct Runtime {
 }  // namespace
 
 extern "C" {
-void* fross_runtime_create(const char* model_path, char* error, std::size_t error_capacity) noexcept {
+void* fross_runtime_create(
+    const char* model_path,
+    std::size_t expected_block_size,
+    std::size_t expected_vocab_size,
+    char* error,
+    std::size_t error_capacity
+) noexcept {
     try {
-        return new Runtime(model_path);
+        return new Runtime(model_path, expected_block_size, expected_vocab_size);
     } catch (const std::exception& exc) {
         set_error(error, error_capacity, exc.what());
     } catch (...) {
