@@ -27,8 +27,9 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 
 # Weights are trained from random initialization on the local corpus, then exported
 # to ONNX. No pretrained model or hosted LLM API is downloaded or called.
+ARG FROSS_TRAIN_STEPS=3000
 RUN python /app/fross_transformer.py train --corpus /app/data/fross_corpus.jsonl \
-       --output /app/fross-transformer.pt --steps 3000 --batch-size 4 --block-size 320 --merges 384 \
+       --output /app/fross-transformer.pt --steps ${FROSS_TRAIN_STEPS} --batch-size 4 --block-size 320 --merges 384 \
     && python /app/fross_transformer.py export --output /app/fross-transformer.pt --onnx-output /app/fross-transformer.onnx \
     && test -n "$(python /app/fross_transformer.py generate --output /app/fross-transformer.pt --text 'Как работает attention?')" \
     && python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))"
