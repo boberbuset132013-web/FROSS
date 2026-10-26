@@ -74,6 +74,20 @@ class DistillationPipelineTests(unittest.TestCase):
         self.assertIn("не обязано вызывать синтаксическую ошибку", sql_example["assistant"].lower())
         self.assertIn("неявный псевдоним", sql_example["assistant"].lower())
 
+    def test_multiline_python_examples_use_copyable_fenced_blocks(self) -> None:
+        teacher = read_corpus(ROOT / "data" / "fross_teacher_corpus.jsonl")
+        expected_prompts = (
+            "Я написал с ошибками. Попробуй понять смысл: обясни что такое цикл в питон",
+            "Как поймать ошибку в Python и не уронить программу?",
+            "Как прочитать JSON из файла в Python?",
+            "Как проверить, существует ли файл в Python?",
+        )
+        for prompt in expected_prompts:
+            with self.subTest(prompt=prompt):
+                row = next(item for item in teacher if item["user"] == prompt)
+                self.assertIn("```python\n", row["assistant"])
+                self.assertIn("\n```", row["assistant"])
+
     def test_read_corpus_reports_bad_json_line(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "broken.jsonl"
