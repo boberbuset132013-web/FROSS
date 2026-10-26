@@ -76,7 +76,6 @@ service cloud.firestore {
             .hasOnly(['tokenCount', 'status', 'updatedAt'])
           && request.resource.data.tokenCount is number
           && request.resource.data.tokenCount >= (resource.data.keys().hasAny(['tokenCount']) ? resource.data.tokenCount : 0)
-          && request.resource.data.tokenCount <= 1000000
           && request.resource.data.status ==
             (request.resource.data.tokenCount >= 1000000 ? 'closed' : 'open')
         )
