@@ -39,7 +39,112 @@ transformer.configure_runtime_threads()
 
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(TRANSFORMER_MODEL_PATH).with_suffix(".onnx")))
+
+
+def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
+    """Download the latest persisted GitHub Release asset on startup, if one exists."""
+    target = Path(destination)
+    if target.is_file():
+        return None
+    repository = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        return None
+    partial = target.with_name(target.name + ".github-part")
+    try:
+        api = "https://api.github.com/repos/" + repository + "/releases/latest"
+        request = urllib.request.Request(api, headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "FROSS-Model-Bootstrap/1.0",
+            "X-GitHub-Api-Version": "2022-11-28",
+        })
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                release = json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                print("FROSS startup: no GitHub model release yet; waiting for upload in Settings.", flush=True)
+                return None
+            raise
+        assets = release.get("assets", [])
+        asset = next((item for item in assets if isinstance(item, dict) and item.get("name") == "fross-transformer.pt"), None)
+        download_url = asset.get("browser_download_url") if isinstance(asset, dict) else None
+        if not isinstance(download_url, str) or not download_url.startswith("https://github.com/"):
+            print("FROSS startup: latest GitHub release has no model asset; waiting for upload in Settings.", flush=True)
+            return None
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        total = 0
+        digest = hashlib.sha256()
+        with urllib.request.urlopen(urllib.request.Request(
+            download_url, headers={"User-Agent": "FROSS-Model-Bootstrap/1.0", "Accept": "application/octet-stream"}
+        ), timeout=90) as response, partial.open("wb") as output:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_MODEL_UPLOAD_BYTES:
+                    raise ValueError("GitHub model asset exceeds the 120-MiB limit.")
+                digest.update(chunk)
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        if total < 1_000_000:
+            raise ValueError("GitHub model asset is too small to be a checkpoint.")
+
+        import torch
+        checkpoint = torch.load(partial, map_location="cpu", weights_only=True)
+        metrics = checkpoint.get("metrics") if isinstance(checkpoint, dict) else None
+        config = checkpoint.get("config") if isinstance(checkpoint, dict) else None
+        if not isinstance(metrics, dict) or not isinstance(config, dict):
+            raise ValueError("GitHub model checkpoint has no valid metadata.")
+        if checkpoint.get("version") != transformer.VERSION or int(checkpoint.get("format_version", 0)) not in {1, 2}:
+            raise ValueError("GitHub model checkpoint version or format is incompatible.")
+        if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
+            raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
+        if int(metrics.get("vocab_size", 0)) != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
+            raise ValueError("GitHub model checkpoint does not have the required 5000-token vocabulary.")
+        if int(config.get("block_size", 0)) != 320:
+            raise ValueError("GitHub model checkpoint context size is not 320.")
+
+        os.replace(partial, target)
+        model_source = "github-release:" + str(release.get("tag_name", "latest"))
+        try:
+            (ROOT / "fross-model-source.txt").write_text(model_source + "\n", encoding="utf-8")
+        except OSError:
+            pass
+        print("FROSS startup: downloaded and verified GitHub model asset; SHA-256 " + digest.hexdigest(), flush=True)
+        return model_source
+    except Exception as exc:
+        print("FROSS startup: GitHub model bootstrap unavailable (" + type(exc).__name__ + "); upload a checkpoint from Settings.", flush=True)
+        return None
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+_startup_model_source = _bootstrap_latest_github_checkpoint(TRANSFORMER_MODEL_PATH)
+if _startup_model_source:
+    MODEL_SOURCE = _startup_model_source
 TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
+if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
+    _loaded_steps = int(TRANSFORMER_STATUS.get("training_steps", 0))
+    _loaded_vocab = int(TRANSFORMER_STATUS.get("vocab_size", TRANSFORMER_TOKENIZER.vocab_size))
+    _loaded_context = int(TRANSFORMER_MODEL.config.get("block_size", 0))
+    if (
+        _loaded_steps < MODEL_UPLOAD_MIN_STEPS
+        or _loaded_vocab != MODEL_UPLOAD_VOCAB_SIZE
+        or TRANSFORMER_TOKENIZER.vocab_size != MODEL_UPLOAD_VOCAB_SIZE
+        or _loaded_context != 320
+    ):
+        TRANSFORMER_MODEL = None
+        TRANSFORMER_TOKENIZER = None
+        TRANSFORMER_STATUS = {
+            "loaded": False,
+            "reason": "checkpoint-requirements-mismatch",
+            "training_steps": _loaded_steps,
+            "vocab_size": _loaded_vocab,
+            "block_size": _loaded_context,
+        }
 
 NATIVE_RUNTIME = None
 CPP_RUNTIME_STATUS = "disabled"
@@ -49,6 +154,8 @@ if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "tr
         CPP_RUNTIME_LIBRARY = os.environ.get("FROSS_CPP_RUNTIME_LIBRARY", str(ROOT / "libfross_cpp.so"))
         if TRANSFORMER_TOKENIZER is None or TRANSFORMER_MODEL is None:
             raise RuntimeError("trained checkpoint is not loaded")
+        if not Path(ONNX_MODEL_PATH).is_file():
+            transformer.export_onnx_model(TRANSFORMER_MODEL_PATH, ONNX_MODEL_PATH)
         NATIVE_RUNTIME = NativeRuntime(
             CPP_RUNTIME_LIBRARY,
             ONNX_MODEL_PATH,
