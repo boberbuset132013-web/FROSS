@@ -1822,14 +1822,12 @@ async function handleFrossModelUpload(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ ok: false, error: "Используй POST /api/model-upload." }, 405, request);
 
-  // Upload is available only to an authenticated account. The model password is
-  // verified by Hostless; this Worker never stores or logs the password.
+  // Upload is available only to a signed-in FROSS account. Hostless independently
+  // requires the shared Worker-to-brain service token before accepting a checkpoint.
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ ok: false, error: "Войди в FROSS, чтобы загрузить модель." }, 401, request);
 
-  const uploadPassword = request.headers.get("X-FROSS-Upload-Password") || "";
   const filename = request.headers.get("X-FROSS-Filename") || "fross-transformer.pt";
-  if (!uploadPassword) return frossJson({ ok: false, error: "Введи пароль загрузки модели." }, 400, request);
   if (!filename.toLowerCase().endsWith(".pt")) return frossJson({ ok: false, error: "Разрешены только файлы .pt." }, 400, request);
 
   const contentLength = Number(request.headers.get("Content-Length") || 0);
@@ -1871,7 +1869,6 @@ async function handleFrossModelUpload(request, env) {
       method: "POST",
       headers: {
         "Content-Type": "application/octet-stream",
-        "X-FROSS-Upload-Password": uploadPassword,
         "X-FROSS-Filename": encodeURIComponent(filename.slice(0, 240)),
         "X-FROSS-GITHUB-TOKEN": githubToken,
         "Authorization": "Bearer " + serviceToken,
