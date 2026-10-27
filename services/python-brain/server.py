@@ -163,6 +163,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         message = raw_message.strip()
         mode = "reasoning" if str(body.get("mode", "normal")).lower() in ("reasoning", "deep") else "normal"
+        # Do not let a low-CPU host spend minutes generating one HTTP response.
+        # The Worker sends an explicit budget; direct callers get a safe mode-based default.
+        default_request_tokens = 512 if mode == "reasoning" else 256
+        try:
+            requested_tokens = int(body.get("max_new_tokens", default_request_tokens))
+        except (TypeError, ValueError):
+            requested_tokens = default_request_tokens
+        request_token_limit = max(1, min(
+            requested_tokens,
+            GENERATION_TOKEN_LIMIT,
+            512,
+        ))
 
         raw_history = body.get("history", [])
         if not isinstance(raw_history, list):
@@ -212,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
                     history=history,
                     knowledge=knowledge,
                     mode=mode,
-                    max_new_tokens=GENERATION_TOKEN_LIMIT,
+                    max_new_tokens=request_token_limit,
                     native_runtime=NATIVE_RUNTIME,
                 ).strip()
         except Exception as exc:
