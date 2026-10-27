@@ -1,10 +1,10 @@
 build:
   command: ""
   system: docker
-  min_cpu: 1
-  max_cpu: 7
-  min_memory: 5120
-  max_memory: 10240
+  min_cpu: 0.5
+  max_cpu: 2
+  min_memory: 2048
+  max_memory: 4096
 dockerfile_path: "services/python-brain/Dockerfile"
 working_directory: "/"
 build_context_directory: "/"
