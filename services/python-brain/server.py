@@ -69,13 +69,20 @@ GENERATION_LOCK = threading.Lock()
 
 
 def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
+    """Send JSON while treating a client disconnect as a normal closed request."""
     payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(payload)))
-    handler.send_header("Cache-Control", "no-store")
-    handler.end_headers()
-    handler.wfile.write(payload)
+    try:
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Content-Length", str(len(payload)))
+        handler.send_header("Cache-Control", "no-store")
+        handler.end_headers()
+        handler.wfile.write(payload)
+    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+        # A Worker, proxy, or browser may time out/disconnect while inference is
+        # running. The response can no longer be delivered; don't print a traceback
+        # or let this routine create noisy server errors.
+        return
 
 
 class Handler(BaseHTTPRequestHandler):
