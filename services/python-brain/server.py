@@ -226,8 +226,9 @@ def _publish_checkpoint_to_github(
     sha256: str,
     training_steps: int,
     vocab_size: int,
+    github_token: str = "",
 ) -> tuple[dict[str, Any], str]:
-    token = os.environ.get("FROSS_GITHUB_TOKEN", "").strip()
+    token = (github_token or os.environ.get("FROSS_GITHUB_TOKEN", "")).strip()
     repo = MODEL_UPLOAD_REPOSITORY
     if len(token) < 20:
         raise RuntimeError("FROSS_GITHUB_TOKEN is not configured in Hostless.")
@@ -386,12 +387,23 @@ def _activate_uploaded_checkpoint(
 
 def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
     expected_password = os.environ.get("FROSS_MODEL_UPLOAD_PASSWORD", "")
-    github_token = os.environ.get("FROSS_GITHUB_TOKEN", "")
+    github_token = os.environ.get("FROSS_GITHUB_TOKEN", "").strip()
+    forwarded_github_token = handler.headers.get("X-FROSS-GITHUB-TOKEN", "").strip()
+    # When GitHub credentials are forwarded from the Cloudflare Worker, require
+    # the existing brain service token so arbitrary callers cannot inject their token.
+    if forwarded_github_token and not github_token:
+        supplied_service_token = handler.headers.get("Authorization", "")
+        if not SERVICE_TOKEN or not hmac.compare_digest(
+            supplied_service_token, "Bearer " + SERVICE_TOKEN
+        ):
+            respond(handler, 401, {"ok": False, "error": "Upload proxy authentication failed."})
+            return
+        github_token = forwarded_github_token
     if not expected_password:
         respond(handler, 503, {"ok": False, "error": "Секрет FROSS_MODEL_UPLOAD_PASSWORD не настроен в Hostless."})
         return
-    if len(github_token.strip()) < 20:
-        respond(handler, 503, {"ok": False, "error": "Секрет FROSS_GITHUB_TOKEN не настроен в Hostless."})
+    if len(github_token) < 20:
+        respond(handler, 503, {"ok": False, "error": "GitHub-токен не передан Worker и не настроен в Hostless."})
         return
 
     peer = str(handler.client_address[0]) if handler.client_address else "unknown"
@@ -474,6 +486,7 @@ def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
             sha256=sha256,
             training_steps=int(metrics["training_steps"]),
             vocab_size=int(metrics["vocab_size"]),
+            github_token=github_token,
         )
         _activate_uploaded_checkpoint(
             temp_checkpoint,
