@@ -52,7 +52,7 @@ export default {
       return frossJson({
         ok: true,
         worker: "FROSS",
-        version: "1.3",
+        version: "1.2",
         brainVersion: "1.4",
         build: "fross-hybrid-cpp-2026-10-26",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
@@ -1892,6 +1892,15 @@ async function handleFrossModelUpload(request, env) {
   }
 }
 
+function frossIsProgrammingRequest(message) {
+  const text = frossClean(message).toLowerCase().replace(/ё/g, "е");
+  // До появления отдельного режима «Программист» обычный чат не принимает задачи по коду.
+  const topic = /(^|[^a-zа-я0-9_])(программирован\w*|программист\w*|код\w*|скрипт\w*|функци\w*|класс\w*|алгоритм\w*|отлад\w*|дебаг\w*|javascript|typescript|python|пайто\w*|html|css|sql|json|api|regex|регулярн\w* выражен\w*|роблокс студио|roblox studio|lua|c\+\+|c#|java)(?=$|[^a-zа-я0-9_])/i;
+  const intent = /\b(напиши|написать|создай|сделай|сгенерируй|исправь|почини|перепиши|оптимизируй|объясни код|разбери код|помоги с кодом|реализуй|сверстай|собери проект|write|create|generate|fix|debug|refactor|implement|build)\b/i;
+  const codeShape = /\`\`\`|<\/?[a-z][^>]*>|\b(function|const|let|var|def|class|import|console\.log|print\s*\()\b/i;
+  return topic.test(text) && (intent.test(text) || codeShape.test(text) || /код|скрипт|программирован|функци|алгоритм|html|css|javascript|python|пайто|роблокс студио|roblox studio/i.test(text));
+}
+
 async function handleFrossApi(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/chat." }, 405, request);
@@ -1910,6 +1919,15 @@ async function handleFrossApi(request, env) {
   if (!quota.ok) return frossJson({ error: quota.error }, quota.status, request);
   const correctedQuery = frossCorrectText(message);
   const safetyReply = frossSafetyReply(message);
+  if (frossIsProgrammingRequest(message)) return frossJson({
+    name: FROSS_PROFILE.name,
+    reply: "Обычный режим FROSS пока не выполняет задачи программирования. Режим «Программист» пока оставлен как недоступная заглушка. Когда основной чат будет стабильно работать, мы отдельно разработаем этот режим.",
+    mode: "normal",
+    steps: ["Проверить режим", "Сообщить об ограничении"],
+    sources: [],
+    quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
+    diagnostics: { engine: "FROSS mode restriction", aiUsed: false, note: "Запрос по программированию остановлен серверным ограничением." }
+  }, 200, request);
   if (safetyReply) return frossJson({
     name: FROSS_PROFILE.name, reply: safetyReply, mode: "safety",
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
