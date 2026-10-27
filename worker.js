@@ -1861,21 +1861,25 @@ async function handleFrossModelUpload(request, env) {
   }
 
   try {
-    // Stream the body directly from the browser to Hostless; do not buffer a
-    // 63-MB checkpoint in Worker memory. The GitHub token stays server-to-server.
-    const upstream = await fetch(target, {
+    // BaseHTTPRequestHandler needs a Content-Length. Stream with FixedLengthStream
+    // so Cloudflare emits a fixed-length upload instead of chunked transfer encoding.
+    // This forwards the file without buffering the 63-MB checkpoint in Worker memory.
+    if (!request.body) return frossJson({ ok: false, error: "Файл не получен." }, 400, request);
+    const fixedBody = new FixedLengthStream(contentLength);
+    const forwarding = request.body.pipeTo(fixedBody.writable);
+    const upstreamPromise = fetch(target, {
       method: "POST",
       headers: {
         "Content-Type": "application/octet-stream",
-        "Content-Length": String(contentLength),
         "X-FROSS-Upload-Password": uploadPassword,
         "X-FROSS-Filename": encodeURIComponent(filename.slice(0, 240)),
         "X-FROSS-GITHUB-TOKEN": githubToken,
         "Authorization": "Bearer " + serviceToken,
         "Accept": "application/json",
       },
-      body: request.body,
+      body: fixedBody.readable,
     });
+    const [upstream] = await Promise.all([upstreamPromise, forwarding]);
     const headers = new Headers({
       "Content-Type": upstream.headers.get("Content-Type") || "application/json; charset=utf-8",
       "Cache-Control": "no-store",
