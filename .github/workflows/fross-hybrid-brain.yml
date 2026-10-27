@@ -47,6 +47,20 @@ jobs:
           echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
       - name: Train small test model, export ONNX, and compare native logits
         run: python -m unittest discover -s tests -v
+      - name: Diagnose shared Yandex Disk checkpoint
+        continue-on-error: true
+        env:
+          FROSS_CHECKPOINT_URL: https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
+        run: |
+          echo "Checking the exact public checkpoint URL configured for Hostless."
+          python services/python-brain/download_model.py "$FROSS_CHECKPOINT_URL" "$RUNNER_TEMP/fross-shared-checkpoint.pt"
+          printf 'uploaded-checkpoint\n' > "$RUNNER_TEMP/fross-model-source.txt"
+          python training/distillation/verify_checkpoint.py \
+            --checkpoint "$RUNNER_TEMP/fross-shared-checkpoint.pt" \
+            --model-source "$RUNNER_TEMP/fross-model-source.txt" \
+            --required-model-steps 600 \
+            --train-steps 600 \
+            --vocab-size 5000
       - name: Build and smoke-test the production Docker image
         run: |
           docker build --build-arg FROSS_MODEL_URL= --build-arg FROSS_TRAIN_STEPS=2 -f services/python-brain/Dockerfile -t fross-brain-smoke .
