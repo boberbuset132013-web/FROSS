@@ -62,7 +62,7 @@ jobs:
             --vocab-size 5000
       - name: Build and smoke-test the production Docker image
         run: |
-          docker build --build-arg FROSS_TRAIN_STEPS=600 -f services/python-brain/Dockerfile -t fross-brain-smoke .
+          docker build -f services/python-brain/Dockerfile -t fross-brain-smoke .
           docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test -e FROSS_MAX_GENERATION_TOKENS=12 fross-brain-smoke
           cleanup() {
             docker logs fross-brain-smoke || true
@@ -90,7 +90,7 @@ jobs:
           model_status = health.get("generationModelStatus", {})
           assert model_status.get("training_steps") == 3000, health
           assert model_status.get("vocab_size") == 5000, health
-          print("Docker health check passed: downloaded 3,000-step Yandex checkpoint and C++ ONNX inference are active.")
+          print("Docker health check passed: pre-trained checkpoint downloaded, validated and C++ ONNX inference is active.")
           PY
           curl -fsS -X POST http://127.0.0.1:10000/ready -H 'Authorization: Bearer ci-test' > "$RUNNER_TEMP/fross-ready.json"
           python - "$RUNNER_TEMP/fross-ready.json" <<'PY'
