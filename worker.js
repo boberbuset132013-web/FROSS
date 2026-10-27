@@ -1894,12 +1894,12 @@ async function handleFrossModelUpload(request, env) {
 
 function frossIsProgrammingRequest(message) {
   const text = frossClean(message).toLowerCase().replace(/ё/g, "е");
-  const programmingTopic = /(^|[^a-zа-я0-9_])(программирован\w*|программист\w*|скрипт\w*|функци\w*|класс\w*|алгоритм\w*|отлад\w*|дебаг\w*|javascript|typescript|python|пайто\w*|html|css|sql|json|api|regex|регулярн\w* выражен\w*|роблокс студио|roblox studio|lua|c\+\+|c#|java)(?=$|[^a-zа-я0-9_])/i;
+  const programmingTopic = /(^|[^a-zа-я0-9_])(программирован[а-я]*|программист[а-я]*|скрипт[а-я]*|функци[а-я]*|класс[а-я]*|алгоритм[а-я]*|отлад[а-я]*|дебаг[а-я]*|javascript|typescript|python|пайто[а-я]*|html|css|sql|json|api|regex|регулярн\w* выражен\w*|роблокс студио|roblox studio|lua|c\+\+|c#|java)(?=$|[^a-zа-я0-9_])/i;
   const codeIntent = /(^|[^a-zа-я])(код|code)(?=$|[^a-zа-я])/i.test(text) &&
     /\b(напиши|написать|создай|сделай|сгенерируй|исправь|почини|перепиши|оптимизируй|реализуй|сверстай|write|create|generate|fix|debug|refactor|implement|build)\b/i.test(text);
   const programmingIntent = /\b(напиши|написать|создай|сделай|сгенерируй|исправь|почини|перепиши|оптимизируй|объясни|расскажи|реализуй|сверстай|собери|write|create|generate|fix|debug|refactor|implement|build|explain|teach)\b/i.test(text);
   const codeShape = /\`\`\`|<\/?[a-z][^>]*>|\b(function|const|let|var|def|class|import|console\.log|print\s*\()/i.test(text);
-  return codeIntent || (programmingTopic.test(text) && (programmingIntent || codeShape || programmingTopic.test(text)));
+  return codeIntent || programmingTopic.test(text) || codeShape;
 }
 
 async function handleFrossApi(request, env) {
