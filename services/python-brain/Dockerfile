@@ -4,16 +4,19 @@ WORKDIR /app
 
 # This image must never train a model. Training is offline; normal deployments
 # start without bundling a checkpoint so an upload from Settings can bootstrap the service.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl g++ \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates curl g++ \
     && rm -rf /var/lib/apt/lists/*
-RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
-    && python -m pip install --no-cache-dir "onnx>=1.16,<2"
+RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 --index-url https://download.pytorch.org/whl/cpu torch \
+    && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2"
 
 ARG ONNXRUNTIME_VERSION=1.31.0
 RUN mkdir -p /opt/onnxruntime \
-    && curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz" \
-       | tar -xz --strip-components=1 -C /opt/onnxruntime
+    && curl --fail --location --show-error --silent --retry 5 --retry-all-errors --connect-timeout 30 --max-time 300 \
+       "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz" \
+       --output /tmp/onnxruntime.tgz \
+    && tar -xzf /tmp/onnxruntime.tgz --strip-components=1 -C /opt/onnxruntime \
+    && rm /tmp/onnxruntime.tgz
 ENV LD_LIBRARY_PATH=/opt/onnxruntime/lib
 
 COPY fross_transformer.py /app/fross_transformer.py
