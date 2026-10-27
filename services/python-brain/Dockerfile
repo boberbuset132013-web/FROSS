@@ -27,14 +27,17 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
       -I/opt/onnxruntime/include -L/opt/onnxruntime/lib -lonnxruntime \
       -Wl,-rpath,/opt/onnxruntime/lib -o /app/libfross_cpp.so
 
+ARG FROSS_BUILD_BUNDLE_MODEL=0
 ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
 ARG FROSS_REQUIRED_MODEL_STEPS=3000
 ARG FROSS_VOCAB_SIZE=5000
 
-# Fail the build if download, checkpoint validation, ONNX export or native smoke
-# test fails. No training command or alternate randomly-initialized model exists here.
-RUN set -eu; \
-    echo "Downloading pre-trained FROSS checkpoint..."; \
+# Normal Hostless builds do not download a checkpoint or spend time exporting ONNX.
+# The running service accepts a model from Settings, saves it as a GitHub Release Asset,
+# and reloads that same asset after future restarts. CI explicitly bundles a known
+# checkpoint to exercise full production inference in the smoke test.
+RUN set -eu; if [ "${FROSS_BUILD_BUNDLE_MODEL}" = "1" ]; then \
+    echo "Bundling a pre-trained FROSS checkpoint for CI smoke testing..."; \
     python /app/download_model.py "${FROSS_MODEL_URL}" /app/fross-transformer.download; \
     mv /app/fross-transformer.download /app/fross-transformer.pt; \
     printf 'uploaded-checkpoint\n' > /app/fross-model-source.txt; \
@@ -48,7 +51,10 @@ RUN set -eu; \
       --output /app/fross-transformer.pt \
       --onnx-output /app/fross-transformer.onnx; \
     python -c "import onnx; onnx.checker.check_model(onnx.load('/app/fross-transformer.onnx'))"; \
-    python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()"
+    python -c "import math; import fross_transformer as t; from native_runtime import NativeRuntime; m, tok, status=t.load_model('/app/fross-transformer.pt'); assert m is not None and tok is not None, status; r=NativeRuntime('/app/libfross_cpp.so','/app/fross-transformer.onnx',block_size=m.config['block_size'],vocab_size=tok.vocab_size); logits=r.forward(tok.encode('Привет!')); assert len(logits)==tok.vocab_size and all(math.isfinite(x) for x in logits); print('C++/ONNX smoke test passed:', len(logits), 'logits'); r.close()"; \
+  else \
+    echo "Skipping model download during build; upload it from FROSS Settings."; \
+  fi
 
 ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
 ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
