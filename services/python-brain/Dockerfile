@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1
+ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1 FROSS_MODEL_GITHUB_REPOSITORY=boberbuset132013-web/FROSS
 WORKDIR /app
 
 # This image must never train a model. Training is an offline developer/CI task;
@@ -28,7 +28,7 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
       -Wl,-rpath,/opt/onnxruntime/lib -o /app/libfross_cpp.so
 
 ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
-ARG FROSS_REQUIRED_MODEL_STEPS=600
+ARG FROSS_REQUIRED_MODEL_STEPS=3000
 ARG FROSS_VOCAB_SIZE=5000
 
 # Fail the build if download, checkpoint validation, ONNX export or native smoke
