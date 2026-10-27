@@ -1918,7 +1918,15 @@ async function handleFrossApi(request, env) {
     remote = await frossCallBrainService(
       selectedEndpoint,
       frossBrainServiceToken(env),
-      { message, mode, history, knowledge: modelKnowledge },
+      {
+        message,
+        mode,
+        history,
+        knowledge: modelKnowledge,
+        // The Python service runs on a small CPU quota. Keep normal replies quick
+        // and allow a larger, but still bounded, budget for reasoning mode.
+        max_new_tokens: mode === "reasoning" ? 512 : 256
+      },
       65000
     );
     if (remote.handled) {
