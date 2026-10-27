@@ -49,7 +49,30 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
     """Download the latest persisted GitHub Release asset on startup, if one exists."""
     target = Path(destination)
     if target.is_file():
-        return None
+        try:
+            import torch
+            existing = torch.load(target, map_location="cpu", weights_only=True)
+            metrics = existing.get("metrics") if isinstance(existing, dict) else None
+            config = existing.get("config") if isinstance(existing, dict) else None
+            compatible = (
+                isinstance(metrics, dict)
+                and isinstance(config, dict)
+                and existing.get("version") == transformer.VERSION
+                and int(existing.get("format_version", 0)) in {1, 2}
+                and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
+                and int(metrics.get("vocab_size", 0)) == MODEL_UPLOAD_VOCAB_SIZE
+                and metrics.get("vocab_target_reached") is True
+                and int(config.get("block_size", 0)) == 320
+            )
+            if compatible:
+                return None
+        except Exception:
+            pass
+        # Never let a stale/incompatible baked-in checkpoint prevent recovery
+        # from the latest known-good GitHub Release asset.
+        target.unlink(missing_ok=True)
+        Path(ONNX_MODEL_PATH).unlink(missing_ok=True)
+        print("FROSS startup: existing checkpoint is incompatible; trying the latest GitHub model.", flush=True)
     repository = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         return None
