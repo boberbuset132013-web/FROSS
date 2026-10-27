@@ -2,22 +2,24 @@
 
 ## Architecture
 
-- Python/PyTorch trains the repository's own Transformer from random weights.
-- The exact trained checkpoint is exported to a fixed-shape ONNX graph.
+- The Transformer is trained offline, outside Hostless deployment builds.
+- Hostless only downloads an already-trained checkpoint, validates it, exports an ONNX graph and smoke-tests native inference.
 - C++ ONNX Runtime executes inference; Python retains prompt formatting, sampling, HTTP and memory/search integration.
 - Basic greetings, thanks and goodbyes are handled deterministically so they cannot turn into gibberish. Questions and tasks still use the trained model.
 - No pretrained LLM or hosted LLM API is used.
 
 ## Container build settings
 
-The Docker build context must be the **repository root** because the Dockerfile copies `fross_transformer.py` and `data/fross_corpus.jsonl` from the root.
+The Docker build context must be the **repository root**.
 
 - Dockerfile path: `services/python-brain/Dockerfile`
 - Build context: repository root (`.`)
 - Port: `10000`
 - Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
 
-The image first tries the hosted `FROSS_MODEL_URL` checkpoint. It accepts a compatible FROSS Transformer 1.4 checkpoint with a 5,000-token vocabulary, block size 320, and at least 600 training steps, so a valid uploaded checkpoint avoids retraining during deployment. If the URL is unavailable or the checkpoint is incompatible, the default is a bounded 600-step local training run. The actual training step count and source are reported by `modelSource` and `generationModelStatus.training_steps`; accepting a 600-step checkpoint does not mean it has been trained for 3,000 steps. Set build arg `FROSS_TRAIN_STEPS=3000` only when a long build is acceptable; above 600 steps, the Dockerfile saves a 600-step intermediate checkpoint and resumes the optimizer/RNG state to the cumulative target. The selected source is visible as `modelSource` in `/health` and `/api/health`.
+The Dockerfile has no training command and no fallback-training path. Every deployment downloads the pre-trained checkpoint from `FROSS_MODEL_URL` (default: the public Yandex Disk checkpoint), verifies that it is a compatible FROSS Transformer 1.4 checkpoint with a 5,000-token vocabulary, block size 320 and at least `FROSS_REQUIRED_MODEL_STEPS` steps, then exports and validates ONNX. Download, compatibility validation, export or native smoke-test failures stop the build. Training must be performed separately, then the new checkpoint must be uploaded to the configured model URL before deploying it.
+
+The selected source is reported as `modelSource` in `/health` and `/api/health`.
 
 ## Verify deployment
 
@@ -35,4 +37,4 @@ If `inferenceBackend` is `python-torch`, inspect `cppRuntimeStatus` and hosting 
 
 Install development/test dependencies with `python -m pip install -r requirements.txt`. Production uses the CPU-specific PyTorch wheel and pinned native runtime in the Dockerfile instead.
 
-The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains a small temporary model, verifies checkpoint loading, checks prompt-context preservation, exports and executes ONNX, compiles C++, and compares C++ logits with Python logits from the same weights.
+Train and export checkpoints outside Hostless builds. The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains a small temporary model for tests, validates the hosted deployment checkpoint, builds the production Docker image without training commands, exercises the HTTP endpoints, exports and executes ONNX, compiles C++, and compares C++ logits with Python logits from identical weights.
