@@ -63,7 +63,7 @@ jobs:
             --vocab-size 5000
       - name: Build and smoke-test the production Docker image
         run: |
-          docker build --build-arg FROSS_MODEL_URL= --build-arg FROSS_TRAIN_STEPS=2 -f services/python-brain/Dockerfile -t fross-brain-smoke .
+          docker build --build-arg FROSS_SKIP_MODEL_DOWNLOAD=1 --build-arg FROSS_TRAIN_STEPS=2 -f services/python-brain/Dockerfile -t fross-brain-smoke .
           docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test -e FROSS_MAX_GENERATION_TOKENS=12 fross-brain-smoke
           cleanup() {
             docker logs fross-brain-smoke || true
