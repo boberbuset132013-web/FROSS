@@ -21,7 +21,7 @@ The Dockerfile has no training command. Normal Hostless deployments use the defa
 
 ### Protected live model upload
 
-Open FROSS chat, go to **Settings → Upload FROSS model**, then choose the `.pt` checkpoint (up to 120 MiB) and enter the upload password. The page sends the file through the Cloudflare Worker to Hostless. Configure `FROSS_MODEL_UPLOAD_PASSWORD` as a Hostless service secret. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret, forwards it only server-to-server alongside the existing `FROSS_BRAIN_SERVICE_TOKEN`, and never exposes it to browser JavaScript. The existing `FROSS_BRAIN_SERVICE_TOKEN` must be configured in both Cloudflare and Hostless as it already is for chat requests.
+Open FROSS chat, go to **Settings → Upload FROSS model**, then choose the `.pt` checkpoint (up to 90 MiB) and enter the upload password. The page sends the file through the Cloudflare Worker to Hostless. Configure `FROSS_MODEL_UPLOAD_PASSWORD` as a Hostless service secret. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret, forwards it only server-to-server alongside the existing `FROSS_BRAIN_SERVICE_TOKEN`, and never exposes it to browser JavaScript. The existing `FROSS_BRAIN_SERVICE_TOKEN` must be configured in both Cloudflare and Hostless as it already is for chat requests.
 
 Optional Hostless settings:
 
