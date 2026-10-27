@@ -45,6 +45,8 @@ jobs:
             -Wl,-rpath,"$RUNNER_TEMP/onnxruntime-linux-x64-1.31.0/lib" \
             -o "$RUNNER_TEMP/libfross_cpp.so"
           echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
+      - name: Compile Python service sources
+        run: python -m py_compile services/python-brain/server.py services/python-brain/download_model.py
       - name: Train small test model, export ONNX, and compare native logits
         run: python -m unittest discover -s tests -v
       - name: Diagnose shared Yandex Disk checkpoint
@@ -62,7 +64,7 @@ jobs:
             --vocab-size 5000
       - name: Build and smoke-test the production Docker image
         run: |
-          docker build -f services/python-brain/Dockerfile -t fross-brain-smoke .
+          docker build --build-arg FROSS_BUILD_BUNDLE_MODEL=1 -f services/python-brain/Dockerfile -t fross-brain-smoke .
           docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test -e FROSS_MAX_GENERATION_TOKENS=12 fross-brain-smoke
           cleanup() {
             docker logs fross-brain-smoke || true
@@ -77,6 +79,8 @@ jobs:
             sleep 2
           done
           test -s "$RUNNER_TEMP/fross-health.json"
+          curl -fsS http://127.0.0.1:10000/admin/model-upload > "$RUNNER_TEMP/fross-upload-page.html"
+          grep -q 'Загрузка модели' "$RUNNER_TEMP/fross-upload-page.html"
           python - "$RUNNER_TEMP/fross-health.json" <<'PY'
           import json, sys
           with open(sys.argv[1], encoding="utf-8") as stream:

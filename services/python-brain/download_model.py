@@ -11,9 +11,41 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-USER_AGENT = "FROSS-Checkpoint-Downloader/1.1"
+USER_AGENT = "FROSS-Checkpoint-Downloader/1.2"
 MAX_ATTEMPTS = 5
 MIN_CHECKPOINT_BYTES = 1_000_000
+
+
+def latest_github_checkpoint_url(repository: str) -> tuple[str, str] | None:
+    """Find the newest published Release Asset, if one exists, without hard-coding a model URL."""
+    repository = str(repository or "").strip()
+    if not repository or "/" not in repository or " " in repository:
+        return None
+    api_url = "https://api.github.com/repos/" + repository + "/releases/latest"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("FROSS_GITHUB_TOKEN", "").strip()
+    if len(token) >= 20:
+        headers["Authorization"] = "Bearer " + token
+    request = urllib.request.Request(api_url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            metadata = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 404):
+            return None
+        raise
+    assets = metadata.get("assets", [])
+    for asset in assets if isinstance(assets, list) else []:
+        if not isinstance(asset, dict) or asset.get("name") != "fross-transformer.pt":
+            continue
+        url = asset.get("browser_download_url")
+        if isinstance(url, str) and url.startswith("https://github.com/"):
+            return url, str(metadata.get("tag_name", "latest"))
+    return None
 
 
 def is_yandex_public_link(url: str) -> bool:
@@ -77,6 +109,21 @@ def main() -> int:
         return 2
 
     source_url, output_name = sys.argv[1], sys.argv[2]
+    repository = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "").strip()
+    if repository:
+        try:
+            latest = latest_github_checkpoint_url(repository)
+            if latest is not None:
+                source_url, release_tag = latest
+                print(f"Using published GitHub model release {release_tag} from {repository}.", flush=True)
+            else:
+                print(f"No published FROSS checkpoint release found in {repository}; using configured fallback URL.", flush=True)
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as error:
+            print(
+                f"Could not query GitHub model releases ({type(error).__name__}); using configured fallback URL.",
+                file=sys.stderr,
+                flush=True,
+            )
     output = Path(output_name)
     output.parent.mkdir(parents=True, exist_ok=True)
     partial_path = output.with_name(output.name + ".part")

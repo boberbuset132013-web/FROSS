@@ -69,6 +69,7 @@ export default {
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
     if (path === "/api/train") return frossApiGuard(path, request, () => handleFrossTrain(request, env));
     if (path === "/api/auto-study") return frossApiGuard(path, request, () => handleFrossAutoStudy(request, env, ctx));
+    if (path === "/api/model-upload") return frossApiGuard(path, request, () => handleFrossModelUpload(request, env));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
     // Главная страница Worker: диагностика сервиса, без Telegram и без прокси.
@@ -1814,6 +1815,83 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 8000) {
       generationModelLoaded: healthData?.generationModelLoaded === true,
       error: error?.name === "AbortError" ? "Python health/readiness check timed out." : "Python service is unreachable."
     };
+  }
+}
+
+async function handleFrossModelUpload(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "POST") return frossJson({ ok: false, error: "Используй POST /api/model-upload." }, 405, request);
+
+  // Upload is available only to an authenticated account. The model password is
+  // verified by Hostless; this Worker never stores or logs the password.
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ ok: false, error: "Войди в FROSS, чтобы загрузить модель." }, 401, request);
+
+  const uploadPassword = request.headers.get("X-FROSS-Upload-Password") || "";
+  const filename = request.headers.get("X-FROSS-Filename") || "fross-transformer.pt";
+  if (!uploadPassword) return frossJson({ ok: false, error: "Введи пароль загрузки модели." }, 400, request);
+  if (!filename.toLowerCase().endsWith(".pt")) return frossJson({ ok: false, error: "Разрешены только файлы .pt." }, 400, request);
+
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (!Number.isSafeInteger(contentLength) || contentLength < 1_000_000 || contentLength > 90 * 1024 * 1024) {
+    return frossJson({ ok: false, error: "Размер файла должен быть от 1 МБ до 90 МБ." }, 413, request);
+  }
+
+  const githubToken = frossGithubToken(env);
+  const serviceToken = frossBrainServiceToken(env);
+  if (githubToken.length < 20) {
+    return frossJson({ ok: false, error: "Секрет FROSS_GITHUB_TOKEN не настроен в Cloudflare Worker." }, 503, request);
+  }
+  if (serviceToken.length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
+    return frossJson({ ok: false, error: "Секрет FROSS_BRAIN_SERVICE_TOKEN не настроен." }, 503, request);
+  }
+
+  let target;
+  try {
+    const configured = new URL(frossPythonBrainUrl(env));
+    if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
+      return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
+    }
+    const basePath = configured.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
+    configured.pathname = (basePath || "") + "/admin/model-upload";
+    configured.search = "";
+    target = configured.toString();
+  } catch {
+    return frossJson({ ok: false, error: "Неверно настроен адрес Python brain." }, 503, request);
+  }
+
+  try {
+    // BaseHTTPRequestHandler needs a Content-Length. Stream with FixedLengthStream
+    // so Cloudflare emits a fixed-length upload instead of chunked transfer encoding.
+    // This forwards the file without buffering the 63-MB checkpoint in Worker memory.
+    if (!request.body) return frossJson({ ok: false, error: "Файл не получен." }, 400, request);
+    const fixedBody = new FixedLengthStream(contentLength);
+    const forwarding = request.body.pipeTo(fixedBody.writable);
+    const upstreamPromise = fetch(target, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-FROSS-Upload-Password": uploadPassword,
+        "X-FROSS-Filename": encodeURIComponent(filename.slice(0, 240)),
+        "X-FROSS-GITHUB-TOKEN": githubToken,
+        "Authorization": "Bearer " + serviceToken,
+        "Accept": "application/json",
+      },
+      body: fixedBody.readable,
+    });
+    const [upstream] = await Promise.all([upstreamPromise, forwarding]);
+    const headers = new Headers({
+      "Content-Type": upstream.headers.get("Content-Type") || "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    return new Response(upstream.body, { status: upstream.status, headers });
+  } catch (error) {
+    return frossJson({
+      ok: false,
+      error: error?.name === "AbortError"
+        ? "Сервис модели не завершил загрузку вовремя."
+        : "Не удалось передать файл в Python brain. Проверь доступность Hostless.",
+    }, 502, request);
   }
 }
 
