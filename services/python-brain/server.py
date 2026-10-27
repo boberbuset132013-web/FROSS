@@ -39,7 +39,7 @@ transformer.configure_runtime_threads()
 
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(TRANSFORMER_MODEL_PATH).with_suffix(".onnx")))
-MAX_MODEL_UPLOAD_BYTES = 120 * 1024 * 1024
+MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
 MODEL_UPLOAD_MIN_STEPS = max(3000, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
 MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "5000"))
@@ -111,7 +111,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
                     break
                 total += len(chunk)
                 if total > MAX_MODEL_UPLOAD_BYTES:
-                    raise ValueError("GitHub model asset exceeds the 120-MiB limit.")
+                    raise ValueError("GitHub model asset exceeds the 90-MiB limit.")
                 digest.update(chunk)
                 output.write(chunk)
             output.flush()
@@ -245,7 +245,7 @@ small{color:#98a5b8}.warn{color:#ffd181}
 <form id="uploadForm">
 <label for="password">Пароль загрузки</label>
 <input id="password" type="password" autocomplete="current-password" required>
-<label for="modelFile">Файл модели (.pt, максимум 120 МБ)</label>
+<label for="modelFile">Файл модели (.pt, максимум 90 МБ)</label>
 <input id="modelFile" type="file" accept=".pt,application/octet-stream" required>
 <button id="submit" type="submit">Проверить и загрузить модель</button>
 </form>
@@ -262,7 +262,7 @@ event.preventDefault();
 const picked=file.files&&file.files[0];
 if(!picked){status.textContent="Сначала выбери .pt файл.";return;}
 if(!picked.name.toLowerCase().endsWith(".pt")){status.textContent="Нужен файл с расширением .pt.";return;}
-if(picked.size<1000000||picked.size>120*1024*1024){status.textContent="Размер файла должен быть от 1 МБ до 120 МБ.";return;}
+if(picked.size<1000000||picked.size>120*1024*1024){status.textContent="Размер файла должен быть от 1 МБ до 90 МБ.";return;}
 submit.disabled=true;bar.style.width="0%";status.textContent="Передаю файл на сервер…";
 const xhr=new XMLHttpRequest();xhr.open("POST",location.pathname);xhr.timeout=30*60*1000;
 xhr.setRequestHeader("Content-Type","application/octet-stream");
@@ -557,7 +557,7 @@ def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
     except ValueError:
         content_length = 0
     if content_length < 1_000_000 or content_length > MAX_MODEL_UPLOAD_BYTES:
-        respond(handler, 413, {"ok": False, "error": "Размер модели должен быть от 1 МБ до 120 МБ."})
+        respond(handler, 413, {"ok": False, "error": "Размер модели должен быть от 1 МБ до 90 МБ."})
         return
     filename = urllib.parse.unquote(handler.headers.get("X-FROSS-Filename", "fross-transformer.pt"))
     filename = Path(filename.replace("\\", "/")).name
