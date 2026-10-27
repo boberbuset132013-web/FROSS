@@ -21,13 +21,15 @@ The Dockerfile has no training command and no fallback-training path. During a d
 
 ### Protected live model upload
 
-Open `https://fross-python-brain.hostless.app/admin/model-upload` to access the upload form. Upload is restricted to `.pt` checkpoints up to 120 MiB, and requires these Hostless service secrets:
+Open FROSS chat, go to **Settings → Upload FROSS model**, then choose the `.pt` checkpoint (up to 120 MiB) and enter the upload password. The page sends the file through the Cloudflare Worker to Hostless. Configure `FROSS_MODEL_UPLOAD_PASSWORD` as a Hostless service secret. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret, forwards it only server-to-server alongside the existing `FROSS_BRAIN_SERVICE_TOKEN`, and never exposes it to browser JavaScript. The existing `FROSS_BRAIN_SERVICE_TOKEN` must be configured in both Cloudflare and Hostless as it already is for chat requests.
 
-- `FROSS_MODEL_UPLOAD_PASSWORD`: the administrator-selected upload password.
-- `FROSS_GITHUB_TOKEN`: a token with write permission to repository contents and Releases for the configured repository.
-- `FROSS_MODEL_GITHUB_REPOSITORY`: optional; defaults to `boberbuset132013-web/FROSS`.
+Optional Hostless settings:
+
+- `FROSS_MODEL_GITHUB_REPOSITORY`: defaults to `boberbuset132013-web/FROSS`.
 - `FROSS_MODEL_MIN_STEPS`: minimum accepted training steps; the server enforces at least 3,000.
 - `FROSS_MODEL_VOCAB_SIZE`: required vocabulary size; defaults to 5,000.
+
+The standalone `/admin/model-upload` page is also retained for server-side diagnostics, but the normal workflow is the FROSS chat Settings panel. The upload password is verified on Hostless and rate-limited after repeated failures.
 
 The endpoint checks checkpoint format/version, training steps, vocabulary and context size, exports an ONNX candidate, and smoke-tests the C++ runtime before publishing it. The binary is uploaded as a GitHub Release Asset named `fross-transformer.pt`; `model-storage/current.json` stores its release URL, SHA-256, size and model metadata. This keeps the repository directory small rather than adding a 63-MB binary to every Git commit. Once published, the service atomically switches its in-memory model without rebuilding Docker. The same Release Asset is selected on subsequent deployments, so it does not have to be uploaded again.
 
