@@ -1833,8 +1833,8 @@ async function handleFrossModelUpload(request, env) {
   if (!filename.toLowerCase().endsWith(".pt")) return frossJson({ ok: false, error: "Разрешены только файлы .pt." }, 400, request);
 
   const contentLength = Number(request.headers.get("Content-Length") || 0);
-  if (!Number.isSafeInteger(contentLength) || contentLength < 1_000_000 || contentLength > 120 * 1024 * 1024) {
-    return frossJson({ ok: false, error: "Размер файла должен быть от 1 МБ до 120 МБ." }, 413, request);
+  if (!Number.isSafeInteger(contentLength) || contentLength < 1_000_000 || contentLength > 90 * 1024 * 1024) {
+    return frossJson({ ok: false, error: "Размер файла должен быть от 1 МБ до 90 МБ." }, 413, request);
   }
 
   const githubToken = frossGithubToken(env);
