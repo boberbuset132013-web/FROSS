@@ -66,11 +66,13 @@ RUN if [ "${FROSS_SKIP_MODEL_DOWNLOAD}" = "1" ]; then \
           echo "Hosted FROSS checkpoint accepted."; \
         else \
           rm -f /app/fross-transformer.pt /app/fross-model-source.candidate; \
-          echo "Hosted checkpoint validation failed; falling back to repository training."; \
+          echo "ERROR: Hosted FROSS checkpoint failed compatibility validation; refusing to silently train a fallback model."; \
+          exit 1; \
         fi; \
       else \
         rm -f /app/fross-transformer.download; \
-        echo "Hosted checkpoint download failed; falling back to repository training."; \
+        echo "ERROR: Hosted FROSS checkpoint download failed; refusing to spend build time training a fallback model."; \
+        exit 1; \
       fi; \
     fi
 
