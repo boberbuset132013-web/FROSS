@@ -35,6 +35,7 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 # Prefer the hosted checkpoint when it is a compatible FROSS 1.4 model.
 # If download/validation fails, the image still gets a bounded 600-step model.
 ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
+ARG FROSS_SKIP_MODEL_DOWNLOAD=0
 # Accept a compatible uploaded Brain 1.4 checkpoint from 600 steps upward to avoid
 # retraining during every deploy. The /health endpoint always reports its real step count.
 ARG FROSS_REQUIRED_MODEL_STEPS=600
@@ -47,9 +48,12 @@ RUN python /app/training/distillation/prepare_corpus.py \
        --teacher /app/data/fross_teacher_corpus.jsonl \
        --output /app/data/fross_training_corpus.jsonl
 
-RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
+RUN if [ "${FROSS_SKIP_MODEL_DOWNLOAD}" = "1" ]; then \
+      echo "Hosted checkpoint download is disabled by FROSS_SKIP_MODEL_DOWNLOAD=1."; \
+    else \
+      MODEL_URL="${FROSS_MODEL_URL:-https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w}"; \
       echo "Attempting to download the hosted FROSS checkpoint..."; \
-      if python /app/download_model.py "${FROSS_MODEL_URL}" /app/fross-transformer.download; then \
+      if python /app/download_model.py "${MODEL_URL}" /app/fross-transformer.download; then \
         mv /app/fross-transformer.download /app/fross-transformer.pt; \
         printf 'uploaded-checkpoint\n' > /app/fross-model-source.candidate; \
         if python /app/training/distillation/verify_checkpoint.py \
@@ -68,8 +72,6 @@ RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
         rm -f /app/fross-transformer.download; \
         echo "Hosted checkpoint download failed; falling back to repository training."; \
       fi; \
-    else \
-      echo "FROSS_MODEL_URL is empty; training from repository corpus."; \
     fi
 
 # 3,000-step training remains available as a build argument, but is not forced
