@@ -196,8 +196,6 @@ if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "tr
         CPP_RUNTIME_STATUS = type(exc).__name__
 
 MAX_BODY = 1024 * 1024
-_UPLOAD_ATTEMPTS: dict[str, tuple[int, float]] = {}
-_UPLOAD_ATTEMPTS_LOCK = threading.Lock()
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
 ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.4"
 MAX_REPLY_CHARS = 50000
@@ -221,64 +219,14 @@ class GitHubAPIError(RuntimeError):
 
 
 MODEL_UPLOAD_HTML = r"""<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#101116"><title>FROSS · Загрузка модели</title>
-<style>
-:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#101116;color:#f4f5f8}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px}
-main{width:min(720px,100%);background:#191d25;border:1px solid #343b49;border-radius:20px;padding:26px;box-shadow:0 20px 70px #0005}
-h1{margin:0 0 8px;font-size:25px}p{color:#bac3d3;line-height:1.5}
-label{display:block;margin:18px 0 7px;color:#d6ddeb;font-weight:600}
-input[type=password],input[type=file]{display:block;width:100%;padding:12px;border:1px solid #475265;border-radius:10px;background:#10141b;color:#fff}
-button{margin-top:18px;border:0;border-radius:10px;padding:12px 16px;background:#087e4c;color:white;font-weight:700;cursor:pointer;width:100%}
-button:disabled{opacity:.55;cursor:wait}.bar{height:8px;background:#303846;border-radius:9px;overflow:hidden;margin-top:16px}.bar span{display:block;width:0;height:100%;background:#20c77a;transition:width .1s}
-#status{white-space:pre-wrap;overflow-wrap:anywhere;background:#11151c;border:1px solid #303846;padding:12px;border-radius:10px;margin-top:14px;min-height:44px}
-small{color:#98a5b8}.warn{color:#ffd181}
-</style>
-</head>
-<body><main>
-<h1>FROSS · Загрузка модели</h1>
-<p>Загрузи совместимый файл <b>fross-transformer.pt</b>. Сервер проверит Brain 1.4, словарь 5000 токенов и минимум 3000 шагов, сохранит резервную копию в GitHub и переключит модель без пересборки Docker.</p>
-<p class="warn">Операция может занять до 30 минут. Не закрывай вкладку до результата. Не загружай сюда GitHub-токен — только пароль загрузки.</p>
-<form id="uploadForm">
-<label for="password">Пароль загрузки</label>
-<input id="password" type="password" autocomplete="current-password" required>
-<label for="modelFile">Файл модели (.pt, максимум 90 МБ)</label>
-<input id="modelFile" type="file" accept=".pt,application/octet-stream" required>
-<button id="submit" type="submit">Проверить и загрузить модель</button>
-</form>
-<div class="bar"><span id="bar"></span></div>
-<div id="status" role="status" aria-live="polite">Ожидаю файл модели.</div>
-<small>Пароль отправляется только заголовком HTTPS-запроса. Страница не сохраняет его в браузере.</small>
-</main>
-<script>
-(function(){
-const form=document.getElementById("uploadForm"),pass=document.getElementById("password"),file=document.getElementById("modelFile");
-const submit=document.getElementById("submit"),status=document.getElementById("status"),bar=document.getElementById("bar");
-form.addEventListener("submit",function(event){
-event.preventDefault();
-const picked=file.files&&file.files[0];
-if(!picked){status.textContent="Сначала выбери .pt файл.";return;}
-if(!picked.name.toLowerCase().endsWith(".pt")){status.textContent="Нужен файл с расширением .pt.";return;}
-if(picked.size<1000000||picked.size>120*1024*1024){status.textContent="Размер файла должен быть от 1 МБ до 90 МБ.";return;}
-submit.disabled=true;bar.style.width="0%";status.textContent="Передаю файл на сервер…";
-const xhr=new XMLHttpRequest();xhr.open("POST",location.pathname);xhr.timeout=30*60*1000;
-xhr.setRequestHeader("Content-Type","application/octet-stream");
-xhr.setRequestHeader("X-FROSS-Upload-Password",pass.value);
-xhr.setRequestHeader("X-FROSS-Filename",encodeURIComponent(picked.name));
-xhr.upload.onprogress=function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);bar.style.width=pct+"%";status.textContent=pct>=100?"Файл отправлен. Проверяю контрольную сумму, модель и сохраняю копию в GitHub…":"Передача файла: "+pct+"%";}};
-xhr.onload=function(){let data={};try{data=JSON.parse(xhr.responseText||"{}");}catch(_e){}
-if(xhr.status>=200&&xhr.status<300&&data.ok){bar.style.width="100%";status.textContent="ГОТОВО\n"+(data.message||"Модель активирована.")+"\nШаги: "+data.training_steps+"\nСловарь: "+data.vocab_size+"\nSHA-256: "+data.sha256+"\nGitHub: "+(data.release_url||"сохранено");if(data.manifest_warning)status.textContent+="\nПредупреждение манифеста: "+data.manifest_warning;}
-else{status.textContent="Ошибка HTTP "+xhr.status+": "+(data.error||xhr.responseText||"Не удалось загрузить модель.");}
-submit.disabled=false;};
-xhr.onerror=function(){status.textContent="Сетевая ошибка. Проверь доступность сервиса; не отправляй файл повторно, пока не проверишь /health.";submit.disabled=false;};
-xhr.ontimeout=function(){status.textContent="Запрос превысил 30 минут. Проверь /health и GitHub Releases, прежде чем повторять загрузку.";submit.disabled=false;};
-xhr.send(picked);
-});
-})();
-</script></body></html>"""
+<style>:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#101116;color:#f4f5f8}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px}main{width:min(720px,100%);background:#191d25;border:1px solid #343b49;border-radius:20px;padding:26px}h1{margin:0 0 8px;font-size:25px}p{color:#bac3d3;line-height:1.5}</style></head>
+<body><main><h1>FROSS · Загрузка модели</h1>
+<p>Загрузка checkpoint выполняется через сайт FROSS после входа в аккаунт.</p>
+<p>Открой FROSS → <b>Настройки → Загрузить модель FROSS</b>, выбери файл <b>fross-transformer.pt</b> (до 90 МБ) и дождись проверки.</p>
+<p>Эта служебная страница не принимает файлы напрямую. Сервер принимает загрузку только от авторизованного Worker.</p>
+</main></body></html>"""
 
 
 def _send_html(handler: BaseHTTPRequestHandler, content: str) -> None:
@@ -516,41 +464,23 @@ def _activate_uploaded_checkpoint(
 
 
 def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
-    expected_password = os.environ.get("FROSS_MODEL_UPLOAD_PASSWORD", "")
+    # The public browser never uploads directly to this route. The authenticated
+    # Worker forwards the shared service token, providing a server-to-server gate.
+    supplied_service_token = handler.headers.get("Authorization", "")
+    if not SERVICE_TOKEN:
+        respond(handler, 503, {"ok": False, "error": "FROSS_BRAIN_SERVICE_TOKEN не настроен в Hostless."})
+        return
+    if not hmac.compare_digest(supplied_service_token, "Bearer " + SERVICE_TOKEN):
+        respond(handler, 401, {"ok": False, "error": "Загрузка модели разрешена только через авторизованный FROSS Worker."})
+        return
+
     github_token = os.environ.get("FROSS_GITHUB_TOKEN", "").strip()
     forwarded_github_token = handler.headers.get("X-FROSS-GITHUB-TOKEN", "").strip()
-    # When GitHub credentials are forwarded from the Cloudflare Worker, require
-    # the existing brain service token so arbitrary callers cannot inject their token.
     if forwarded_github_token and not github_token:
-        supplied_service_token = handler.headers.get("Authorization", "")
-        if not SERVICE_TOKEN or not hmac.compare_digest(
-            supplied_service_token, "Bearer " + SERVICE_TOKEN
-        ):
-            respond(handler, 401, {"ok": False, "error": "Upload proxy authentication failed."})
-            return
         github_token = forwarded_github_token
-    if not expected_password:
-        respond(handler, 503, {"ok": False, "error": "Секрет FROSS_MODEL_UPLOAD_PASSWORD не настроен в Hostless."})
-        return
     if len(github_token) < 20:
         respond(handler, 503, {"ok": False, "error": "GitHub-токен не передан Worker и не настроен в Hostless."})
         return
-
-    peer = str(handler.client_address[0]) if handler.client_address else "unknown"
-    now = time.time()
-    with _UPLOAD_ATTEMPTS_LOCK:
-        attempts, last_attempt = _UPLOAD_ATTEMPTS.get(peer, (0, 0.0))
-        if now - last_attempt > 900:
-            attempts = 0
-        if attempts >= 5:
-            respond(handler, 429, {"ok": False, "error": "Слишком много неверных паролей. Подожди 15 минут и повтори."})
-            return
-        supplied = handler.headers.get("X-FROSS-Upload-Password", "")
-        if not hmac.compare_digest(supplied, expected_password):
-            _UPLOAD_ATTEMPTS[peer] = (attempts + 1, now)
-            respond(handler, 401, {"ok": False, "error": "Неверный пароль загрузки."})
-            return
-        _UPLOAD_ATTEMPTS.pop(peer, None)
 
     try:
         content_length = int(handler.headers.get("Content-Length", "0"))
