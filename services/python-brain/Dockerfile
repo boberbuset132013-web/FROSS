@@ -21,6 +21,7 @@ COPY data/fross_teacher_corpus.jsonl /app/data/fross_teacher_corpus.jsonl
 COPY training/distillation/prepare_corpus.py /app/training/distillation/prepare_corpus.py
 COPY training/distillation/verify_checkpoint.py /app/training/distillation/verify_checkpoint.py
 COPY services/python-brain/server.py /app/server.py
+COPY services/python-brain/download_model.py /app/download_model.py
 COPY services/python-brain/native_runtime.py /app/native_runtime.py
 COPY services/python-brain/cpp_runtime.cpp /app/cpp_runtime.cpp
 
@@ -33,7 +34,7 @@ RUN g++ -std=c++17 -O3 -fPIC -shared /app/cpp_runtime.cpp \
 # are imported, and the teacher is not called during this build or during inference.
 # Prefer the hosted checkpoint when it is a compatible FROSS 1.4 model.
 # If download/validation fails, the image still gets a bounded 600-step model.
-ARG FROSS_MODEL_URL=https://deliverbit.com/f/uMSeXVFA5w/fross-transformer
+ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
 # Accept a compatible uploaded Brain 1.4 checkpoint from 600 steps upward to avoid
 # retraining during every deploy. The /health endpoint always reports its real step count.
 ARG FROSS_REQUIRED_MODEL_STEPS=600
@@ -48,7 +49,7 @@ RUN python /app/training/distillation/prepare_corpus.py \
 
 RUN if [ -n "${FROSS_MODEL_URL}" ]; then \
       echo "Attempting to download the hosted FROSS checkpoint..."; \
-      if curl -fL --show-error --progress-bar --connect-timeout 8 --max-time 60 "${FROSS_MODEL_URL}" -o /app/fross-transformer.download; then \
+      if python /app/download_model.py "${FROSS_MODEL_URL}" /app/fross-transformer.download; then \
         mv /app/fross-transformer.download /app/fross-transformer.pt; \
         printf 'uploaded-checkpoint\n' > /app/fross-model-source.candidate; \
         if python /app/training/distillation/verify_checkpoint.py \
