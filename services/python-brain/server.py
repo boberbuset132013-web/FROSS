@@ -170,11 +170,7 @@ class Handler(BaseHTTPRequestHandler):
             requested_tokens = int(body.get("max_new_tokens", default_request_tokens))
         except (TypeError, ValueError):
             requested_tokens = default_request_tokens
-        request_token_limit = max(1, min(
-            requested_tokens,
-            GENERATION_TOKEN_LIMIT,
-            512,
-        ))
+        request_token_limit = max(1, min(requested_tokens, GENERATION_TOKEN_LIMIT))
 
         raw_history = body.get("history", [])
         if not isinstance(raw_history, list):
