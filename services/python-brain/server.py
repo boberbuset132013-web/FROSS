@@ -372,7 +372,7 @@ def _activate_uploaded_checkpoint(
             CPP_RUNTIME_STATUS = "loaded" if new_native_runtime is not None else "disabled"
             MODEL_SOURCE = model_source
             try:
-                (ROOT / "fross-model-source.txt").write_text(model_source + "\\n", encoding="utf-8")
+                (ROOT / "fross-model-source.txt").write_text(model_source + "\n", encoding="utf-8")
             except OSError:
                 pass
         if old_native is not None and old_native is not new_native_runtime:
@@ -418,7 +418,7 @@ def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
         respond(handler, 413, {"ok": False, "error": "Размер модели должен быть от 1 МБ до 120 МБ."})
         return
     filename = urllib.parse.unquote(handler.headers.get("X-FROSS-Filename", "fross-transformer.pt"))
-    filename = Path(filename.replace("\\\\", "/")).name
+    filename = Path(filename.replace("\\", "/")).name
     if not filename.lower().endswith(".pt"):
         respond(handler, 400, {"ok": False, "error": "Загрузи checkpoint с расширением .pt."})
         return
