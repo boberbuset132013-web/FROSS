@@ -17,7 +17,7 @@ The Docker build context must be the **repository root**.
 - Port: `10000`
 - Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
 
-The Dockerfile has no training command and no fallback-training path. During a deployment it checks the latest published GitHub Release in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`) for the asset `fross-transformer.pt`. If no such release exists, it falls back to `FROSS_MODEL_URL` (the public Yandex Disk checkpoint by default). The chosen checkpoint must be a compatible FROSS Transformer 1.4 model with a 5,000-token vocabulary, block size 320 and at least 3,000 training steps, then ONNX is exported and validated. Download, compatibility validation, export or native smoke-test failures stop the build.
+The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI sets `FROSS_BUILD_BUNDLE_MODEL=1` so the production inference smoke test still exercises a bundled, validated checkpoint.
 
 ### Protected live model upload
 
