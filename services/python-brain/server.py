@@ -39,6 +39,10 @@ transformer.configure_runtime_threads()
 
 TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
 ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(TRANSFORMER_MODEL_PATH).with_suffix(".onnx")))
+MAX_MODEL_UPLOAD_BYTES = 120 * 1024 * 1024
+MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
+MODEL_UPLOAD_MIN_STEPS = max(3000, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
+MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "5000"))
 
 
 def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
@@ -169,10 +173,6 @@ if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "tr
         CPP_RUNTIME_STATUS = type(exc).__name__
 
 MAX_BODY = 1024 * 1024
-MAX_MODEL_UPLOAD_BYTES = 120 * 1024 * 1024
-MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
-MODEL_UPLOAD_MIN_STEPS = max(3000, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
-MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "5000"))
 _UPLOAD_ATTEMPTS: dict[str, tuple[int, float]] = {}
 _UPLOAD_ATTEMPTS_LOCK = threading.Lock()
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
