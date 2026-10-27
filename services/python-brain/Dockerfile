@@ -2,8 +2,8 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1 FROSS_MODEL_GITHUB_REPOSITORY=boberbuset132013-web/FROSS
 WORKDIR /app
 
-# This image must never train a model. Training is an offline developer/CI task;
-# deployments only download, validate and export an already-trained checkpoint.
+# This image must never train a model. Training is offline; normal deployments
+# start without bundling a checkpoint so an upload from Settings can bootstrap the service.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl g++ \
     && rm -rf /var/lib/apt/lists/*
