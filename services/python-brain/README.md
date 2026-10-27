@@ -19,21 +19,20 @@ The Docker build context must be the **repository root**.
 
 The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI sets `FROSS_BUILD_BUNDLE_MODEL=1` so the production inference smoke test still exercises a bundled, validated checkpoint.
 
-### Protected live model upload
+### Authenticated live model upload
 
-Open FROSS chat, go to **Settings → Upload FROSS model**, then choose the `.pt` checkpoint (up to 90 MiB) and enter the upload password. The page sends the file through the Cloudflare Worker to Hostless. Configure `FROSS_MODEL_UPLOAD_PASSWORD` as a Hostless service secret. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret, forwards it only server-to-server alongside the existing `FROSS_BRAIN_SERVICE_TOKEN`, and never exposes it to browser JavaScript. The existing `FROSS_BRAIN_SERVICE_TOKEN` must be configured in both Cloudflare and Hostless as it already is for chat requests.
-
+Open FROSS chat, sign in, go to **Settings → Upload FROSS model**, and choose the `.pt` checkpoint (up to 90 MiB). No separate upload password is needed. The Worker verifies the Firebase session, then Hostless independently requires the shared `FROSS_BRAIN_SERVICE_TOKEN` before accepting the upload. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret and forwards it only server-to-server; it is never exposed to browser JavaScript. Keep the same `FROSS_BRAIN_SERVICE_TOKEN` configured in Cloudflare and Hostless.
 Optional Hostless settings:
 
 - `FROSS_MODEL_GITHUB_REPOSITORY`: defaults to `boberbuset132013-web/FROSS`.
 - `FROSS_MODEL_MIN_STEPS`: minimum accepted training steps; the server enforces at least 3,000.
 - `FROSS_MODEL_VOCAB_SIZE`: required vocabulary size; defaults to 5,000.
 
-The standalone `/admin/model-upload` page is also retained for server-side diagnostics, but the normal workflow is the FROSS chat Settings panel. The upload password is verified on Hostless and rate-limited after repeated failures.
+The standalone `/admin/model-upload` route is informational only; file uploads are accepted exclusively from the authenticated Worker.
 
 The endpoint checks checkpoint format/version, training steps, vocabulary and context size, exports an ONNX candidate, and smoke-tests the C++ runtime before publishing it. The binary is uploaded as a GitHub Release Asset named `fross-transformer.pt`; `model-storage/current.json` stores its release URL, SHA-256, size and model metadata. This keeps the repository directory small rather than adding a 63-MB binary to every Git commit. Once published, the service atomically switches its in-memory model without rebuilding Docker. The same Release Asset is selected on subsequent deployments, so it does not have to be uploaded again.
 
-**Security note:** keep both secrets exclusively in Hostless's environment/secrets UI. Never put them into the website JavaScript or GitHub source code. If the repository is public, the Release Asset itself is public too; never upload a checkpoint that must remain private to a public repository.
+**Security note:** keep `FROSS_BRAIN_SERVICE_TOKEN` and `FROSS_GITHUB_TOKEN` in server-side secrets only. Never put them into website JavaScript or GitHub source code. If the repository is public, the Release Asset itself is public too; never upload a checkpoint that must remain private to a public repository.
 
 The selected source is reported as `modelSource` in `/health` and `/api/health`.
 
