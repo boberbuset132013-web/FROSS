@@ -42,9 +42,15 @@ def main() -> int:
     metrics = checkpoint.get("metrics")
     if not isinstance(metrics, dict):
         raise SystemExit("Checkpoint does not contain a metrics object.")
-    if checkpoint.get("version") != transformer.VERSION:
+    checkpoint_version = checkpoint.get("version")
+    # Brain 1.5 intentionally remains able to load the deployed 1.4 BPE checkpoint.
+    # Accept that known legacy version while continuing to reject unknown versions;
+    # tokenizer IDs, model shapes, vocabulary, and step count are checked separately.
+    supported_checkpoint_versions = {transformer.VERSION, "FROSS Transformer 1.4"}
+    if checkpoint_version not in supported_checkpoint_versions:
         raise SystemExit(
-            f"Checkpoint version {checkpoint.get('version')!r} does not match {transformer.VERSION!r}."
+            f"Unsupported checkpoint version {checkpoint_version!r}; "
+            f"supported versions: {', '.join(sorted(supported_checkpoint_versions))}."
         )
     if int(checkpoint.get("format_version", 0)) not in {1, 2}:
         raise SystemExit("Unsupported FROSS checkpoint format.")
