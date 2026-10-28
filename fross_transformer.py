@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.4: a small decoder-only language model trained from random weights.
+"""FROSS Transformer 1.5: a small decoder-only language model trained from random weights.
 
-No pretrained checkpoint, hosted LLM, or downloaded model is used. A BPE tokenizer
-and a causal Transformer are learned from the repository's own text corpus.
-This is an educational, deliberately small model; its quality is bounded by its data
-and compute budget. Install PyTorch CPU wheels to train or run it.
+No pretrained checkpoint, hosted LLM, or downloaded model is used. The current
+training path learns a SentencePiece Unigram tokenizer and a causal Transformer from
+the repository's own corpus; legacy BPE checkpoints remain supported.
+This educational model's quality is bounded by its data and compute budget.
 """
 from __future__ import annotations
 

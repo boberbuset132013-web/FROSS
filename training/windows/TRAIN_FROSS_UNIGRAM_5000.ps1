@@ -122,5 +122,6 @@ if ($checkExitCode -ne 0) { throw "Checkpoint verification failed. The saved che
 
 Write-Host ""
 Write-Host "Checkpoint: $checkpoint"
+Write-Host "Saved model snapshots: $(Join-Path $workDir 'checkpoints')"
 Write-Host "Logs: $logDir"
 Write-Host "This is a local checkpoint only; it has NOT been uploaded to Hostless or the live website."
