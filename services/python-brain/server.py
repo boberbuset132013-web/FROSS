@@ -200,7 +200,21 @@ def _load_startup_model_background() -> None:
     print("FROSS startup: background model loading started after HTTP server bind.", flush=True)
     candidate_native = None
     try:
-        downloaded_source = _bootstrap_latest_github_checkpoint(TRANSFORMER_MODEL_PATH)
+        downloaded_source = None
+        for attempt in range(1, 4):
+            downloaded_source = _bootstrap_latest_github_checkpoint(TRANSFORMER_MODEL_PATH)
+            # An existing verified checkpoint can be reused even when GitHub is
+            # temporarily unavailable; otherwise retry the remote fetch briefly.
+            if downloaded_source or Path(TRANSFORMER_MODEL_PATH).is_file():
+                break
+            if attempt < 3:
+                delay = min(2 ** attempt, 8)
+                print(
+                    "FROSS startup: no local checkpoint yet; retrying GitHub fetch in "
+                    + str(delay) + "s (" + str(attempt) + "/3).",
+                    flush=True,
+                )
+                time.sleep(delay)
         if downloaded_source:
             MODEL_SOURCE = downloaded_source
 
