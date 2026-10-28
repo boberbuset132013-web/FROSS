@@ -1014,7 +1014,7 @@ def main() -> int:
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 5000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
-    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
+    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 5000 for both training stages.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
