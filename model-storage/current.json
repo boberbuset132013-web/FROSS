@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "model": "FROSS Transformer 1.4",
+  "file": "fross-transformer.pt",
+  "tag": "fross-model-20261028T063206Z-97f05c6f",
+  "release_url": "https://github.com/boberbuset132013-web/FROSS/releases/tag/fross-model-20261028T063206Z-97f05c6f",
+  "download_url": "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-model-20261028T063206Z-97f05c6f/fross-transformer.pt",
+  "sha256": "97f05c6fac3930294aa394e841b9ea4b0d379f7e9e4460675ab5f6f24e626fbf",
+  "size_bytes": 63087851,
+  "training_steps": 3000,
+  "vocab_size": 5000,
+  "uploaded_at": "2026-10-28T06:32:12.153734+00:00"
+}
