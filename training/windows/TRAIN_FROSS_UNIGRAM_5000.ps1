@@ -89,7 +89,7 @@ $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
 $env:PYTHONUNBUFFERED = "1"
 
-Write-Host "Live progress is printed every 10 steps; checkpoints and snapshots are saved every 200 steps."
+Write-Host "Live progress is printed every 5 steps; checkpoints and snapshots are saved every 200 steps."
 Write-Host "Validating and preparing the combined training corpus..."
 & $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
 if ($LASTEXITCODE -ne 0) { throw "Corpus validation failed; training has not started." }
@@ -99,7 +99,7 @@ if (-not (Test-Path $checkpoint)) {
         $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
         "--steps", "600", "--schedule-steps", "5000", "--batch-size", "4",
         "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
-        "--checkpoint-interval", "200", "--log-interval", "10"
+        "--checkpoint-interval", "200", "--log-interval", "5"
     )
     $log600 = Join-Path $logDir "stage-600.log"
     Write-Host ""
@@ -123,7 +123,7 @@ if ($completedSteps -lt 600) {
         $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
         "--steps", "600", "--schedule-steps", "5000", "--batch-size", "4",
         "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
-        "--checkpoint-interval", "200", "--log-interval", "10"
+        "--checkpoint-interval", "200", "--log-interval", "5"
     )
     if ($completedSteps -gt 0) { $resume600 += "--resume" }
     $log600 = Join-Path $logDir "stage-600.log"
@@ -140,7 +140,7 @@ if ($completedSteps -lt 5000) {
         $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
         "--steps", "5000", "--schedule-steps", "5000", "--batch-size", "4",
         "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
-        "--checkpoint-interval", "200", "--log-interval", "10", "--resume"
+        "--checkpoint-interval", "200", "--log-interval", "5", "--resume"
     )
     $log5000 = Join-Path $logDir "stage-5000.log"
     Write-Host ""
