@@ -95,6 +95,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         assets = release.get("assets", [])
         asset = next((item for item in assets if isinstance(item, dict) and item.get("name") == "fross-transformer.pt"), None)
         download_url = asset.get("browser_download_url") if isinstance(asset, dict) else None
+        expected_digest = asset.get("digest") if isinstance(asset, dict) else None
         if not isinstance(download_url, str) or not download_url.startswith("https://github.com/"):
             print("FROSS startup: latest GitHub release has no model asset; waiting for upload in Settings.", flush=True)
             return None
@@ -118,6 +119,9 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
             os.fsync(output.fileno())
         if total < 1_000_000:
             raise ValueError("GitHub model asset is too small to be a checkpoint.")
+        actual_digest = "sha256:" + digest.hexdigest()
+        if isinstance(expected_digest, str) and expected_digest and expected_digest.lower() != actual_digest.lower():
+            raise ValueError("GitHub model asset SHA-256 does not match the published digest.")
 
         import torch
         checkpoint = torch.load(partial, map_location="cpu", weights_only=True)
@@ -135,6 +139,9 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
             raise ValueError("GitHub model checkpoint context size is not 320.")
 
         os.replace(partial, target)
+        # A cached ONNX graph may belong to older weights. Rebuild it only after
+        # the new checkpoint has passed metadata and checksum validation.
+        Path(ONNX_MODEL_PATH).unlink(missing_ok=True)
         model_source = "github-release:" + str(release.get("tag_name", "latest"))
         try:
             (ROOT / "fross-model-source.txt").write_text(model_source + "\n", encoding="utf-8")
@@ -149,51 +156,13 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         partial.unlink(missing_ok=True)
 
 
-_startup_model_source = _bootstrap_latest_github_checkpoint(TRANSFORMER_MODEL_PATH)
-if _startup_model_source:
-    MODEL_SOURCE = _startup_model_source
-TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS = transformer.load_model(TRANSFORMER_MODEL_PATH)
-if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
-    _loaded_steps = int(TRANSFORMER_STATUS.get("training_steps", 0))
-    _loaded_vocab = int(TRANSFORMER_STATUS.get("vocab_size", TRANSFORMER_TOKENIZER.vocab_size))
-    _loaded_context = int(TRANSFORMER_MODEL.config.get("block_size", 0))
-    if (
-        _loaded_steps < MODEL_UPLOAD_MIN_STEPS
-        or _loaded_vocab != MODEL_UPLOAD_VOCAB_SIZE
-        or TRANSFORMER_TOKENIZER.vocab_size != MODEL_UPLOAD_VOCAB_SIZE
-        or _loaded_context != 320
-    ):
-        TRANSFORMER_MODEL = None
-        TRANSFORMER_TOKENIZER = None
-        TRANSFORMER_STATUS = {
-            "loaded": False,
-            "reason": "checkpoint-requirements-mismatch",
-            "training_steps": _loaded_steps,
-            "vocab_size": _loaded_vocab,
-            "block_size": _loaded_context,
-        }
-
+TRANSFORMER_MODEL = None
+TRANSFORMER_TOKENIZER = None
+TRANSFORMER_STATUS: dict[str, Any] = {"loaded": False, "reason": "startup-pending"}
+MODEL_LOAD_STATE = "pending"
+MODEL_LOAD_ERROR: str | None = None
 NATIVE_RUNTIME = None
-CPP_RUNTIME_STATUS = "disabled"
-if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "true", "yes"}:
-    try:
-        from native_runtime import NativeRuntime
-        CPP_RUNTIME_LIBRARY = os.environ.get("FROSS_CPP_RUNTIME_LIBRARY", str(ROOT / "libfross_cpp.so"))
-        if TRANSFORMER_TOKENIZER is None or TRANSFORMER_MODEL is None:
-            raise RuntimeError("trained checkpoint is not loaded")
-        if not Path(ONNX_MODEL_PATH).is_file():
-            transformer.export_onnx_model(TRANSFORMER_MODEL_PATH, ONNX_MODEL_PATH)
-        NATIVE_RUNTIME = NativeRuntime(
-            CPP_RUNTIME_LIBRARY,
-            ONNX_MODEL_PATH,
-            block_size=int(TRANSFORMER_MODEL.config["block_size"]),
-            vocab_size=TRANSFORMER_TOKENIZER.vocab_size,
-        )
-        CPP_RUNTIME_STATUS = "loaded"
-    except Exception as exc:
-        # Keep the service available on the known-good Python path if the native
-        # runtime cannot be loaded; the health endpoint makes this visible.
-        CPP_RUNTIME_STATUS = type(exc).__name__
+CPP_RUNTIME_STATUS = "pending"
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
@@ -208,6 +177,156 @@ except (TypeError, ValueError):
     GENERATION_TOKEN_LIMIT = transformer.MAX_GENERATION_TOKENS
 # Serialize inference so concurrent visitors do not multiply activation memory on a small server.
 GENERATION_LOCK = threading.Lock()
+
+def _load_startup_model_background() -> None:
+    """Load the persisted checkpoint after the HTTP listener is bound.
+
+    Keeping network I/O and ONNX initialization out of module import means a
+    successful container build can start its health endpoint before model assets
+    are downloaded. The model remains unavailable to chat until validation passes.
+    """
+    global TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS
+    global MODEL_SOURCE, MODEL_LOAD_STATE, MODEL_LOAD_ERROR
+    global NATIVE_RUNTIME, CPP_RUNTIME_STATUS
+
+    with GENERATION_LOCK:
+        if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
+            MODEL_LOAD_STATE = "ready"
+            MODEL_LOAD_ERROR = None
+            return
+        MODEL_LOAD_STATE = "loading"
+        MODEL_LOAD_ERROR = None
+
+    print("FROSS startup: background model loading started after HTTP server bind.", flush=True)
+    candidate_native = None
+    try:
+        downloaded_source = None
+        for attempt in range(1, 4):
+            downloaded_source = _bootstrap_latest_github_checkpoint(TRANSFORMER_MODEL_PATH)
+            # An existing verified checkpoint can be reused even when GitHub is
+            # temporarily unavailable; otherwise retry the remote fetch briefly.
+            if downloaded_source or Path(TRANSFORMER_MODEL_PATH).is_file():
+                break
+            if attempt < 3:
+                delay = min(2 ** attempt, 8)
+                print(
+                    "FROSS startup: no local checkpoint yet; retrying GitHub fetch in "
+                    + str(delay) + "s (" + str(attempt) + "/3).",
+                    flush=True,
+                )
+                time.sleep(delay)
+        if downloaded_source:
+            MODEL_SOURCE = downloaded_source
+
+        model, tokenizer, status = transformer.load_model(TRANSFORMER_MODEL_PATH)
+        if model is None or tokenizer is None:
+            reason = str(status.get("reason", "checkpoint-unavailable")) if isinstance(status, dict) else "checkpoint-unavailable"
+            raise RuntimeError("No compatible checkpoint is available (" + reason + ").")
+
+        loaded_steps = int(status.get("training_steps", 0))
+        loaded_vocab = int(status.get("vocab_size", tokenizer.vocab_size))
+        loaded_context = int(model.config.get("block_size", 0))
+        if (
+            loaded_steps < MODEL_UPLOAD_MIN_STEPS
+            or loaded_vocab != MODEL_UPLOAD_VOCAB_SIZE
+            or tokenizer.vocab_size != MODEL_UPLOAD_VOCAB_SIZE
+            or loaded_context != 320
+        ):
+            raise ValueError(
+                "Checkpoint requirements mismatch: training_steps="
+                + str(loaded_steps) + ", vocab_size=" + str(loaded_vocab)
+                + ", block_size=" + str(loaded_context) + "."
+            )
+
+        candidate_cpp_status = "disabled"
+        if os.environ.get("FROSS_CPP_RUNTIME_ENABLED", "0").strip().lower() in {"1", "true", "yes"}:
+            try:
+                from native_runtime import NativeRuntime
+                cpp_library = os.environ.get("FROSS_CPP_RUNTIME_LIBRARY", str(ROOT / "libfross_cpp.so"))
+                # A newly-downloaded checkpoint invalidates any old ONNX graph.
+                if not Path(ONNX_MODEL_PATH).is_file():
+                    transformer.export_onnx_model(TRANSFORMER_MODEL_PATH, ONNX_MODEL_PATH)
+                candidate_native = NativeRuntime(
+                    cpp_library,
+                    ONNX_MODEL_PATH,
+                    block_size=int(model.config["block_size"]),
+                    vocab_size=tokenizer.vocab_size,
+                )
+                candidate_cpp_status = "loaded"
+            except Exception as native_error:
+                # The Python/PyTorch path remains available if the optional native runtime fails.
+                candidate_cpp_status = type(native_error).__name__
+                if candidate_native is not None:
+                    candidate_native.close()
+                    candidate_native = None
+                print(
+                    "FROSS startup: native runtime unavailable; using Python/PyTorch ("
+                    + candidate_cpp_status + ").",
+                    flush=True,
+                )
+
+        with GENERATION_LOCK:
+            # If a user uploaded a checkpoint while the background download was
+            # running, keep that newly activated model instead of overwriting it.
+            if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
+                if candidate_native is not None:
+                    candidate_native.close()
+                    candidate_native = None
+                MODEL_LOAD_STATE = "ready"
+                MODEL_LOAD_ERROR = None
+                return
+
+            TRANSFORMER_MODEL = model
+            TRANSFORMER_TOKENIZER = tokenizer
+            TRANSFORMER_STATUS = {
+                **status,
+                "loaded": True,
+                "path": str(TRANSFORMER_MODEL_PATH),
+            }
+            NATIVE_RUNTIME = candidate_native
+            candidate_native = None
+            CPP_RUNTIME_STATUS = candidate_cpp_status
+            MODEL_LOAD_STATE = "ready"
+            MODEL_LOAD_ERROR = None
+            try:
+                (ROOT / "fross-model-source.txt").write_text(MODEL_SOURCE + "\n", encoding="utf-8")
+            except OSError:
+                pass
+
+        print(
+            "FROSS startup: model loaded successfully; source="
+            + str(MODEL_SOURCE) + "; steps=" + str(loaded_steps)
+            + "; vocab=" + str(loaded_vocab) + ".",
+            flush=True,
+        )
+    except Exception as exc:
+        if candidate_native is not None:
+            candidate_native.close()
+        with GENERATION_LOCK:
+            # A concurrent upload may have successfully activated a model even
+            # if the background fetch failed. Never replace that success with an error.
+            if TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None:
+                MODEL_LOAD_STATE = "ready"
+                MODEL_LOAD_ERROR = None
+            else:
+                TRANSFORMER_MODEL = None
+                TRANSFORMER_TOKENIZER = None
+                TRANSFORMER_STATUS = {
+                    "loaded": False,
+                    "reason": "startup-load-failed",
+                    "error": type(exc).__name__,
+                    "path": str(TRANSFORMER_MODEL_PATH),
+                }
+                MODEL_LOAD_STATE = "failed"
+                MODEL_LOAD_ERROR = type(exc).__name__
+                if CPP_RUNTIME_STATUS == "pending":
+                    CPP_RUNTIME_STATUS = "unavailable"
+        print(
+            "FROSS startup: model is not ready ("
+            + type(exc).__name__ + "). The HTTP service remains available.",
+            flush=True,
+        )
+
 
 
 
@@ -417,6 +536,7 @@ def _activate_uploaded_checkpoint(
 ) -> None:
     global TRANSFORMER_MODEL, TRANSFORMER_TOKENIZER, TRANSFORMER_STATUS
     global NATIVE_RUNTIME, CPP_RUNTIME_STATUS, MODEL_SOURCE
+    global MODEL_LOAD_STATE, MODEL_LOAD_ERROR
 
     checkpoint_target = Path(TRANSFORMER_MODEL_PATH)
     onnx_target = Path(ONNX_MODEL_PATH)
@@ -450,6 +570,8 @@ def _activate_uploaded_checkpoint(
             NATIVE_RUNTIME = new_native_runtime
             CPP_RUNTIME_STATUS = "loaded" if new_native_runtime is not None else "disabled"
             MODEL_SOURCE = model_source
+            MODEL_LOAD_STATE = "ready"
+            MODEL_LOAD_ERROR = None
             try:
                 (ROOT / "fross-model-source.txt").write_text(model_source + "\n", encoding="utf-8")
             except OSError:
@@ -616,6 +738,8 @@ class Handler(BaseHTTPRequestHandler):
             "engine": ENGINE_NAME,
             "version": "1.4",
             "modelSource": MODEL_SOURCE,
+            "modelLoadState": MODEL_LOAD_STATE,
+            "modelLoadError": MODEL_LOAD_ERROR,
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
             "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
@@ -649,6 +773,8 @@ class Handler(BaseHTTPRequestHandler):
                 "engine": ENGINE_NAME,
                 "version": "1.4",
                 "modelSource": MODEL_SOURCE,
+            "modelLoadState": MODEL_LOAD_STATE,
+            "modelLoadError": MODEL_LOAD_ERROR,
                 "authenticated": True,
                 "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
                 "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
@@ -726,6 +852,8 @@ class Handler(BaseHTTPRequestHandler):
                 "kind": "generation-model-unavailable",
                 "generationModel": transformer.VERSION,
                 "generationModelStatus": TRANSFORMER_STATUS,
+                "modelLoadState": MODEL_LOAD_STATE,
+                "modelLoadError": MODEL_LOAD_ERROR,
             })
             return
 
@@ -804,4 +932,11 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    http_server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    print("FROSS Python Brain: HTTP listener is bound; model will load in background.", flush=True)
+    threading.Thread(
+        target=_load_startup_model_background,
+        name="fross-model-bootstrap",
+        daemon=True,
+    ).start()
+    http_server.serve_forever()
