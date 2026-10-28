@@ -37,8 +37,8 @@ import fross_transformer as transformer  # noqa: E402
 # Cap PyTorch's thread pools before the first model load or inference.
 transformer.configure_runtime_threads()
 
-TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(ROOT / "fross-transformer.pt"))
-ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(TRANSFORMER_MODEL_PATH).with_suffix(".onnx")))
+TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(Path(tempfile.gettempdir()) / "fross-transformer.pt"))
+ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(tempfile.gettempdir()) / "fross-transformer.onnx"))
 MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
 MODEL_UPLOAD_MIN_STEPS = max(3000, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
