@@ -22,14 +22,14 @@ ARG FROSS_VOCAB_SIZE=5000
 
 # Normal Hostless builds skip checkpoint download. The running service loads the
 # verified checkpoint from GitHub Releases after the HTTP listener starts.
-# CI can still bundle a checkpoint for the separate production smoke test.
+# Keep runtime model files in /tmp because Hostless mounts /app read-only.
 RUN set -eu; if [ "${FROSS_BUILD_BUNDLE_MODEL}" = "1" ]; then \
     echo "Bundling a pre-trained FROSS checkpoint for CI smoke testing..."; \
-    python /app/download_model.py "${FROSS_MODEL_URL}" /app/fross-transformer.download; \
-    mv /app/fross-transformer.download /app/fross-transformer.pt; \
+    python /app/download_model.py "${FROSS_MODEL_URL}" /tmp/fross-transformer.download; \
+    mv /tmp/fross-transformer.download /tmp/fross-transformer.pt; \
     printf 'uploaded-checkpoint\n' > /app/fross-model-source.txt; \
     python /app/training/distillation/verify_checkpoint.py \
-      --checkpoint /app/fross-transformer.pt \
+      --checkpoint /tmp/fross-transformer.pt \
       --model-source /app/fross-model-source.txt \
       --required-model-steps "${FROSS_REQUIRED_MODEL_STEPS}" \
       --train-steps 600 \
@@ -38,8 +38,8 @@ RUN set -eu; if [ "${FROSS_BUILD_BUNDLE_MODEL}" = "1" ]; then \
     echo "Skipping model download during build; upload it from FROSS Settings."; \
   fi
 
-ENV FROSS_TRANSFORMER_MODEL_PATH=/app/fross-transformer.pt
-ENV FROSS_ONNX_MODEL_PATH=/app/fross-transformer.onnx
+ENV FROSS_TRANSFORMER_MODEL_PATH=/tmp/fross-transformer.pt
+ENV FROSS_ONNX_MODEL_PATH=/tmp/fross-transformer.onnx
 ENV FROSS_CPP_RUNTIME_ENABLED=0
 EXPOSE 10000
 CMD ["python", "/app/server.py"]
