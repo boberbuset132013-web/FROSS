@@ -660,6 +660,8 @@ def train_model(
     best_state: dict[str, torch.Tensor] | None = None
     best_checkpoint_step = 0
     best_train_loss = float("nan")
+    latest_validation_loss = float("nan")
+    latest_validation_step = 0
 
     if resume and resume_checkpoint is not None and resume_state is not None:
         prior_metrics = resume_checkpoint.get("metrics", {})
@@ -687,6 +689,24 @@ def train_model(
             name: value.detach().cpu().clone()
             for name, value in resume_checkpoint["state_dict"].items()
         }
+        # Old checkpoints measured validation on random windows. Re-score both the
+        # saved best model and the resume state using the new fixed validation windows,
+        # so their losses are comparable from the first resumed step onward.
+        if best_state is not None:
+            model.load_state_dict(best_state, strict=True)
+            comparable_best_loss = _evaluate(model, validation_stream, actual_block)
+            if math.isfinite(comparable_best_loss):
+                best_validation_loss = comparable_best_loss
+            model.load_state_dict(resume_state["last_state_dict"], strict=True)
+            latest_validation_loss = _evaluate(model, validation_stream, actual_block)
+            latest_validation_step = start_step
+            model.train()
+            print(
+                f"[eval] resume baseline at step {start_step}: "
+                f"best weights={best_validation_loss:.4f}, "
+                f"last weights={latest_validation_loss:.4f}",
+                flush=True,
+            )
 
     def _cpu_tree(value: Any) -> Any:
         if torch.is_tensor(value):
@@ -716,19 +736,35 @@ def train_model(
 
     def _write_inference_snapshot(payload: dict[str, Any], completed_steps: int) -> Path:
         snapshot_path = target.parent / "checkpoints" / f"{target.stem}-step-{completed_steps:04d}.pt"
+        resume_payload = payload.get("resume_state", {})
+        snapshot_state = resume_payload.get("last_state_dict", payload["state_dict"])
+        snapshot_metrics = dict(payload["metrics"])
+        snapshot_metrics.update({
+            "snapshot_step": int(completed_steps),
+            "snapshot_weights_kind": "latest-training-state",
+            "snapshot_train_loss": (
+                round(last_loss, 5) if math.isfinite(last_loss) else None
+            ),
+            "snapshot_validation_loss": (
+                round(latest_validation_loss, 5)
+                if math.isfinite(latest_validation_loss) else None
+            ),
+            "snapshot_validation_step": int(latest_validation_step),
+        })
         snapshot = {
             "format_version": int(payload.get("format_version", 2)),
             "version": payload.get("version", VERSION),
             "config": payload["config"],
             "tokenizer": payload["tokenizer"],
-            "state_dict": payload["state_dict"],
-            "metrics": payload["metrics"],
-            "snapshot_kind": "inference-only",
+            "state_dict": snapshot_state,
+            "metrics": snapshot_metrics,
+            "snapshot_kind": "inference-only-step-snapshot",
         }
         _atomic_torch_save(snapshot, snapshot_path)
         print(
-            f"[checkpoint] inference snapshot saved: {snapshot_path} "
-            f"(step {completed_steps}; best model step {payload['metrics'].get('best_checkpoint_step')})",
+            f"[checkpoint] step snapshot saved: {snapshot_path} "
+            f"(weights at step {completed_steps}; best model step "
+            f"{payload['metrics'].get('best_checkpoint_step')})",
             flush=True,
         )
         return snapshot_path
@@ -750,6 +786,12 @@ def train_model(
             "steps_this_run": completed_steps - start_step,
             "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or completed_steps,
+            "latest_validation_loss": (
+                round(latest_validation_loss, 5)
+                if math.isfinite(latest_validation_loss) else None
+            ),
+            "latest_validation_step": int(latest_validation_step),
+            "last_train_loss": round(last_loss, 5) if math.isfinite(last_loss) else None,
             "vocab_size": tokenizer.vocab_size,
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
             "vocab_target_reached": (
@@ -800,7 +842,6 @@ def train_model(
 
     last_start = len(train_stream) - actual_block - 1
     evaluation_interval = max(100, min(250, schedule_total // 20))
-    latest_validation_loss = float("nan")
     warmup_steps = min(100, max(0, schedule_total // 20))
     print(
         f"[train] start={start_step}, target={steps}, schedule={schedule_total}, "
@@ -834,6 +875,7 @@ def train_model(
 
         if completed_steps % evaluation_interval == 0 or completed_steps == steps:
             latest_validation_loss = _evaluate(model, validation_stream, actual_block)
+            latest_validation_step = completed_steps
             if math.isfinite(latest_validation_loss) and latest_validation_loss < best_validation_loss:
                 best_validation_loss = latest_validation_loss
                 best_checkpoint_step = completed_steps

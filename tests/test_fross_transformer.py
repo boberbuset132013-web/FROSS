@@ -202,6 +202,8 @@ class TransformerTests(unittest.TestCase):
                 self.assertIsNotNone(snapshot_model)
                 self.assertIsNotNone(snapshot_tokenizer)
                 self.assertTrue(snapshot_status["loaded"])
+                self.assertEqual(snapshot_status["snapshot_step"], 1)
+                self.assertEqual(snapshot_status["snapshot_weights_kind"], "latest-training-state")
                 self.assertEqual(first["steps_this_run"], 1)
 
                 continued = transformer.train_model(
