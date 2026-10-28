@@ -36,13 +36,16 @@ Write-Host "Python: $pythonExe"
 & $pythonExe -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "Could not upgrade pip." }
 
-& $pythonExe -c "import torch" 2>$null
+# Use find_spec instead of importing modules for checks. Importing a missing module
+# prints a traceback to stderr, which Windows PowerShell 5.1 can treat as a terminating
+# NativeCommandError when ErrorActionPreference is Stop.
+& $pythonExe -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('torch') else 1)"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing CPU PyTorch..."
     & $pythonExe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
     if ($LASTEXITCODE -ne 0) { throw "PyTorch installation failed. Check Python compatibility and internet access." }
 }
-& $pythonExe -c "import sentencepiece" 2>$null
+& $pythonExe -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('sentencepiece') else 1)"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing SentencePiece Unigram tokenizer..."
     & $pythonExe -m pip install "sentencepiece>=0.2.0,<1"
