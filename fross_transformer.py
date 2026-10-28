@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from collections import Counter
+from collections import Counter, OrderedDict
 import json
 import math
 import os
@@ -271,6 +271,10 @@ class SentencePieceUnigramTokenizer:
         self.processor = spm.SentencePieceProcessor(model_proto=self.model_proto)
         self.pieces = [self.processor.id_to_piece(i) for i in range(self.processor.get_piece_size())]
         self.pretokenized = False
+        # Cache repeated prompts/history fragments without changing token IDs.
+        # Keep it bounded because the service may run with a small memory limit.
+        self._encode_cache: OrderedDict[str, tuple[int, ...]] = OrderedDict()
+        self._encode_cache_limit = 256
         if (self.processor.pad_id(), self.processor.unk_id(),
                 self.processor.bos_id(), self.processor.eos_id()) != (PAD_ID, UNK_ID, BOS_ID, EOS_ID):
             raise ValueError("SentencePiece special token IDs are incompatible with FROSS.")
@@ -307,7 +311,19 @@ class SentencePieceUnigramTokenizer:
             return cls((prefix.with_suffix(".model")).read_bytes())
 
     def encode(self, text: str) -> list[int]:
-        return list(self.processor.encode(str(text), out_type=int))
+        raw = str(text)
+        cached = self._encode_cache.get(raw)
+        if cached is not None:
+            self._encode_cache.move_to_end(raw)
+            # Return a new list so callers cannot mutate the cached sequence.
+            return list(cached)
+
+        encoded = tuple(self.processor.encode(raw, out_type=int))
+        self._encode_cache[raw] = encoded
+        self._encode_cache.move_to_end(raw)
+        if len(self._encode_cache) > self._encode_cache_limit:
+            self._encode_cache.popitem(last=False)
+        return list(encoded)
 
     def decode(self, token_ids: list[int], stop_at_eos: bool = True) -> str:
         ids = []
