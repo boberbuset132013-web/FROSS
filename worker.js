@@ -52,7 +52,7 @@ export default {
       return frossJson({
         ok: true,
         worker: "FROSS",
-        version: "1.3",
+        version: "1.2",
         brainVersion: "1.4",
         build: "fross-hybrid-cpp-2026-10-26",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
@@ -1892,6 +1892,16 @@ async function handleFrossModelUpload(request, env) {
   }
 }
 
+function frossIsProgrammingRequest(message) {
+  const text = frossClean(message).toLowerCase().replace(/ё/g, "е");
+  const programmingTopic = /(^|[^a-zа-я0-9_])(программир[а-я]*|программирован[а-я]*|программа[а-я]*|программист[а-я]*|скрипт[а-я]*|функци[а-я]*|класс[а-я]*|алгоритм[а-я]*|отлад[а-я]*|дебаг[а-я]*|javascript|typescript|python|пайто[а-я]*|html|css|sql|json|api|regex|регулярн\w* выражен\w*|роблокс студио|roblox studio|lua|c\+\+|c#|java)(?=$|[^a-zа-я0-9_])/i;
+  const codeIntent = /(^|[^a-zа-я])(код|code)(?=$|[^a-zа-я])/i.test(text) &&
+    /\b(напиши|написать|создай|сделай|сгенерируй|исправь|почини|перепиши|оптимизируй|реализуй|сверстай|write|create|generate|fix|debug|refactor|implement|build)\b/i.test(text);
+  const programmingIntent = /\b(напиши|написать|создай|сделай|сгенерируй|исправь|почини|перепиши|оптимизируй|объясни|расскажи|реализуй|сверстай|собери|write|create|generate|fix|debug|refactor|implement|build|explain|teach)\b/i.test(text);
+  const codeShape = /\`\`\`|<\/?[a-z][^>]*>|\b(function|const|let|var|def|class|import|console\.log|print\s*\()/i.test(text);
+  return codeIntent || programmingTopic.test(text) || codeShape;
+}
+
 async function handleFrossApi(request, env) {
   if (request.method === "OPTIONS") return corsPreflight();
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/chat." }, 405, request);
@@ -1915,6 +1925,16 @@ async function handleFrossApi(request, env) {
     steps: ["Понять запрос", "Проверить безопасность", "Предложить безопасную альтернативу"],
     sources: [], quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
     diagnostics: { engine: "FROSS safety filter", aiUsed: false, note: "Ответ создан локальными правилами безопасности." }
+  }, 200, request);
+
+  if (frossIsProgrammingRequest(message)) return frossJson({
+    name: FROSS_PROFILE.name,
+    reply: "Обычный режим FROSS пока не выполняет задачи программирования. Режим «Программист» пока оставлен как недоступная заглушка. Когда основной чат будет стабильно работать, мы отдельно разработаем этот режим.",
+    mode: "normal",
+    steps: ["Проверить режим", "Сообщить об ограничении"],
+    sources: [],
+    quota: { used: quota.count, limit: 60, closed: quota.status === "closed" },
+    diagnostics: { engine: "FROSS mode restriction", aiUsed: false, note: "Запрос по программированию остановлен серверным ограничением." }
   }, 200, request);
 
   const mode = ["reasoning", "рассуждение", "deep"].includes(String(body.mode || "").toLowerCase()) ? "reasoning" : "normal";
