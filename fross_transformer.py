@@ -18,13 +18,15 @@ from pathlib import Path
 import random
 import re
 import string
+import tempfile
 from typing import Any
 
 import torch
+import sentencepiece as spm
 from torch import nn
 import torch.nn.functional as F
 
-VERSION = "FROSS Transformer 1.4"
+VERSION = "FROSS Transformer 1.5"
 
 
 def _preferred_device() -> torch.device:
@@ -258,6 +260,73 @@ class BPETokenizer:
             "pretokenized": self.pretokenized,
             "max_piece_chars": self.max_piece_chars,
         }
+
+
+class SentencePieceUnigramTokenizer:
+    """SentencePiece Unigram tokenizer with FROSS-compatible special token IDs."""
+
+    def __init__(self, model_proto: bytes):
+        self.model_proto = bytes(model_proto)
+        self.processor = spm.SentencePieceProcessor(model_proto=self.model_proto)
+        self.pieces = [self.processor.id_to_piece(i) for i in range(self.processor.get_piece_size())]
+        self.pretokenized = False
+        if (self.processor.pad_id(), self.processor.unk_id(),
+                self.processor.bos_id(), self.processor.eos_id()) != (PAD_ID, UNK_ID, BOS_ID, EOS_ID):
+            raise ValueError("SentencePiece special token IDs are incompatible with FROSS.")
+
+    @property
+    def vocab_size(self) -> int:
+        return self.processor.get_piece_size()
+
+    @classmethod
+    def train(cls, texts: list[str], target_vocab_size: int = 20000, **_: Any):
+        if target_vocab_size < 32:
+            raise ValueError("SentencePiece vocabulary target must be at least 32.")
+        # SentencePiece requires a corpus file. Keep it temporary; the model proto
+        # is embedded in the checkpoint so deployment needs no sidecar file.
+        with tempfile.TemporaryDirectory(prefix="fross-unigram-") as temp_dir:
+            input_path = Path(temp_dir) / "corpus.txt"
+            prefix = Path(temp_dir) / "tokenizer"
+            with input_path.open("w", encoding="utf-8", newline="\n") as handle:
+                for text in texts:
+                    line = str(text).replace("\r", " ").replace("\n", " ")
+                    if line.strip():
+                        handle.write(line + "\n")
+            if input_path.stat().st_size == 0:
+                raise ValueError("Cannot train SentencePiece on an empty corpus.")
+            spm.SentencePieceTrainer.train(
+                input=str(input_path), model_prefix=str(prefix), model_type="unigram",
+                vocab_size=int(target_vocab_size), hard_vocab_limit=False,
+                character_coverage=0.9995, normalization_rule_name="identity",
+                pad_id=PAD_ID, unk_id=UNK_ID, bos_id=BOS_ID, eos_id=EOS_ID,
+                pad_piece="<pad>", unk_piece="<unk>", bos_piece="<bos>", eos_piece="<eos>",
+                shuffle_input_sentence=False, num_threads=1, max_sentence_length=16384,
+                minloglevel=2,
+            )
+            return cls((prefix.with_suffix(".model")).read_bytes())
+
+    def encode(self, text: str) -> list[int]:
+        return list(self.processor.encode(str(text), out_type=int))
+
+    def decode(self, token_ids: list[int], stop_at_eos: bool = True) -> str:
+        ids = []
+        for raw_id in token_ids:
+            token_id = int(raw_id)
+            if token_id == EOS_ID and stop_at_eos:
+                break
+            if 0 <= token_id < self.vocab_size and token_id not in {PAD_ID, BOS_ID, EOS_ID}:
+                ids.append(token_id)
+        return self.processor.decode(ids)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"model_proto": self.model_proto}
+
+
+def _load_tokenizer(data: dict[str, Any]):
+    if "model_proto" in data:
+        return SentencePieceUnigramTokenizer(data["model_proto"])
+    # Backward compatibility: existing BPE checkpoints remain loadable.
+    return BPETokenizer(**data)
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
@@ -535,13 +604,11 @@ def train_model(
     validation_records, train_records = records[:val_count], records[val_count:]
 
     if resume and resume_checkpoint is not None:
-        tokenizer = BPETokenizer(**resume_checkpoint["tokenizer"])
+        tokenizer = _load_tokenizer(resume_checkpoint["tokenizer"])
     else:
-        tokenizer = BPETokenizer.train(
+        tokenizer = SentencePieceUnigramTokenizer.train(
             [_format_record(row) for row in train_records],
-            merge_count=merge_count,
-            target_vocab_size=target_vocab_size if merge_count is None else None,
-            max_piece_chars=24,
+            target_vocab_size=target_vocab_size or 20000,
         )
 
     train_stream = _encode_stream(train_records, tokenizer)
@@ -696,7 +763,7 @@ def train_model(
             "vocab_target_reached": (
                 tokenizer.vocab_size == target_vocab_size if merge_count is None else None
             ),
-            "tokenizer_type": "word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe",
+            "tokenizer_type": ("sentencepiece-unigram" if isinstance(tokenizer, SentencePieceUnigramTokenizer) else ("word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe")),
             "parameters": sum(p.numel() for p in model.parameters()),
             "trained_from_random_weights": True,
         },
@@ -718,7 +785,7 @@ def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer 
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
         if int(checkpoint.get("format_version", 0)) not in {1, 2}:
             raise ValueError("Unsupported checkpoint format.")
-        tokenizer = BPETokenizer(**checkpoint["tokenizer"])
+        tokenizer = _load_tokenizer(checkpoint["tokenizer"])
         config = checkpoint["config"]
         model = FrossTransformer(tokenizer.vocab_size, config)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
