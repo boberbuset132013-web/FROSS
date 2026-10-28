@@ -3,3 +3,4 @@ torch
 onnx>=1.16,<2
 onnxruntime>=1.20,<2
 numpy
+sentencepiece>=0.2.0,<1
