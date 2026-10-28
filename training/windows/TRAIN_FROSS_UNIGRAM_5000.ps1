@@ -72,7 +72,9 @@ if (-not (Test-Path $checkpoint)) {
     Write-Host "A checkpoint for this experiment already exists; it will not be overwritten."
 }
 
-$completedSteps = & $pythonExe -c "import torch; p=torch.load(r'$checkpoint',map_location='cpu',weights_only=True); print(int(p.get('metrics',{}).get('training_steps',0)))"
+$env:FROSS_CHECKPOINT_PATH = $checkpoint
+$completedSteps = & $pythonExe -c "import os,torch; p=torch.load(os.environ['FROSS_CHECKPOINT_PATH'],map_location='cpu',weights_only=True); print(int(p.get('metrics',{}).get('training_steps',0)))"
+Remove-Item Env:FROSS_CHECKPOINT_PATH
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the saved checkpoint. It has been preserved." }
 $completedSteps = [int]("$completedSteps".Trim())
 
@@ -99,7 +101,7 @@ Write-Host "Training stage finished. Running a short checkpoint load/generation 
 $checkLog = Join-Path $logDir "checkpoint-check.log"
 $checkArgs = @(
     $pythonScript, "generate", "--output", $checkpoint,
-    "--text", "Объясни простыми словами, что такое нейронная сеть.",
+    "--text", "Explain in simple terms what a neural network is.",
     "--max-new-tokens", "80"
 )
 & $pythonExe @checkArgs 2>&1 | Tee-Object -FilePath $checkLog
