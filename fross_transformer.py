@@ -737,6 +737,7 @@ def train_model(
 
     # Keep a loadable model snapshot at each 200-step checkpoint from 600 to 5000.
     # Earlier stages also archive periodic checkpoints so a partial run is inspectable.
+    archive_milestones = set(range(600, 5001, 200))
 
     def _write_inference_snapshot(payload: dict[str, Any], completed_steps: int) -> Path:
         snapshot_path = target.parent / "checkpoints" / f"{target.stem}-step-{completed_steps:04d}.pt"
