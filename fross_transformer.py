@@ -566,7 +566,8 @@ def train_model(
     seed: int = 1337,
     resume: bool = False,
     schedule_steps: int | None = None,
-    checkpoint_interval: int = 400,
+    checkpoint_interval: int = 200,
+    log_interval: int = 10,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
 
@@ -577,6 +578,8 @@ def train_model(
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
     if checkpoint_interval < 1:
         raise ValueError("checkpoint_interval must be at least 1")
+    if log_interval < 1:
+        raise ValueError("log_interval must be at least 1")
     schedule_total = int(schedule_steps if schedule_steps is not None else steps)
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
@@ -732,7 +735,8 @@ def train_model(
                 pass
             raise
 
-    archive_milestones = {600, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000}
+    # Keep a loadable model snapshot at each 200-step checkpoint from 600 to 5000.
+    # Earlier stages also archive periodic checkpoints so a partial run is inspectable.
 
     def _write_inference_snapshot(payload: dict[str, Any], completed_steps: int) -> Path:
         snapshot_path = target.parent / "checkpoints" / f"{target.stem}-step-{completed_steps:04d}.pt"
@@ -841,12 +845,12 @@ def train_model(
             _write_inference_snapshot(resume_checkpoint, start_step)
 
     last_start = len(train_stream) - actual_block - 1
-    evaluation_interval = max(100, min(250, schedule_total // 20))
+    evaluation_interval = max(100, min(200, schedule_total // 25))
     warmup_steps = min(100, max(0, schedule_total // 20))
     print(
         f"[train] start={start_step}, target={steps}, schedule={schedule_total}, "
         f"batch={batch_size}, context={actual_block}, eval_every={evaluation_interval}, "
-        f"checkpoint_every={checkpoint_interval}, warmup={warmup_steps}",
+        f"checkpoint_every={checkpoint_interval}, log_every={log_interval}, warmup={warmup_steps}",
         flush=True,
     )
 
@@ -892,7 +896,7 @@ def train_model(
                 flush=True,
             )
 
-        if completed_steps % 100 == 0 or completed_steps == steps:
+        if completed_steps % log_interval == 0 or completed_steps == steps:
             shown_latest = f"{latest_validation_loss:.4f}" if math.isfinite(latest_validation_loss) else "not-yet-measured"
             shown_best = f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
             print(
@@ -904,7 +908,10 @@ def train_model(
         is_periodic_checkpoint = (completed_steps - start_step) % checkpoint_interval == 0
         is_archive_milestone = completed_steps in archive_milestones
         if completed_steps < steps and (is_periodic_checkpoint or is_archive_milestone):
-            _save_training_checkpoint(completed_steps, archive=is_archive_milestone)
+            _save_training_checkpoint(
+                completed_steps,
+                archive=(is_archive_milestone or is_periodic_checkpoint),
+            )
 
     checkpoint = _build_checkpoint(steps)
     _atomic_torch_save(checkpoint, target)
@@ -1151,7 +1158,8 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 5000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 5000 for both training stages.")
-    parser.add_argument("--checkpoint-interval", type=int, default=400, help="Save a resumable checkpoint every N completed steps.")
+    parser.add_argument("--checkpoint-interval", type=int, default=200, help="Save a resumable checkpoint and model snapshot every N completed steps.")
+    parser.add_argument("--log-interval", type=int, default=10, help="Print flushed training progress every N completed steps.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
@@ -1188,6 +1196,7 @@ def main() -> int:
             resume=args.resume,
             schedule_steps=args.schedule_steps,
             checkpoint_interval=args.checkpoint_interval,
+            log_interval=args.log_interval,
         )
         model, tokenizer, status = load_model(args.output)
         if model is None or tokenizer is None:

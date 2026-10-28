@@ -21,13 +21,16 @@ function Invoke-PythonLogged {
     )
     $logParent = Split-Path -Parent $LogPath
     if ($logParent) { New-Item -ItemType Directory -Force -Path $logParent | Out-Null }
-    $writer = [System.IO.StreamWriter]::new($LogPath, $false, [System.Text.UTF8Encoding]::new($false))
+    $writer = [System.IO.StreamWriter]::new($LogPath, $true, [System.Text.UTF8Encoding]::new($false))
+    $writer.WriteLine("===== $(Get-Date -Format s) | $PythonPath $($Arguments -join ' ') =====")
+    $writer.Flush()
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
         & $PythonPath -u @Arguments 2>&1 | ForEach-Object {
             $line = [string]$_
             Write-Host $line
+            [Console]::Out.Flush()
             $writer.WriteLine($line)
             $writer.Flush()
         }
@@ -86,6 +89,7 @@ $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
 $env:PYTHONUNBUFFERED = "1"
 
+Write-Host "Live progress is printed every 10 steps; checkpoints and snapshots are saved every 200 steps."
 Write-Host "Validating and preparing the combined training corpus..."
 & $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
 if ($LASTEXITCODE -ne 0) { throw "Corpus validation failed; training has not started." }
@@ -94,7 +98,8 @@ if (-not (Test-Path $checkpoint)) {
     $stage600 = @(
         $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
         "--steps", "600", "--schedule-steps", "5000", "--batch-size", "4",
-        "--block-size", "320", "--vocab-size", "20000", "--seed", "1337"
+        "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
+        "--checkpoint-interval", "200", "--log-interval", "10"
     )
     $log600 = Join-Path $logDir "stage-600.log"
     Write-Host ""
@@ -112,11 +117,30 @@ Remove-Item Env:FROSS_CHECKPOINT_PATH
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect the saved checkpoint. It has been preserved." }
 $completedSteps = [int]("$completedSteps".Trim())
 
+# If an interrupted run left a checkpoint below step 600, resume that stage first.
+if ($completedSteps -lt 600) {
+    $resume600 = @(
+        $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
+        "--steps", "600", "--schedule-steps", "5000", "--batch-size", "4",
+        "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
+        "--checkpoint-interval", "200", "--log-interval", "10"
+    )
+    if ($completedSteps -gt 0) { $resume600 += "--resume" }
+    $log600 = Join-Path $logDir "stage-600.log"
+    Write-Host ""
+    Write-Host "Checkpoint contains $completedSteps steps; resuming stage 1 to 600 before stage 2."
+    Write-Host "Log: $log600"
+    $trainExitCode = Invoke-PythonLogged -PythonPath $pythonExe -Arguments $resume600 -LogPath $log600
+    if ($trainExitCode -ne 0) { throw "Stage 600 continuation failed. Check $log600; checkpoint preserved." }
+    $completedSteps = 600
+}
+
 if ($completedSteps -lt 5000) {
     $continueArgs = @(
         $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
         "--steps", "5000", "--schedule-steps", "5000", "--batch-size", "4",
-        "--block-size", "320", "--vocab-size", "20000", "--seed", "1337", "--resume"
+        "--block-size", "320", "--vocab-size", "20000", "--seed", "1337",
+        "--checkpoint-interval", "200", "--log-interval", "10", "--resume"
     )
     $log5000 = Join-Path $logDir "stage-5000.log"
     Write-Host ""

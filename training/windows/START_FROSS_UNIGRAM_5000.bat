@@ -1,7 +1,7 @@
 @echo off
 setlocal
 title FROSS Unigram 20k - 5000 Steps
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0TRAIN_FROSS_UNIGRAM_5000.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0TRAIN_FROSS_UNIGRAM_5000.ps1"
 if errorlevel 1 (
   echo.
   echo Training did not complete. The checkpoint was kept when possible.
