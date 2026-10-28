@@ -74,8 +74,9 @@ if (-not (Test-Path $checkpoint)) {
     Write-Host "Stage 1/2: training a NEW Unigram model to 600 steps (target vocabulary 20000)."
     Write-Host "Log: $log600"
     & $pythonExe @stage600 *> $log600
+    $trainExitCode = $LASTEXITCODE
     Get-Content $log600 -Tail 40
-    if ($LASTEXITCODE -ne 0) { throw "Stage 600 failed. Keep the checkpoint and inspect $log600." }
+    if ($trainExitCode -ne 0) { throw "Stage 600 failed. Keep the checkpoint and inspect $log600." }
 } else {
     Write-Host "A checkpoint for this experiment already exists; it will not be overwritten."
 }
@@ -97,8 +98,9 @@ if ($completedSteps -lt 5000) {
     Write-Host "Stage 2/2: continuing from $completedSteps to 5000 TOTAL steps."
     Write-Host "Log: $log5000"
     & $pythonExe @continueArgs *> $log5000
+    $trainExitCode = $LASTEXITCODE
     Get-Content $log5000 -Tail 40
-    if ($LASTEXITCODE -ne 0) { throw "Continuation failed. Keep the checkpoint and inspect $log5000." }
+    if ($trainExitCode -ne 0) { throw "Continuation failed. Keep the checkpoint and inspect $log5000." }
 } elseif ($completedSteps -eq 5000) {
     Write-Host "This experiment already has 5000 training steps. No retraining was started."
 } else {
@@ -114,8 +116,9 @@ $checkArgs = @(
     "--max-new-tokens", "80"
 )
 & $pythonExe @checkArgs *> $checkLog
+$checkExitCode = $LASTEXITCODE
 Get-Content $checkLog -Tail 40
-if ($LASTEXITCODE -ne 0) { throw "Checkpoint verification failed. The saved checkpoint has been preserved." }
+if ($checkExitCode -ne 0) { throw "Checkpoint verification failed. The saved checkpoint has been preserved." }
 
 Write-Host ""
 Write-Host "Checkpoint: $checkpoint"
