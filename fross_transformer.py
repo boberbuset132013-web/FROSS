@@ -19,6 +19,7 @@ import random
 import re
 import string
 import tempfile
+import time
 from typing import Any
 
 import torch
@@ -567,7 +568,7 @@ def train_model(
     resume: bool = False,
     schedule_steps: int | None = None,
     checkpoint_interval: int = 200,
-    log_interval: int = 10,
+    log_interval: int = 5,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
 
@@ -855,6 +856,7 @@ def train_model(
         flush=True,
     )
 
+    last_log_time = time.perf_counter()
     for step in range(start_step, steps):
         # Update the learning rate before the optimizer update, not after backpropagation.
         if warmup_steps and step < warmup_steps:
@@ -900,9 +902,13 @@ def train_model(
         if completed_steps % log_interval == 0 or completed_steps == steps:
             shown_latest = f"{latest_validation_loss:.4f}" if math.isfinite(latest_validation_loss) else "not-yet-measured"
             shown_best = f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
+            now = time.perf_counter()
+            interval_seconds = now - last_log_time
+            last_log_time = now
             print(
                 f"[train] step {completed_steps}/{steps} · train loss {last_loss:.4f} "
-                f"· lr {learning_rate:.2e} · latest validation {shown_latest} · best {shown_best}",
+                f"· lr {learning_rate:.2e} · latest validation {shown_latest} · best {shown_best} "
+                f"· {interval_seconds:.1f}s/{log_interval} steps",
                 flush=True,
             )
 
@@ -1160,7 +1166,7 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 5000 for both training stages.")
     parser.add_argument("--checkpoint-interval", type=int, default=200, help="Save a resumable checkpoint and model snapshot every N completed steps.")
-    parser.add_argument("--log-interval", type=int, default=10, help="Print flushed training progress every N completed steps.")
+    parser.add_argument("--log-interval", type=int, default=5, help="Print flushed training progress every N completed steps.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
