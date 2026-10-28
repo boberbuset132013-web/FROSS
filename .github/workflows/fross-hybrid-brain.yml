@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
-          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy
+          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy "sentencepiece>=0.2.0,<1"
       - name: Download pinned ONNX Runtime C++ library
         run: |
           curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v1.31.0/onnxruntime-linux-x64-1.31.0.tgz" \
