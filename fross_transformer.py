@@ -265,8 +265,9 @@ class BPETokenizer:
 class SentencePieceUnigramTokenizer:
     """SentencePiece Unigram tokenizer with FROSS-compatible special token IDs."""
 
-    def __init__(self, model_proto: bytes):
-        self.model_proto = bytes(model_proto)
+    def __init__(self, model_proto: bytes | str):
+        # Hex text is safe to serialize in PyTorch weights-only checkpoints.
+        self.model_proto = bytes.fromhex(model_proto) if isinstance(model_proto, str) else bytes(model_proto)
         self.processor = spm.SentencePieceProcessor(model_proto=self.model_proto)
         self.pieces = [self.processor.id_to_piece(i) for i in range(self.processor.get_piece_size())]
         self.pretokenized = False
@@ -319,7 +320,7 @@ class SentencePieceUnigramTokenizer:
         return self.processor.decode(ids)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"model_proto": self.model_proto}
+        return {"model_proto": self.model_proto.hex()}
 
 
 def _load_tokenizer(data: dict[str, Any]):
