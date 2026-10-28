@@ -8,7 +8,7 @@ RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 --index-url https://download.pytorch.org/whl/cpu torch \
-    && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2"
+    && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2" "sentencepiece>=0.2.0,<1"
 
 COPY fross_transformer.py /app/fross_transformer.py
 COPY training/distillation/verify_checkpoint.py /app/training/distillation/verify_checkpoint.py
