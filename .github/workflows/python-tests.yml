@@ -62,11 +62,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Parse PowerShell training launcher script
+      - name: Parse PowerShell training launcher scripts
         shell: powershell
         run: |
-          $path = Join-Path $PWD "training/windows/TRAIN_FROSS.ps1"
-          $source = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::ASCII)
-          $null = [scriptblock]::Create($source)
-          Write-Host "TRAIN_FROSS.ps1 parsed successfully."
-          if ($source -match "[^\x00-\x7F]") { throw "TRAIN_FROSS.ps1 must remain ASCII-only for Windows PowerShell 5.1." }
+          foreach ($relativePath in @("training/windows/TRAIN_FROSS.ps1", "training/windows/TRAIN_FROSS_UNIGRAM_5000.ps1")) {
+            $path = Join-Path $PWD $relativePath
+            $source = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::ASCII)
+            $null = [scriptblock]::Create($source)
+            Write-Host "$relativePath parsed successfully."
+            if ($source -match "[^\x00-\x7F]") { throw "$relativePath must remain ASCII-only for Windows PowerShell 5.1." }
+          }
