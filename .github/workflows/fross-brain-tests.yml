@@ -47,7 +47,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install CPU training dependency
-        run: python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
+        run: |
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install --disable-pip-version-check "sentencepiece>=0.2.0,<1"
       - name: Validate Hostless Docker build paths
         run: |
           python - <<'PY'

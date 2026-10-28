@@ -113,7 +113,7 @@ class TransformerTests(unittest.TestCase):
         second = transformer._evaluate(model, stream, block_size=16, batches=2)
         self.assertAlmostEqual(first, second, places=7)
 
-    def test_causal_attention_cannot_see_future_tokens(self) -> None
+    def test_causal_attention_cannot_see_future_tokens(self) -> None:
         torch.manual_seed(7)
         model = transformer.FrossTransformer(
             vocab_size=48,
