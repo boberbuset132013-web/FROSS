@@ -13,6 +13,32 @@ $venvDir = Join-Path $repoRoot ".venv-unigram-training"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $logDir = Join-Path $workDir "logs"
 
+function Invoke-PythonLogged {
+    param(
+        [Parameter(Mandatory = $true)][string]$PythonPath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$LogPath
+    )
+    $logParent = Split-Path -Parent $LogPath
+    if ($logParent) { New-Item -ItemType Directory -Force -Path $logParent | Out-Null }
+    $writer = [System.IO.StreamWriter]::new($LogPath, $false, [System.Text.UTF8Encoding]::new($false))
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $PythonPath -u @Arguments 2>&1 | ForEach-Object {
+            $line = [string]$_
+            Write-Host $line
+            $writer.WriteLine($line)
+            $writer.Flush()
+        }
+        $nativeExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+        $writer.Dispose()
+    }
+    return $nativeExitCode
+}
+
 foreach ($required in @($pythonScript, $baseCorpus, $teacherCorpus, $prepareCorpus)) {
     if (-not (Test-Path $required)) { throw "Missing required file: $required. Download and extract the complete repository ZIP." }
 }
@@ -58,6 +84,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
+$env:PYTHONUNBUFFERED = "1"
 
 Write-Host "Validating and preparing the combined training corpus..."
 & $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
@@ -73,9 +100,7 @@ if (-not (Test-Path $checkpoint)) {
     Write-Host ""
     Write-Host "Stage 1/2: training a NEW Unigram model to 600 steps (target vocabulary 20000)."
     Write-Host "Log: $log600"
-    & $pythonExe @stage600 *> $log600
-    $trainExitCode = $LASTEXITCODE
-    Get-Content $log600 -Tail 40
+    $trainExitCode = Invoke-PythonLogged -PythonPath $pythonExe -Arguments $stage600 -LogPath $log600
     if ($trainExitCode -ne 0) { throw "Stage 600 failed. Keep the checkpoint and inspect $log600." }
 } else {
     Write-Host "A checkpoint for this experiment already exists; it will not be overwritten."
@@ -97,9 +122,7 @@ if ($completedSteps -lt 5000) {
     Write-Host ""
     Write-Host "Stage 2/2: continuing from $completedSteps to 5000 TOTAL steps."
     Write-Host "Log: $log5000"
-    & $pythonExe @continueArgs *> $log5000
-    $trainExitCode = $LASTEXITCODE
-    Get-Content $log5000 -Tail 40
+    $trainExitCode = Invoke-PythonLogged -PythonPath $pythonExe -Arguments $continueArgs -LogPath $log5000
     if ($trainExitCode -ne 0) { throw "Continuation failed. Keep the checkpoint and inspect $log5000." }
 } elseif ($completedSteps -eq 5000) {
     Write-Host "This experiment already has 5000 training steps. No retraining was started."
@@ -115,9 +138,7 @@ $checkArgs = @(
     "--text", "Explain in simple terms what a neural network is.",
     "--max-new-tokens", "80"
 )
-& $pythonExe @checkArgs *> $checkLog
-$checkExitCode = $LASTEXITCODE
-Get-Content $checkLog -Tail 40
+$checkExitCode = Invoke-PythonLogged -PythonPath $pythonExe -Arguments $checkArgs -LogPath $checkLog
 if ($checkExitCode -ne 0) { throw "Checkpoint verification failed. The saved checkpoint has been preserved." }
 
 Write-Host ""

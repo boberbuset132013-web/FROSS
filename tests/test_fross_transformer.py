@@ -96,7 +96,24 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(loaded[0]["history"][0]["role"], "user")
         self.assertEqual(loaded[1]["history"], [])
 
-    def test_causal_attention_cannot_see_future_tokens(self) -> None:
+    def test_validation_evaluation_is_repeatable(self) -> None:
+        torch.manual_seed(7)
+        model = transformer.FrossTransformer(
+            vocab_size=32,
+            config={
+                "block_size": 16,
+                "n_embd": 16,
+                "n_head": 4,
+                "n_layer": 1,
+                "dropout": 0.0,
+            },
+        )
+        stream = [4 + (index % 20) for index in range(256)]
+        first = transformer._evaluate(model, stream, block_size=16, batches=2)
+        second = transformer._evaluate(model, stream, block_size=16, batches=2)
+        self.assertAlmostEqual(first, second, places=7)
+
+    def test_causal_attention_cannot_see_future_tokens(self) -> None
         torch.manual_seed(7)
         model = transformer.FrossTransformer(
             vocab_size=48,
@@ -176,8 +193,15 @@ class TransformerTests(unittest.TestCase):
                     target_vocab_size=256,
                     seed=91,
                     schedule_steps=2,
+                    checkpoint_interval=1,
                 )
                 self.assertEqual(first["training_steps"], 1)
+                snapshot = root / "checkpoints" / "checkpoint-step-0001.pt"
+                self.assertTrue(snapshot.is_file())
+                snapshot_model, snapshot_tokenizer, snapshot_status = transformer.load_model(snapshot)
+                self.assertIsNotNone(snapshot_model)
+                self.assertIsNotNone(snapshot_tokenizer)
+                self.assertTrue(snapshot_status["loaded"])
                 self.assertEqual(first["steps_this_run"], 1)
 
                 continued = transformer.train_model(

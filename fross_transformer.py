@@ -542,8 +542,10 @@ def _evaluate(model: FrossTransformer, stream: list[int], block_size: int, batch
     values = []
     device = next(model.parameters()).device
     last_start = len(stream) - block_size - 1
+    # Reuse identical validation windows to make loss comparisons stable.
+    validation_rng = random.Random(1337)
     for _ in range(batches):
-        starts = [random.randint(0, last_start) for _ in range(4)]
+        starts = [validation_rng.randint(0, last_start) for _ in range(4)]
         x = torch.tensor([stream[i:i + block_size] for i in starts], dtype=torch.long, device=device)
         y = torch.tensor([stream[i + 1:i + block_size + 1] for i in starts], dtype=torch.long, device=device)
         logits = model(x)
@@ -564,6 +566,7 @@ def train_model(
     seed: int = 1337,
     resume: bool = False,
     schedule_steps: int | None = None,
+    checkpoint_interval: int = 400,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
 
@@ -572,6 +575,8 @@ def train_model(
     """
     if steps < 1 or batch_size < 1 or block_size < 32:
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
+    if checkpoint_interval < 1:
+        raise ValueError("checkpoint_interval must be at least 1")
     schedule_total = int(schedule_steps if schedule_steps is not None else steps)
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
@@ -683,49 +688,6 @@ def train_model(
             for name, value in resume_checkpoint["state_dict"].items()
         }
 
-    last_start = len(train_stream) - actual_block - 1
-    evaluation_interval = max(50, min(300, schedule_total // 8))
-    for step in range(start_step, steps):
-        starts = [random.randint(0, last_start) for _ in range(batch_size)]
-        x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
-        y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long, device=device)
-        optimizer.zero_grad(set_to_none=True)
-        logits = model(x)
-        loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        learning_rate = 3e-4 * (1.0 - 0.65 * (step / max(1, schedule_total - 1)))
-        for group in optimizer.param_groups:
-            group["lr"] = learning_rate
-        optimizer.step()
-        last_loss = float(loss.detach())
-        is_eval_step = (step + 1) % evaluation_interval == 0 or step + 1 == steps
-        if is_eval_step:
-            candidate_validation_loss = _evaluate(model, validation_stream, actual_block)
-            if math.isfinite(candidate_validation_loss) and candidate_validation_loss < best_validation_loss:
-                best_validation_loss = candidate_validation_loss
-                best_checkpoint_step = step + 1
-                best_train_loss = last_loss
-                best_state = {
-                    name: value.detach().cpu().clone()
-                    for name, value in model.state_dict().items()
-                }
-        if (step + 1) % max(1, (steps - start_step) // 5) == 0 or step + 1 == steps:
-            shown_val = (
-                f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
-            )
-            print(
-                f"step {step + 1}/{steps} · train loss {last_loss:.4f} · "
-                f"best validation loss {shown_val}",
-                flush=True,
-            )
-
-    # Keep the true last training state separately from the best-validation inference weights.
-    last_state_dict = {
-        name: value.detach().cpu().clone()
-        for name, value in model.state_dict().items()
-    }
-
     def _cpu_tree(value: Any) -> Any:
         if torch.is_tensor(value):
             return value.detach().cpu()
@@ -737,61 +699,176 @@ def train_model(
             return tuple(_cpu_tree(item) for item in value)
         return value
 
-    saved_optimizer_state = _cpu_tree(optimizer.state_dict())
-    saved_python_rng_state = random.getstate()
-    saved_torch_rng_state = torch.get_rng_state().clone()
+    def _atomic_torch_save(payload: dict[str, Any], path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        try:
+            torch.save(payload, temporary)
+            os.replace(temporary, path)
+        except Exception:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+            raise
 
-    if best_state is not None:
-        model.load_state_dict(best_state, strict=True)
-        validation_loss = best_validation_loss
-        reported_train_loss = best_train_loss
-    else:
-        validation_loss = _evaluate(model, validation_stream, actual_block)
-        reported_train_loss = last_loss
-    model.eval()
-    checkpoint = {
-        "format_version": 2,
-        "version": VERSION,
-        "config": config,
-        "tokenizer": tokenizer.to_dict(),
-        "state_dict": _cpu_tree(model.state_dict()),
-        "resume_state": {
-            "last_state_dict": last_state_dict,
-            "optimizer_state_dict": saved_optimizer_state,
-            "python_rng_state": saved_python_rng_state,
-            "torch_rng_state": saved_torch_rng_state,
-            "completed_steps": steps,
-            "corpus_sha256": corpus_sha256,
-            "seed": seed,
-            "schedule_steps": schedule_total,
-        },
-        "metrics": {
-            "train_loss": round(reported_train_loss, 5) if math.isfinite(reported_train_loss) else None,
-            "validation_loss": round(validation_loss, 5) if math.isfinite(validation_loss) else None,
+    archive_milestones = {600, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000}
+
+    def _write_inference_snapshot(payload: dict[str, Any], completed_steps: int) -> Path:
+        snapshot_path = target.parent / "checkpoints" / f"{target.stem}-step-{completed_steps:04d}.pt"
+        snapshot = {
+            "format_version": int(payload.get("format_version", 2)),
+            "version": payload.get("version", VERSION),
+            "config": payload["config"],
+            "tokenizer": payload["tokenizer"],
+            "state_dict": payload["state_dict"],
+            "metrics": payload["metrics"],
+            "snapshot_kind": "inference-only",
+        }
+        _atomic_torch_save(snapshot, snapshot_path)
+        print(
+            f"[checkpoint] inference snapshot saved: {snapshot_path} "
+            f"(step {completed_steps}; best model step {payload['metrics'].get('best_checkpoint_step')})",
+            flush=True,
+        )
+        return snapshot_path
+
+    def _build_checkpoint(completed_steps: int) -> dict[str, Any]:
+        current_state = {
+            name: value.detach().cpu().clone()
+            for name, value in model.state_dict().items()
+        }
+        inference_state = best_state if best_state is not None else current_state
+        shown_train_loss = best_train_loss if math.isfinite(best_train_loss) else last_loss
+        metrics = {
+            "train_loss": round(shown_train_loss, 5) if math.isfinite(shown_train_loss) else None,
+            "validation_loss": round(best_validation_loss, 5) if math.isfinite(best_validation_loss) else None,
             "training_device": str(device),
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
-            "training_steps": steps,
-            "steps_this_run": steps - start_step,
+            "training_steps": completed_steps,
+            "steps_this_run": completed_steps - start_step,
             "schedule_steps": schedule_total,
-            "best_checkpoint_step": best_checkpoint_step or steps,
+            "best_checkpoint_step": best_checkpoint_step or completed_steps,
             "vocab_size": tokenizer.vocab_size,
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
             "vocab_target_reached": (
                 tokenizer.vocab_size == target_vocab_size if merge_count is None else None
             ),
-            "tokenizer_type": ("sentencepiece-unigram" if isinstance(tokenizer, SentencePieceUnigramTokenizer) else ("word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe")),
+            "tokenizer_type": (
+                "sentencepiece-unigram" if isinstance(tokenizer, SentencePieceUnigramTokenizer)
+                else ("word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe")
+            ),
             "parameters": sum(p.numel() for p in model.parameters()),
             "trained_from_random_weights": True,
-        },
-    }
-    target.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint, target)
-    return {
-        "ok": True, "version": VERSION, "output": str(target),
-        **checkpoint["metrics"]
-    }
+        }
+        return {
+            "format_version": 2,
+            "version": VERSION,
+            "config": config,
+            "tokenizer": tokenizer.to_dict(),
+            "state_dict": _cpu_tree(inference_state),
+            "resume_state": {
+                "last_state_dict": current_state,
+                "optimizer_state_dict": _cpu_tree(optimizer.state_dict()),
+                "python_rng_state": random.getstate(),
+                "torch_rng_state": torch.get_rng_state().clone(),
+                "completed_steps": completed_steps,
+                "corpus_sha256": corpus_sha256,
+                "seed": seed,
+                "schedule_steps": schedule_total,
+            },
+            "metrics": metrics,
+        }
 
+    def _save_training_checkpoint(completed_steps: int, archive: bool = False) -> dict[str, Any]:
+        payload = _build_checkpoint(completed_steps)
+        _atomic_torch_save(payload, target)
+        print(
+            f"[checkpoint] resumable checkpoint saved at step {completed_steps}/{steps}: {target}",
+            flush=True,
+        )
+        if archive:
+            _write_inference_snapshot(payload, completed_steps)
+        return payload
+
+    # Preserve the start checkpoint as a visible snapshot when resuming an older run.
+    if resume_checkpoint is not None:
+        initial_snapshot = target.parent / "checkpoints" / f"{target.stem}-step-{start_step:04d}.pt"
+        if not initial_snapshot.is_file():
+            _write_inference_snapshot(resume_checkpoint, start_step)
+
+    last_start = len(train_stream) - actual_block - 1
+    evaluation_interval = max(100, min(250, schedule_total // 20))
+    latest_validation_loss = float("nan")
+    warmup_steps = min(100, max(0, schedule_total // 20))
+    print(
+        f"[train] start={start_step}, target={steps}, schedule={schedule_total}, "
+        f"batch={batch_size}, context={actual_block}, eval_every={evaluation_interval}, "
+        f"checkpoint_every={checkpoint_interval}, warmup={warmup_steps}",
+        flush=True,
+    )
+
+    for step in range(start_step, steps):
+        # Update the learning rate before the optimizer update, not after backpropagation.
+        if warmup_steps and step < warmup_steps:
+            learning_rate = 3e-4 * ((step + 1) / warmup_steps)
+        else:
+            decay_steps = max(1, schedule_total - warmup_steps - 1)
+            decay_progress = min(1.0, max(0.0, (step - warmup_steps) / decay_steps))
+            learning_rate = 3e-4 * (1.0 - 0.65 * decay_progress)
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate
+
+        starts = [random.randint(0, last_start) for _ in range(batch_size)]
+        x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
+        y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long, device=device)
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(x)
+        loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        last_loss = float(loss.detach())
+        completed_steps = step + 1
+
+        if completed_steps % evaluation_interval == 0 or completed_steps == steps:
+            latest_validation_loss = _evaluate(model, validation_stream, actual_block)
+            if math.isfinite(latest_validation_loss) and latest_validation_loss < best_validation_loss:
+                best_validation_loss = latest_validation_loss
+                best_checkpoint_step = completed_steps
+                best_train_loss = last_loss
+                best_state = {
+                    name: value.detach().cpu().clone()
+                    for name, value in model.state_dict().items()
+                }
+            shown_latest = f"{latest_validation_loss:.4f}" if math.isfinite(latest_validation_loss) else "unavailable"
+            shown_best = f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "unavailable"
+            print(
+                f"[eval] step {completed_steps}/{steps} · validation loss {shown_latest} "
+                f"· best validation loss {shown_best} at step {best_checkpoint_step}",
+                flush=True,
+            )
+
+        if completed_steps % 100 == 0 or completed_steps == steps:
+            shown_latest = f"{latest_validation_loss:.4f}" if math.isfinite(latest_validation_loss) else "not-yet-measured"
+            shown_best = f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
+            print(
+                f"[train] step {completed_steps}/{steps} · train loss {last_loss:.4f} "
+                f"· lr {learning_rate:.2e} · latest validation {shown_latest} · best {shown_best}",
+                flush=True,
+            )
+
+        is_periodic_checkpoint = (completed_steps - start_step) % checkpoint_interval == 0
+        is_archive_milestone = completed_steps in archive_milestones
+        if completed_steps < steps and (is_periodic_checkpoint or is_archive_milestone):
+            _save_training_checkpoint(completed_steps, archive=is_archive_milestone)
+
+    checkpoint = _build_checkpoint(steps)
+    _atomic_torch_save(checkpoint, target)
+    print(f"[checkpoint] final resumable checkpoint saved at step {steps}: {target}", flush=True)
+    _write_inference_snapshot(checkpoint, steps)
+    return {"ok": True, "version": VERSION, "output": str(target), **checkpoint["metrics"]}
 
 def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, BPETokenizer | None, dict[str, Any]]:
     configure_runtime_threads()
@@ -1032,6 +1109,7 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 5000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 5000 for both training stages.")
+    parser.add_argument("--checkpoint-interval", type=int, default=400, help="Save a resumable checkpoint every N completed steps.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
@@ -1067,6 +1145,7 @@ def main() -> int:
             seed=args.seed,
             resume=args.resume,
             schedule_steps=args.schedule_steps,
+            checkpoint_interval=args.checkpoint_interval,
         )
         model, tokenizer, status = load_model(args.output)
         if model is None or tokenizer is None:
