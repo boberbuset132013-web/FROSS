@@ -158,7 +158,7 @@ jobs:
           assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
           assert "function frossForbiddenProgrammingTopic(topic)" in worker and "frossForbiddenProgrammingTopic(topic)" in worker, "Custom learning must reject programming languages outside JavaScript, Python, HTML and CSS"
           assert "...(shouldSearch ? results.slice(0, 6) : [])" in worker, "Fresh search results must be prioritized in the model context"
-          assert 'VERSION = "FROSS Transformer 1.4"' in transformer and '"block_size": 320' in transformer and '"n_embd": 192' in transformer and '"n_head": 6' in transformer and '"n_layer": 6' in transformer, "Transformer version, context window and architecture must match Brain 1.4"
+          assert 'VERSION = "FROSS Transformer 1.5"' in transformer and '"block_size": 320' in transformer and '"n_embd": 192' in transformer and '"n_head": 6' in transformer and '"n_layer": 6' in transformer, "Transformer version, context window and architecture must match Brain 1.5"
           assert 'def _response_strategy(message: str)' in transformer and "короткая социальная реплика" in transformer and "Тип запроса" in transformer, "Brain 1.4 must retain its task-type guidance templates"
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
           assert 'FROSS Hybrid Transformer Brain 1.4' in server and 'max_new_tokens=request_token_limit' in server and 'requested_tokens' in server and '512' in server, "Python service must match Brain 1.4 and clamp per-request generation to a safe budget"
