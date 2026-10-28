@@ -36,6 +36,10 @@ Write-Host "Python: $pythonExe"
 & $pythonExe -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "Could not upgrade pip." }
 
+# Install NumPy explicitly: PyTorch may warn during startup if it is missing.
+& $pythonExe -m pip install "numpy>=2.0"
+if ($LASTEXITCODE -ne 0) { throw "NumPy installation failed." }
+
 # Use find_spec instead of importing modules for checks. Importing a missing module
 # prints a traceback to stderr, which Windows PowerShell 5.1 can treat as a terminating
 # NativeCommandError when ErrorActionPreference is Stop.
@@ -69,7 +73,8 @@ if (-not (Test-Path $checkpoint)) {
     Write-Host ""
     Write-Host "Stage 1/2: training a NEW Unigram model to 600 steps (target vocabulary 20000)."
     Write-Host "Log: $log600"
-    & $pythonExe @stage600 2>&1 | Tee-Object -FilePath $log600
+    & $pythonExe @stage600 *> $log600
+    Get-Content $log600 -Tail 40
     if ($LASTEXITCODE -ne 0) { throw "Stage 600 failed. Keep the checkpoint and inspect $log600." }
 } else {
     Write-Host "A checkpoint for this experiment already exists; it will not be overwritten."
@@ -91,7 +96,8 @@ if ($completedSteps -lt 5000) {
     Write-Host ""
     Write-Host "Stage 2/2: continuing from $completedSteps to 5000 TOTAL steps."
     Write-Host "Log: $log5000"
-    & $pythonExe @continueArgs 2>&1 | Tee-Object -FilePath $log5000
+    & $pythonExe @continueArgs *> $log5000
+    Get-Content $log5000 -Tail 40
     if ($LASTEXITCODE -ne 0) { throw "Continuation failed. Keep the checkpoint and inspect $log5000." }
 } elseif ($completedSteps -eq 5000) {
     Write-Host "This experiment already has 5000 training steps. No retraining was started."
@@ -107,7 +113,8 @@ $checkArgs = @(
     "--text", "Explain in simple terms what a neural network is.",
     "--max-new-tokens", "80"
 )
-& $pythonExe @checkArgs 2>&1 | Tee-Object -FilePath $checkLog
+& $pythonExe @checkArgs *> $checkLog
+Get-Content $checkLog -Tail 40
 if ($LASTEXITCODE -ne 0) { throw "Checkpoint verification failed. The saved checkpoint has been preserved." }
 
 Write-Host ""
