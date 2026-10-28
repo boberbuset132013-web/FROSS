@@ -543,7 +543,7 @@ def train_model(
     batch_size: int = 4,
     block_size: int = 320,
     merge_count: int | None = None,
-    target_vocab_size: int = 5000,
+    target_vocab_size: int = 20000,
     seed: int = 1337,
     resume: bool = False,
     schedule_steps: int | None = None,
