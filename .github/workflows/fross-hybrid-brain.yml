@@ -87,14 +87,14 @@ jobs:
               health = json.load(stream)
           assert health.get("ok") is True, health
           assert health.get("version") == "1.4", health
-          assert health.get("inferenceBackend") == "cpp-onnx", health
-          assert health.get("cppRuntimeLoaded") is True, health
+          assert health.get("inferenceBackend") == "python-torch", health
+          assert health.get("cppRuntimeLoaded") is False, health
           assert health.get("generationModelStatus", {}).get("loaded") is True, health
           assert health.get("modelSource") == "uploaded-checkpoint", health
           model_status = health.get("generationModelStatus", {})
           assert model_status.get("training_steps") == 3000, health
           assert model_status.get("vocab_size") == 5000, health
-          print("Docker health check passed: pre-trained checkpoint downloaded, validated and C++ ONNX inference is active.")
+          print("Docker health check passed: pre-trained checkpoint downloaded, validated and PyTorch inference is active.")
           PY
           curl -fsS -X POST http://127.0.0.1:10000/ready -H 'Authorization: Bearer ci-test' > "$RUNNER_TEMP/fross-ready.json"
           python - "$RUNNER_TEMP/fross-ready.json" <<'PY'
@@ -103,7 +103,7 @@ jobs:
               ready = json.load(stream)
           assert ready.get("ok") is True and ready.get("authenticated") is True, ready
           assert ready.get("generationModelLoaded") is True, ready
-          assert ready.get("inferenceBackend") == "cpp-onnx", ready
+          assert ready.get("inferenceBackend") == "python-torch", ready
           print("Authenticated readiness endpoint passed.")
           PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
@@ -130,5 +130,5 @@ jobs:
               # This Docker smoke build deliberately uses only two training steps;
               # a fluent non-empty answer is not a meaningful expectation at this stage.
               assert response.get("generationModelStatus", {}).get("loaded") is True, response
-          print("Docker chat endpoint and C++ ONNX model smoke test passed.")
+          print("Docker chat endpoint and PyTorch model smoke test passed.")
           PY
