@@ -551,7 +551,7 @@ def train_model(
     """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
 
     When using staged training, pass the same schedule_steps on both runs. For example,
-    train 600 steps with schedule_steps=3000, then resume with steps=3000.
+    train 600 steps with schedule_steps=5000, then resume with steps=5000.
     """
     if steps < 1 or batch_size < 1 or block_size < 32:
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
@@ -1012,15 +1012,15 @@ def main() -> int:
     parser.add_argument("command", choices=("train", "test", "generate", "export"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
-    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
+    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 5000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=320)
     parser.add_argument(
-        "--vocab-size", type=int, default=5000,
-        help="Target tokenizer vocabulary size; Brain 1.4 defaults to 5000 tokens.",
+        "--vocab-size", type=int, default=20000,
+        help="Target SentencePiece Unigram vocabulary size; actual size may be lower if the corpus is too small.",
     )
     parser.add_argument(
         "--merges", type=int, default=None,
