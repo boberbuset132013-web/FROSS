@@ -5,7 +5,7 @@
   "slug": "javascript-sobytiya-i-dom",
   "topic": "JavaScript: события и DOM",
   "createdAt": "2026-10-26T03:00:37.634Z",
-  "updatedAt": "2026-10-26T03:00:37.634Z",
+  "updatedAt": "2026-10-28T03:00:28.035Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. 👋 Welcome, Bienvenue, ようこそ, 환영합니다, Bienvenido, Bem-vindos, Добро пожаловать, 欢迎, 歡迎, أهلا MDN Web Docs is an open-source, collaborative project that documents web platform technologies, including CSS, HTML, JavaScript, and Web APIs. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. 🌎 Our community We're proud to have a global community of contributors and developers, who also want to say 👋 స్వాగతం സ്വാഗതം Merhaba خوش آمدید स्वागत है Selamat Datang வணக்கம் მოგესალმებით Ласкаво просимо مرحباً خوش آمدی স্বাগতম Dobro došli שלום Добре дошли 환영합니다 ✉️ Get in touch You can ask quest 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "project",
     "that"
   ],
-  "sourceCount": 5,
+  "sourceCount": 6,
   "items": [
     {
       "schemaVersion": 2,
@@ -285,6 +285,47 @@
       ],
       "source": "Bing",
       "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: события и DOM",
+      "title": "MDN - Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/MDN",
+      "snippet": "Toggle the table of contents MDN 10 languages Deutsch Español Français Italiano 日本語 한국어 Polski Português Svenska 中文 Edit links Article Talk English Read Edit View history Tools Tools move to sidebar hide Actions Read Edit View history General What links here Related changes Upload file Permanent link Page information Cite this page Get shortened URL Switch to legacy parser Print/export Download as PDF Printable version In other projects Wikidata item Appearance move to sidebar hide From Wikipedia, the free encyclopedia MDN may refer to: Computing and technology [ edit ] MDN Web Docs (formerly Mozilla Developer Network), a Mozilla website for developer documentation Message Disposition Notification, a form of return receipt for e-mail Telephone number for mobile devices, as in: Mobile device number Mobile dialable number Mobile directory number Organizations [ edit ] Ministry of National Defence (Portugal) ( Ministério da Defesa Nacional ), the Portuguese defence ministry Nicaraguan Democratic Movement ( Movimiento Demócratico Nicaragüense ) Transport [ edit ] Macedon railway station , Victoria, Australia (station code: MDN) Madison Municipal Airport (Indiana) , Madison, Indiana, United States (IATA code: MDN) Maiden Newton railway station , England (National Rail station code: MDN) Medan railway station , North Sumatra, Indonesia (station code: MDN) Meriden (Amtrak station) , Connecticut, United States (Amtrak station code: MDN) Milwaukee District North Line , a rail line in Chicago, Illinois, US Minggang East railway station , China (China Railway telegraph code: MDN) Morden tube station (London Underground station code: MDN) Mudan Airlines , Somali Republic (ICAO code: MDN) Other uses [ edit ] East German mark ( Mark der Deutschen Notenbank ), the official unit of currency in East Germany from 1964 to 1967 Maya Day Number, the sum of days in Mesoamerican Long Count calendar Mbati language (ISO 639-3: mdn) MdN Interactive , the magazine for Macintosh designers Network MDN, a television station in Griffith, New South Wales, and sister station of MTN Topics referred to by the same term This disambiguation page lists articles associated with the title MDN . If an internal link incorrectly led you here, you may wish to change the link to point directly to the intended article. Retrieved from \" https://en.wikipedia.org/w/index.php?title=MDN&oldid=1282032390 \" Category : Disambiguation pages Hidden categories: Short description is different from Wikidata All article disambiguation pages All disambiguation pages",
+      "summary": "If an internal link incorrectly led you here, you may wish to change the link to point directly to the intended article. Retrieved from \" https://en.wikipedia.org/w/index.php?title=MDN&oldid=1282032390 \" Category : Disambiguation pages Hidden categories: Short description is different from Wikidata All article disambiguation pages All disambiguation pages",
+      "keyPoints": [
+        "If an internal link incorrectly led you here, you may wish to change the link to point directly to the intended article.",
+        "Retrieved from \" https://en.wikipedia.org/w/index.php?title=MDN&oldid=1282032390 \" Category : Disambiguation pages Hidden categories: Short description is different from Wikidata All article disambiguation pages All disambiguation pages"
+      ],
+      "keywords": [
+        "mdn",
+        "station",
+        "to",
+        "code",
+        "edit",
+        "of",
+        "in",
+        "javascript",
+        "события",
+        "dom",
+        "wikipedia",
+        "number",
+        "railway",
+        "mobile",
+        "disambiguation",
+        "article",
+        "link",
+        "page",
+        "east",
+        "pages",
+        "links",
+        "read",
+        "view",
+        "history"
+      ],
+      "source": "article text",
+      "score": 0.1563
     }
   ]
 }
