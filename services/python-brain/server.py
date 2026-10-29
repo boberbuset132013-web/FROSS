@@ -726,6 +726,7 @@ TRAINING_OUTPUT_PATH = Path(os.environ.get(
     "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output.pt")
 ))
 TRAINING_LOCK = threading.Lock()
+TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
     "ok": True, "state": "idle", "step": 0, "targetSteps": 600,
     "trainLoss": None, "validationLoss": None, "logs": [],
@@ -737,7 +738,7 @@ def _training_log(message: str) -> None:
         logs = TRAINING_STATUS.setdefault("logs", [])
         logs.append("[" + stamp + "] " + str(message)[:300])
         del logs[:-120]
-def _training_progress(progress: dict[str, Any]) -> None:
+def _training_progress(progress: dict[str, Any]) -> bool:
     with TRAINING_LOCK:
         TRAINING_STATUS["step"] = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
         TRAINING_STATUS["targetSteps"] = int(progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600)))
@@ -754,7 +755,11 @@ def _training_progress(progress: dict[str, Any]) -> None:
             + " · validation loss "
             + (format(float(progress["validation_loss"]), ".4f") if progress.get("validation_loss") is not None else "ещё не измерен")
         )
+    return not TRAINING_CANCEL.is_set()
 def _run_training(target_steps: int, schedule_steps: int) -> None:
+    previous_device = os.environ.get("FROSS_DEVICE")
+    # Training is deliberately CPU-only on the shared Hostless instance to avoid GPU overload.
+    os.environ["FROSS_DEVICE"] = "cpu"
     try:
         corpus = ROOT / "data" / "fross_corpus.jsonl"
         resume = TRAINING_OUTPUT_PATH.is_file()
@@ -763,27 +768,34 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
             corpus_path=corpus,
             output_path=TRAINING_OUTPUT_PATH,
             steps=target_steps,
-            batch_size=2,
-            block_size=320,
+            batch_size=1,
+            block_size=128,
             target_vocab_size=5000,
             seed=1337,
             resume=resume,
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
         )
+        cancelled = TRAINING_CANCEL.is_set()
         with TRAINING_LOCK:
             TRAINING_STATUS.update({
-                "state": "completed", "step": int(result.get("training_steps", target_steps)),
+                "state": "cancelled" if cancelled else "completed", "step": int(result.get("training_steps", target_steps)),
                 "targetSteps": target_steps, "trainLoss": result.get("train_loss"),
                 "validationLoss": result.get("validation_loss"),
                 "metrics": result, "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
                 "finishedAt": datetime.now(timezone.utc).isoformat(),
             })
-        _training_log("Обучение завершено. Контрольная точка сохранена.")
+        _training_log("Обучение отменено пользователем. Промежуточная контрольная точка сохранена." if cancelled else "Обучение завершено. Контрольная точка сохранена.")
     except Exception as exc:
         with TRAINING_LOCK:
             TRAINING_STATUS.update({"state": "failed", "error": type(exc).__name__ + ": " + str(exc)[:240]})
         _training_log("Ошибка обучения: " + type(exc).__name__ + ": " + str(exc)[:180])
+    finally:
+        if previous_device is None:
+            os.environ.pop("FROSS_DEVICE", None)
+        else:
+            os.environ["FROSS_DEVICE"] = previous_device
+        TRAINING_CANCEL.clear()
 def _training_snapshot() -> dict[str, Any]:
     with TRAINING_LOCK:
         snapshot = dict(TRAINING_STATUS)
@@ -901,6 +913,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path == "/admin/training/cancel":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            with TRAINING_LOCK:
+                if TRAINING_STATUS.get("state") != "running":
+                    respond(self, 409, {"ok": False, "error": "Сейчас обучение не выполняется."})
+                    return
+                TRAINING_CANCEL.set()
+                TRAINING_STATUS["state"] = "cancelling"
+            _training_log("Получена команда отмены; остановка после текущего шага.")
+            respond(self, 202, {"ok": True, "state": "cancelling"})
+            return
         if path == "/admin/training/start":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
@@ -940,6 +968,7 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception as exc:
                         respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})
                         return
+                TRAINING_CANCEL.clear()
                 TRAINING_STATUS.update({
                     "state": "running", "step": int(existing_steps if has_checkpoint else 0),
                     "targetSteps": target_steps, "trainLoss": None, "validationLoss": None,
