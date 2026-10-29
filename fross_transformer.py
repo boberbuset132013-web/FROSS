@@ -479,6 +479,8 @@ def train_model(
     resume: bool = False,
     schedule_steps: int | None = None,
     progress_callback: Any = None,
+    stop_callback: Any = None,
+    force_cpu: bool = False,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming a saved optimizer state.
 
@@ -561,7 +563,7 @@ def train_model(
     else:
         config = {**DEFAULT_CONFIG, "block_size": actual_block}
 
-    device = _preferred_device()
+    device = torch.device("cpu") if force_cpu else _preferred_device()
     model = FrossTransformer(tokenizer.vocab_size, config).to(device)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
@@ -601,7 +603,12 @@ def train_model(
 
     last_start = len(train_stream) - actual_block - 1
     evaluation_interval = max(50, min(300, schedule_total // 8))
+    completed_steps = start_step
+    was_cancelled = False
     for step in range(start_step, steps):
+        if stop_callback is not None and stop_callback():
+            was_cancelled = True
+            break
         starts = [random.randint(0, last_start) for _ in range(batch_size)]
         x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
         y = torch.tensor([train_stream[i + 1:i + actual_block + 1] for i in starts], dtype=torch.long, device=device)
@@ -615,6 +622,7 @@ def train_model(
             group["lr"] = learning_rate
         optimizer.step()
         last_loss = float(loss.detach())
+        completed_steps = step + 1
         is_eval_step = (step + 1) % evaluation_interval == 0 or step + 1 == steps
         if is_eval_step:
             candidate_validation_loss = _evaluate(model, validation_stream, actual_block)
@@ -688,7 +696,7 @@ def train_model(
             "optimizer_state_dict": saved_optimizer_state,
             "python_rng_state": saved_python_rng_state,
             "torch_rng_state": saved_torch_rng_state,
-            "completed_steps": steps,
+            "completed_steps": completed_steps,
             "corpus_sha256": corpus_sha256,
             "seed": seed,
             "schedule_steps": schedule_total,
@@ -699,8 +707,9 @@ def train_model(
             "training_device": str(device),
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
-            "training_steps": steps,
-            "steps_this_run": steps - start_step,
+            "training_steps": completed_steps,
+            "steps_this_run": completed_steps - start_step,
+            "cancelled": was_cancelled,
             "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
