@@ -1839,7 +1839,7 @@ async function handleFrossTransformerTraining(request, env, action) {
     if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
       return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
     }
-    const basePath = configured.pathname.replace(/\\/+$/, "").replace(/\\/chat$/, "");
+    const basePath = configured.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
     configured.pathname = (basePath || "") + (action === "status" ? "/admin/training/status" : "/admin/training/start");
     configured.search = "";
     target = configured.toString();
