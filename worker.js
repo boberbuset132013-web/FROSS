@@ -74,6 +74,13 @@ export default {
     if (path === "/api/model-upload") return frossApiGuard(path, request, () => handleFrossModelUpload(request, env));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
+    // Статические страницы (включая / и /training.html) обслуживаем через binding ASSETS.
+    // API-маршруты обработаны выше; этот fallback предотвращает FROSS route not found для HTML/CSS/JS.
+    if ((method === "GET" || method === "HEAD") && env.ASSETS && !path.startsWith("/api/")) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status !== 404 || path === "/" || path === "/index.html") return assetResponse;
+    }
+
     // Главная страница Worker: диагностика сервиса, без Telegram и без прокси.
     if (path === "/" && method === "GET") {
       return new Response(
