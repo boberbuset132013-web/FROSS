@@ -726,6 +726,7 @@ TRAINING_OUTPUT_PATH = Path(os.environ.get(
     "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output.pt")
 ))
 TRAINING_LOCK = threading.Lock()
+TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
     "ok": True, "state": "idle", "step": 0, "targetSteps": 600,
     "trainLoss": None, "validationLoss": None, "logs": [],
@@ -770,16 +771,19 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
             resume=resume,
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
+            stop_callback=TRAINING_CANCEL.is_set,
+            force_cpu=True,
         )
+        cancelled = bool(result.get("cancelled"))
         with TRAINING_LOCK:
             TRAINING_STATUS.update({
-                "state": "completed", "step": int(result.get("training_steps", target_steps)),
+                "state": "cancelled" if cancelled else "completed", "step": int(result.get("training_steps", target_steps)),
                 "targetSteps": target_steps, "trainLoss": result.get("train_loss"),
                 "validationLoss": result.get("validation_loss"),
                 "metrics": result, "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
                 "finishedAt": datetime.now(timezone.utc).isoformat(),
             })
-        _training_log("Обучение завершено. Контрольная точка сохранена.")
+        _training_log("Обучение отменено; checkpoint сохранён для продолжения." if cancelled else "Обучение завершено. Контрольная точка сохранена.")
     except Exception as exc:
         with TRAINING_LOCK:
             TRAINING_STATUS.update({"state": "failed", "error": type(exc).__name__ + ": " + str(exc)[:240]})
@@ -901,6 +905,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path == "/admin/training/cancel":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            with TRAINING_LOCK:
+                if TRAINING_STATUS.get("state") != "running":
+                    respond(self, 409, {"ok": False, "error": "Обучение сейчас не выполняется."})
+                    return
+                TRAINING_CANCEL.set()
+                TRAINING_STATUS["cancelRequested"] = True
+            _training_log("Получен запрос на отмену; остановка после текущего шага.")
+            respond(self, 202, {"ok": True, "state": "cancelling"})
+            return
         if path == "/admin/training/start":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
@@ -940,6 +960,7 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception as exc:
                         respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})
                         return
+                TRAINING_CANCEL.clear()
                 TRAINING_STATUS.update({
                     "state": "running", "step": int(existing_steps if has_checkpoint else 0),
                     "targetSteps": target_steps, "trainLoss": None, "validationLoss": None,
