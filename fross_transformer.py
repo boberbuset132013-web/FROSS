@@ -162,6 +162,16 @@ class BPETokenizer:
             if stop_callback is not None and stop_callback():
                 raise TrainingCancelled("Training cancelled while reading the tokenizer corpus.")
             segment_counts.update(_PRETOKEN_PATTERN.findall(str(text)))
+
+        # Recomputing every pair over every unique word for thousands of BPE
+        # merges is expensive on small hosted CPUs. Keep the most frequent
+        # segments for merge learning while retaining all corpus characters
+        # above, so rare words still encode losslessly as character tokens.
+        # This bounds first-run tokenizer preparation without reducing vocab size.
+        max_bpe_segments = 3072
+        if merge_count >= 1000 and len(segment_counts) > max_bpe_segments:
+            segment_counts = Counter(dict(segment_counts.most_common(max_bpe_segments)))
+
         sequences: list[tuple[list[int], int]] = []
         for segment, frequency in segment_counts.items():
             sequence = [tokenizer.char_to_id.get(char, UNK_ID) for char in segment]
