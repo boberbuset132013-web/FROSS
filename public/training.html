@@ -90,9 +90,14 @@ function renderStatus(d){
  $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
  $("valLoss").textContent=Number.isFinite(Number(d.validationLoss))&&d.validationLoss!==null?Number(d.validationLoss).toFixed(4):"—";
- $("start").disabled=state==="running";$("start").textContent=state==="running"?"Обучение выполняется…":"▶ Начать обучение";
- canDownloadModel=d.checkpointAvailable===true && state!=="running";$("downloadModel").disabled=!canDownloadModel;
- if(state==="running")showMessage("Обучение выполняется на сервере. Можно закрыть страницу; проверяй состояние позже.");
+ const busy=state==="running"||state==="cancelling";
+ $("start").disabled=busy;$("start").textContent=busy?"Обучение выполняется…":"▶ Начать обучение";
+ $("cancel").disabled=state!=="running"||cancelPending;
+ $("cancel").textContent=state==="cancelling"||cancelPending?"Останавливаю…":"⏹ Отменить обучение";
+ canDownloadModel=d.checkpointAvailable===true && !busy;$("downloadModel").disabled=!canDownloadModel;
+ if(state==="running")showMessage("Обучение выполняется на CPU. Кнопка отмены остановит его после текущего шага.");
+ else if(state==="cancelling")showMessage("Запрошена остановка. Сервер завершает текущий шаг и сохраняет checkpoint…");
+ else if(state==="cancelled")showMessage("Обучение остановлено. Сохранённый checkpoint можно продолжить позже.","good");
  else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
  else if(state==="failed")showMessage(d.error||"Обучение завершилось ошибкой.","error");
  if(d.metrics){const m=d.metrics;$("metrics").innerHTML="Примеров обучения: <b>"+(m.training_examples??"—")+"</b><br>Примеров проверки: <b>"+(m.validation_examples??"—")+"</b><br>Размер словаря: <b>"+(m.vocab_size??"—")+"</b><br>Параметров модели: <b>"+(m.parameters?Number(m.parameters).toLocaleString("ru-RU"):"—")+"</b><br>Лучший шаг checkpoint: <b>"+(m.best_checkpoint_step??"—")+"</b>";}
