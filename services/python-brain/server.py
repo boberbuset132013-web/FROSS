@@ -799,7 +799,8 @@ class Handler(BaseHTTPRequestHandler):
         print("FROSS Python Transformer HTTP " + str(args[1] if len(args) > 1 else "request"))
 
     def do_GET(self) -> None:
-        if self.path == "/admin/training/status":
+        path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path == "/admin/training/status":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -808,10 +809,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             respond(self, 200, _training_snapshot())
             return
-        if self.path == "/admin/model-upload":
+        if path == "/admin/model-upload":
             _send_html(self, MODEL_UPLOAD_HTML)
             return
-        if self.path == "/admin/training/model":
+        if path == "/admin/training/model":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -849,10 +850,16 @@ class Handler(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError):
                     pass
             return
-        if self.path not in ("/health", "/"):
-            respond(self, 404, {"ok": False, "error": "Not found"})
+        if path not in ("/health", "/", "/chat"):
+            respond(self, 404, {
+                "ok": False,
+                "error": "Not found",
+                "method": "GET",
+                "path": path,
+                "routes": ["GET /", "GET /health", "GET /chat", "GET /admin/training/status", "GET /admin/training/model"]
+            })
             return
-        respond(self, 200, {
+        health_data = {
             "ok": True,
             "engine": ENGINE_NAME,
             "version": "1.4",
@@ -868,10 +875,33 @@ class Handler(BaseHTTPRequestHandler):
             "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
             "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
             "cppRuntimeStatus": CPP_RUNTIME_STATUS,
-        })
+        }
+        if path == "/chat":
+            health_data["requestInfo"] = {
+                "GET": "Диагностика сервера Python brain. Для готовности модели смотри generationModelLoaded.",
+                "POST": "Генерация ответа FROSS; требуется Authorization: Bearer <FROSS_BRAIN_SERVICE_TOKEN> и JSON с message.",
+                "health": "/health",
+                "routes": ["/chat", "/health", "/admin/training/status", "/admin/training/start", "/admin/training/model"]
+            }
+        respond(self, 200, health_data)
+
+    def do_HEAD(self) -> None:
+        path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path in ("/", "/health", "/chat"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
 
     def do_POST(self) -> None:
-        if self.path == "/admin/training/start":
+        path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path == "/admin/training/start":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -921,11 +951,17 @@ class Handler(BaseHTTPRequestHandler):
             ).start()
             respond(self, 202, {"ok": True, "state": "running", "targetSteps": target_steps})
             return
-        if self.path == "/admin/model-upload":
+        if path == "/admin/model-upload":
             handle_model_upload(self)
             return
-        if self.path not in ("/chat", "/ready"):
-            respond(self, 404, {"handled": False, "error": "Not found"})
+        if path not in ("/chat", "/ready"):
+            respond(self, 404, {
+                "handled": False,
+                "error": "Not found",
+                "method": "POST",
+                "path": path,
+                "routes": ["POST /chat", "POST /ready", "POST /admin/training/start", "POST /admin/model-upload"]
+            })
             return
         if not SERVICE_TOKEN:
             respond(self, 503, {"handled": False, "error": "Service token is not configured."})
@@ -936,7 +972,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # This authenticated readiness route proves Worker/Hostless token agreement
         # and confirms model status without generating text or consuming inference time.
-        if self.path == "/ready":
+        if path == "/ready":
             respond(self, 200, {
                 "ok": True,
                 "engine": ENGINE_NAME,

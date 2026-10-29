@@ -36,6 +36,12 @@ The endpoint checks checkpoint format/version, training steps, vocabulary and co
 
 The selected source is reported as `modelSource` in `/health` and `/api/health`.
 
+## HTTP routes and browser checks
+
+The service base URL configured in FROSS may end in `/chat`. Opening that exact URL in a browser sends **GET /chat**; it now returns JSON health/route diagnostics (HTTP 200) instead of a confusing 404. Actual inference still uses **POST /chat** with a JSON body and the shared `Authorization: Bearer FROSS_BRAIN_SERVICE_TOKEN` header. `GET /health`, `GET /`, and `HEAD /health` are health probes. Query strings and a trailing slash are normalized for route matching, so `/chat/?probe=1` does not produce a false 404.
+
+If a deployed service still returns `{"error":"Not found"}` for `GET /chat`, it is likely running an older image; trigger a Hostless rebuild/redeploy from the latest repository commit with Dockerfile `services/python-brain/Dockerfile` and the repository root as build context.
+
 ## Verify deployment
 
 Open `/health` on the Python brain service to view model status. The authenticated `POST /ready` endpoint allows the Worker to verify the shared service token as well as model readiness. A successful hybrid deployment should report:
