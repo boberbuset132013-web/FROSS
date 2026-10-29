@@ -207,7 +207,7 @@ jobs:
           assert 'path === "/api/model-upload"' in worker and "handleFrossModelUpload(request, env)" in worker, "Worker must proxy protected model uploads"
           assert 'id="settingsModelUploadBtn"' in page and 'id="modelUploadForm"' in page, "Model upload must be available inside FROSS settings"
           assert 'xhr.open("POST","/api/model-upload")' in page and "30*60*1000" in page, "Settings uploader must report progress and permit a 30-minute upload"
-          assert 'if self.path == "/admin/model-upload"' in server and "github_token=github_token" in server, "Python service must validate and save uploaded checkpoints using the forwarded server token"
+          assert 'if path == "/admin/model-upload"' in server and "github_token=github_token" in server, "Python service must validate and save uploaded checkpoints using the forwarded server token"
           assert '"X-FROSS-GITHUB-TOKEN": githubToken' in worker, "GitHub token must be forwarded only from Worker to Hostless, not browser-side"
           assert "request.resource.data.content.size() <= 50000" in rules
           assert "request.resource.data.content.size() <= 50000" in rules
