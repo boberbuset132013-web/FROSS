@@ -47,6 +47,8 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
       <button class="choice" data-steps="10000" type="button"><strong>10000</strong><span>Полный график</span></button>
     </div>
     <button id="start" class="btn primary wide" type="button">▶ Начать обучение</button>
+    <button id="cancel" class="btn wide" style="margin-top:9px;border-color:#8b4b58;color:#ffc5cc" type="button" disabled>■ Отменить обучение</button>
+    <div class="notice error" style="margin-top:10px">Защита ресурсов: обучение принудительно идёт на CPU, batch size 1 и контекст 128. GPU не используется.</div>
     <button id="downloadModel" class="btn wide" style="margin-top:9px" type="button" disabled>⬇ Скачать модель (.pt)</button>
     <div id="message" class="notice">Ожидание подключения к Python brain…</div>
     <div id="metrics" class="metrics"></div>
@@ -89,9 +91,11 @@ function renderStatus(d){
  $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
  $("valLoss").textContent=Number.isFinite(Number(d.validationLoss))&&d.validationLoss!==null?Number(d.validationLoss).toFixed(4):"—";
- $("start").disabled=state==="running";$("start").textContent=state==="running"?"Обучение выполняется…":"▶ Начать обучение";
+ $("start").disabled=state==="running"||state==="cancelling";$("start").textContent=state==="running"||state==="cancelling"?"Обучение выполняется…":"▶ Начать обучение";$("cancel").disabled=state!=="running";$("cancel").textContent=state==="cancelling"?"Остановка…":"■ Отменить обучение";
  canDownloadModel=d.checkpointAvailable===true && state!=="running";$("downloadModel").disabled=!canDownloadModel;
  if(state==="running")showMessage("Обучение выполняется на сервере. Можно закрыть страницу; проверяй состояние позже.");
+ else if(state==="cancelled")showMessage("Обучение остановлено. Частичная контрольная точка сохранена; можно продолжить позже.","good");
+ else if(state==="cancelling")showMessage("Останавливаю после текущего шага и сохраняю checkpoint…");
  else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
  else if(state==="failed")showMessage(d.error||"Обучение завершилось ошибкой.","error");
  if(d.metrics){const m=d.metrics;$("metrics").innerHTML="Примеров обучения: <b>"+(m.training_examples??"—")+"</b><br>Примеров проверки: <b>"+(m.validation_examples??"—")+"</b><br>Размер словаря: <b>"+(m.vocab_size??"—")+"</b><br>Параметров модели: <b>"+(m.parameters?Number(m.parameters).toLocaleString("ru-RU"):"—")+"</b><br>Лучший шаг checkpoint: <b>"+(m.best_checkpoint_step??"—")+"</b>";}
@@ -99,6 +103,7 @@ function renderStatus(d){
 }
 async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){canDownloadModel=false;$("downloadModel").disabled=true;showMessage(errorText(e),"error")}}
 async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000})});showMessage("Сервер принял задачу. Закрытие вкладки не остановит обучение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=$("state").classList.contains("running")}}
+async function cancelTraining(){const btn=$("cancel");btn.disabled=true;showMessage("Запрашиваю безопасную остановку и сохранение checkpoint…");try{await api("/api/training/cancel",{method:"POST",body:JSON.stringify({})});showMessage("Сервер принял отмену. Текущий шаг завершится, checkpoint будет сохранён.","good");await refresh()}catch(e){showMessage(errorText(e),"error");btn.disabled=false}}
 async function downloadModel(){
  const btn=$("downloadModel");btn.disabled=true;btn.textContent="Подготовка файла…";
  try{
@@ -113,6 +118,7 @@ async function downloadModel(){
 }
 document.querySelectorAll("[data-steps]").forEach(button=>button.addEventListener("click",()=>{selectedSteps=Number(button.dataset.steps);document.querySelectorAll("[data-steps]").forEach(b=>b.classList.toggle("selected",b===button))}));
 $("start").addEventListener("click",startTraining);
+$("cancel").addEventListener("click",cancelTraining);
 $("downloadModel").addEventListener("click",downloadModel);
 $("google").addEventListener("click",async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){if(e.code==="auth/popup-blocked"){await signInWithRedirect(auth,new GoogleAuthProvider());return}showAuthMessage(errorText(e),true)}});
 $("emailForm").addEventListener("submit",async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
