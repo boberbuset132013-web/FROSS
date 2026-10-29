@@ -42,9 +42,12 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
     <div class="choices">
       <button class="choice selected" data-steps="600" type="button"><strong>600</strong><span>Первый этап</span></button>
       <button class="choice" data-steps="3000" type="button"><strong>3000</strong><span>Минимум для модели</span></button>
-      <button class="choice" data-steps="5000" type="button"><strong>5000</strong><span>Длинный запуск</span></button>
+      <button class="choice" data-steps="5000" type="button"><strong>5000</strong><span>Большой этап</span></button>
+      <button class="choice" data-steps="8000" type="button"><strong>8000</strong><span>Продолженное обучение</span></button>
+      <button class="choice" data-steps="10000" type="button"><strong>10000</strong><span>Полный график</span></button>
     </div>
     <button id="start" class="btn primary wide" type="button">▶ Начать обучение</button>
+    <button id="downloadModel" class="btn wide" style="margin-top:9px" type="button" disabled>⬇ Скачать модель (.pt)</button>
     <div id="message" class="notice">Ожидание подключения к Python brain…</div>
     <div id="metrics" class="metrics"></div>
   </section>
@@ -54,6 +57,18 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
     <div class="notice">Не закрывай сервер и не перезапускай Hostless во время обучения. Закрыть эту страницу можно — запущенный поток останется на сервере, пока сам сервис работает.</div>
   </section>
 </main>
+<section class="card" style="margin-top:17px">
+  <h2>Параметры модели</h2>
+  <p class="sub">Количество шагов меняет длительность обучения, но не размер архитектуры.</p>
+  <div class="stats">
+    <div class="stat"><small>Параметры</small><b>≈ 3,69 млн</b></div>
+    <div class="stat"><small>Словарь</small><b>5000</b></div>
+    <div class="stat"><small>Контекст</small><b>320 токенов</b></div>
+  </div>
+  <div class="metrics">Transformer: <b>6 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · optimizer <b>AdamW</b>.<br>
+  График оптимизации фиксирован на <b>10000 шагов</b>, поэтому можно продолжать обучение с предыдущего checkpoint. Закрытие вкладки не останавливает задачу; перезапуск или пересборка самого Python-сервера может её прервать.</div>
+  <p class="sub" style="margin-top:15px;margin-bottom:0">Больше шагов могут улучшить усвоение корпуса, но не гарантируют более умные ответы: результат зависит от объёма и качества примеров и от validation loss.</p>
+</section>
 <p class="foot">FROSS Transformer 1.4 · Целевой словарь 5000 токенов · Контекст 320 · CPU/GPU определяется сервером</p>
 </div>
 <script type="module">
@@ -61,7 +76,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 const $=id=>document.getElementById(id);
-let auth=null,user=null,selectedSteps=600,pollHandle=null;
+let auth=null,user=null,selectedSteps=600,pollHandle=null,canDownloadModel=false; 
 $("chatLink").addEventListener("click",()=>location.href="./chat.html");
 function showAuthMessage(message,isError=false){$("authMessage").textContent=message;$("authMessage").classList.remove("hidden","error");if(isError)$("authMessage").classList.add("error");}
 function showMessage(message,type=""){const el=$("message");el.textContent=message;el.className="notice"+(type?" "+type:"");}
@@ -75,16 +90,30 @@ function renderStatus(d){
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
  $("valLoss").textContent=Number.isFinite(Number(d.validationLoss))&&d.validationLoss!==null?Number(d.validationLoss).toFixed(4):"—";
  $("start").disabled=state==="running";$("start").textContent=state==="running"?"Обучение выполняется…":"▶ Начать обучение";
+ canDownloadModel=d.checkpointAvailable===true && state!=="running";$("downloadModel").disabled=!canDownloadModel;
  if(state==="running")showMessage("Обучение выполняется на сервере. Можно закрыть страницу; проверяй состояние позже.");
  else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
  else if(state==="failed")showMessage(d.error||"Обучение завершилось ошибкой.","error");
  if(d.metrics){const m=d.metrics;$("metrics").innerHTML="Примеров обучения: <b>"+(m.training_examples??"—")+"</b><br>Примеров проверки: <b>"+(m.validation_examples??"—")+"</b><br>Размер словаря: <b>"+(m.vocab_size??"—")+"</b><br>Параметров модели: <b>"+(m.parameters?Number(m.parameters).toLocaleString("ru-RU"):"—")+"</b><br>Лучший шаг checkpoint: <b>"+(m.best_checkpoint_step??"—")+"</b>";}
  if(Array.isArray(d.logs)&&d.logs.length){$("logs").textContent=d.logs.join("\n");$("logs").scrollTop=$("logs").scrollHeight}
 }
-async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){showMessage(errorText(e),"error")}}
-async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{const d=await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:5000})});showMessage("Сервер принял задачу. Обучение продолжится без открытой страницы.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=false}}
+async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){canDownloadModel=false;$("downloadModel").disabled=true;showMessage(errorText(e),"error")}}
+async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000})});showMessage("Сервер принял задачу. Закрытие вкладки не остановит обучение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=false}}
+async function downloadModel(){
+ const btn=$("downloadModel");btn.disabled=true;btn.textContent="Подготовка файла…";
+ try{
+  const idToken=await token();
+  const response=await fetch("/api/training/model",{method:"GET",headers:{"Authorization":"Bearer "+idToken},cache:"no-store"});
+  if(!response.ok){let data=null;try{data=await response.json()}catch{}throw new Error(data?.error||("Не удалось скачать модель (HTTP "+response.status+")."))}
+  const blob=await response.blob();if(!blob.size)throw new Error("Сервер вернул пустой файл модели.");
+  const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="fross-transformer.pt";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  showMessage("Файл fross-transformer.pt подготовлен для скачивания.","good");
+ }catch(e){showMessage(errorText(e),"error")}
+ finally{btn.textContent="⬇ Скачать модель (.pt)";btn.disabled=!canDownloadModel}
+}
 document.querySelectorAll("[data-steps]").forEach(button=>button.addEventListener("click",()=>{selectedSteps=Number(button.dataset.steps);document.querySelectorAll("[data-steps]").forEach(b=>b.classList.toggle("selected",b===button))}));
 $("start").addEventListener("click",startTraining);
+$("downloadModel").addEventListener("click",downloadModel);
 $("google").addEventListener("click",async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){if(e.code==="auth/popup-blocked"){await signInWithRedirect(auth,new GoogleAuthProvider());return}showAuthMessage(errorText(e),true)}});
 $("emailForm").addEventListener("submit",async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
 $("register").addEventListener("click",async()=>{try{await createUserWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
