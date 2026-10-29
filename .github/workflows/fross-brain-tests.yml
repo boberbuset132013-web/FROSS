@@ -156,6 +156,7 @@ jobs:
           assert 'id="publicStudyLogs"' in page and 'id="publicStudyResults"' in page, "Study logs and results must be visible"
           assert 'id="settingsLearningBtn"' in page and 'settingsLearningBtn").addEventListener' in page, "Learning must be available from Settings"
           assert 'id="trainingDashboardBtn"' in page and 'href="./training.html"' in page and "Вернуться к обучению" in page, "Chat must offer a direct return to the Transformer training dashboard"
+          assert 'id="trainingTopBtn"' in page and 'class="tool-btn training-top-btn"' in page and "↩ Обучение</a>" in page, "Training return must also be visible in the chat top bar"
           assert "FROSS_BROWSER_STUDY_NOTES_KEY" in page and "saveStudyNotesToMemory" in page, "Study results must be saved to account/browser memory"
           assert "function frossSteps(mode)" in worker and "1/14 — определить цель" in worker and "7/7 — проверить релевантность" in worker, "Worker must expose 7-stage normal and 14-stage reasoning workflows"
           assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
