@@ -66,6 +66,7 @@ export default {
     });
     if (path === "/api/training/status") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "status"));
     if (path === "/api/training/start") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "start"));
+    if (path === "/api/training/model") return frossApiGuard(path, request, () => handleFrossTransformerModelDownload(request, env));
     if (path === "/api/teacher-training/status") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStatus(request, env));
     if (path === "/api/teacher-training/step") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStep(request, env));
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
@@ -1861,9 +1862,9 @@ async function handleFrossTransformerTraining(request, env, action) {
       try { body = await request.json(); }
       catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
       const steps = Number(body?.steps ?? 600);
-      const scheduleSteps = Number(body?.scheduleSteps ?? 3000);
-      if (![600,1200,1800,2400,3000,4000,5000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps < steps || scheduleSteps > 5000) {
-        return frossJson({ ok: false, error: "Выбери корректную цель обучения от 600 до 5000 шагов." }, 400, request);
+      const scheduleSteps = Number(body?.scheduleSteps ?? 10000);
+      if (![600,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
+        return frossJson({ ok: false, error: "Выбери 600, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
       }
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify({ steps, scheduleSteps });
@@ -1877,6 +1878,68 @@ async function handleFrossTransformerTraining(request, env, action) {
     return frossJson({
       ok: false,
       error: error?.name === "AbortError" ? "Python brain не ответил вовремя." : "Не удалось связаться с Python brain."
+    }, 502, request);
+  }
+}
+
+async function handleFrossTransformerModelDownload(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  if (request.method !== "GET") return frossJson({ ok: false, error: "Используй GET /api/training/model." }, 405, request);
+
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ ok: false, error: "Войди в FROSS, чтобы скачать модель." }, 401, request);
+
+  const serviceToken = frossBrainServiceToken(env);
+  if (serviceToken.length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
+    return frossJson({ ok: false, error: "Секрет FROSS_BRAIN_SERVICE_TOKEN не настроен." }, 503, request);
+  }
+
+  let target;
+  try {
+    const configured = new URL(frossPythonBrainUrl(env));
+    if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
+      return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
+    }
+    let basePath = configured.pathname;
+    while (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
+    if (basePath.endsWith("/chat")) basePath = basePath.slice(0, -5);
+    configured.pathname = (basePath || "") + "/admin/training/model";
+    configured.search = "";
+    target = configured.toString();
+  } catch {
+    return frossJson({ ok: false, error: "Неверно настроен адрес Python brain." }, 503, request);
+  }
+
+  try {
+    const upstream = await fetch(target, {
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer " + serviceToken,
+        "Accept": "application/octet-stream, application/json",
+        "Cache-Control": "no-store"
+      },
+      cache: "no-store"
+    });
+    if (!upstream.ok) {
+      let data;
+      try { data = await upstream.json(); }
+      catch { data = { ok: false, error: "Python brain не смог выдать файл модели." }; }
+      return frossJson(data, upstream.status, request);
+    }
+
+    const headers = new Headers({
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": upstream.headers.get("Content-Disposition") || 'attachment; filename="fross-transformer.pt"',
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    const length = upstream.headers.get("Content-Length");
+    if (length) headers.set("Content-Length", length);
+    return new Response(upstream.body, { status: 200, headers });
+  } catch (error) {
+    return frossJson({
+      ok: false,
+      error: error?.name === "AbortError" ? "Python brain не ответил вовремя." : "Не удалось получить файл модели с Python brain."
     }, 502, request);
   }
 }

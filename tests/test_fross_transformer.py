@@ -189,11 +189,11 @@ class TransformerTests(unittest.TestCase):
                     target_vocab_size=256,
                     seed=91,
                     resume=True,
-                    schedule_steps=2,
+                    schedule_steps=3,
                 )
                 self.assertEqual(continued["training_steps"], 2)
                 self.assertEqual(continued["steps_this_run"], 1)
-                self.assertEqual(continued["schedule_steps"], 2)
+                self.assertEqual(continued["schedule_steps"], 3)
 
                 model, tokenizer, status = transformer.load_model(checkpoint_path)
                 self.assertIsNotNone(model)

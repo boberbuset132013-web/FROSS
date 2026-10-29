@@ -811,6 +811,44 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/admin/model-upload":
             _send_html(self, MODEL_UPLOAD_HTML)
             return
+        if self.path == "/admin/training/model":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            with TRAINING_LOCK:
+                training_state = str(TRAINING_STATUS.get("state", "idle"))
+            if training_state == "running":
+                respond(self, 409, {"ok": False, "error": "Сначала дождись завершения обучения, затем скачай контрольную точку."})
+                return
+            if not TRAINING_OUTPUT_PATH.is_file():
+                respond(self, 404, {"ok": False, "error": "Сохранённая модель не найдена. Сначала запусти и заверши обучение."})
+                return
+            try:
+                model_file = TRAINING_OUTPUT_PATH.open("rb")
+            except OSError:
+                respond(self, 500, {"ok": False, "error": "Не удалось открыть файл модели."})
+                return
+            with model_file:
+                file_size = os.fstat(model_file.fileno()).st_size
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", 'attachment; filename="fross-transformer.pt"')
+                self.send_header("Content-Length", str(file_size))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                try:
+                    while True:
+                        chunk = model_file.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+            return
         if self.path not in ("/health", "/"):
             respond(self, 404, {"ok": False, "error": "Not found"})
             return
@@ -848,11 +886,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(payload, dict):
                     raise ValueError("Expected a JSON object.")
                 target_steps = int(payload.get("steps", 600))
-                schedule_steps = int(payload.get("scheduleSteps", 3000))
-                if target_steps not in (600, 1200, 1800, 2400, 3000, 4000, 5000):
-                    raise ValueError("Choose a cumulative target from 600, 1200, 1800, 2400, 3000, 4000 or 5000.")
-                if schedule_steps < target_steps or schedule_steps > 5000:
-                    raise ValueError("Schedule must be between the selected target and 5000.")
+                schedule_steps = int(payload.get("scheduleSteps", 10000))
+                if target_steps not in (600, 3000, 5000, 8000, 10000):
+                    raise ValueError("Choose 600, 3000, 5000, 8000 or 10000 training steps.")
+                if schedule_steps != 10000 or schedule_steps < target_steps:
+                    raise ValueError("Schedule must stay fixed at 10000 steps so training can resume consistently.")
             except Exception as exc:
                 respond(self, 400, {"ok": False, "error": str(exc)[:240]})
                 return
@@ -866,12 +904,8 @@ class Handler(BaseHTTPRequestHandler):
                         import torch
                         existing = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
                         existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
-                        existing_schedule = int(existing.get("resume_state", {}).get("schedule_steps", 0))
                         if target_steps <= existing_steps:
                             respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
-                            return
-                        if existing_schedule != schedule_steps:
-                            respond(self, 409, {"ok": False, "error": "Для продолжения нужен тот же график обучения: " + str(existing_schedule) + " шагов."})
                             return
                     except Exception as exc:
                         respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})

@@ -480,10 +480,11 @@ def train_model(
     schedule_steps: int | None = None,
     progress_callback: Any = None,
 ) -> dict[str, Any]:
-    """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
+    """Train to a cumulative step target, optionally resuming a saved optimizer state.
 
-    When using staged training, pass the same schedule_steps on both runs. For example,
-    train 600 steps with schedule_steps=3000, then resume with steps=3000.
+    The schedule_steps value is the cumulative learning-rate schedule horizon. It may be
+    extended when resuming an older checkpoint; the updated schedule applies from the
+    current step onward. Keep the same or a larger cumulative target when continuing.
     """
     if steps < 1 or batch_size < 1 or block_size < 32:
         raise ValueError("steps/batch_size must be positive and block_size must be at least 32")
@@ -510,11 +511,9 @@ def train_model(
             raise ValueError("Checkpoint is missing its resumable training state.")
         if int(resume_state.get("seed", -1)) != seed:
             raise ValueError("Resume seed differs from the saved run. Use the same --seed (default: 1337).")
-        if int(resume_state.get("schedule_steps", -1)) != schedule_total:
-            raise ValueError(
-                "The learning-rate schedule does not match the saved run. "
-                f"Use --schedule-steps {resume_state.get('schedule_steps')}."
-            )
+        saved_schedule = int(resume_state.get("schedule_steps", -1))
+        if saved_schedule < 1:
+            raise ValueError("Checkpoint does not record a valid learning-rate schedule.")
 
     configure_runtime_threads()
     random.seed(seed)
