@@ -220,7 +220,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          html = Path("public/index.html").read_text(encoding="utf-8")
+          html = Path("public/training.html").read_text(encoding="utf-8")
           start = html.find('<script type="module">')
           if start < 0:
               raise SystemExit("Could not find the browser module script")
