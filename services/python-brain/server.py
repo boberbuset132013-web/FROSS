@@ -728,7 +728,8 @@ TRAINING_OUTPUT_PATH = Path(os.environ.get(
 TRAINING_LOCK = threading.Lock()
 TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
-    "ok": True, "state": "idle", "step": 0, "targetSteps": 600,
+    "ok": True, "state": "idle", "phase": "idle", "step": 0, "targetSteps": 600,
+    "preparationStep": 0, "preparationTotal": 0, "vocabSize": None,
     "trainLoss": None, "validationLoss": None, "logs": [],
     "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
 }
@@ -739,26 +740,63 @@ def _training_log(message: str) -> None:
         logs.append("[" + stamp + "] " + str(message)[:300])
         del logs[:-120]
 def _training_progress(progress: dict[str, Any]) -> None:
+    phase = str(progress.get("phase", "training"))
     with TRAINING_LOCK:
-        TRAINING_STATUS["step"] = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
-        TRAINING_STATUS["targetSteps"] = int(progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600)))
-        TRAINING_STATUS["trainLoss"] = progress.get("train_loss")
-        TRAINING_STATUS["validationLoss"] = progress.get("validation_loss")
-        TRAINING_STATUS["bestCheckpointStep"] = int(progress.get("best_checkpoint_step", 0))
+        TRAINING_STATUS["phase"] = phase
+        TRAINING_STATUS["targetSteps"] = int(
+            progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600))
+        )
         TRAINING_STATUS["device"] = str(progress.get("device", "cpu"))
-        step = int(TRAINING_STATUS["step"])
-        target = max(1, int(TRAINING_STATUS["targetSteps"]))
-    if step == 1 or step % 10 == 0 or step == target:
+        if phase == "tokenizer":
+            TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
+            TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 0))
+            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", 0))
+            step = int(TRAINING_STATUS.get("step", 0))
+            target = max(1, int(TRAINING_STATUS["targetSteps"]))
+            preparation_step = int(TRAINING_STATUS["preparationStep"])
+            preparation_total = max(1, int(TRAINING_STATUS["preparationTotal"]))
+            vocab_size = int(TRAINING_STATUS["vocabSize"])
+        else:
+            TRAINING_STATUS["step"] = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
+            TRAINING_STATUS["trainLoss"] = progress.get("train_loss")
+            TRAINING_STATUS["validationLoss"] = progress.get("validation_loss")
+            TRAINING_STATUS["bestCheckpointStep"] = int(progress.get("best_checkpoint_step", 0))
+            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", TRAINING_STATUS.get("vocabSize") or 0))
+            step = int(TRAINING_STATUS["step"])
+            target = max(1, int(TRAINING_STATUS["targetSteps"]))
+            preparation_step = 0
+            preparation_total = 0
+            vocab_size = int(TRAINING_STATUS.get("vocabSize") or 0)
+    if phase == "tokenizer":
+        interval = max(1, preparation_total // 10)
+        if preparation_step == 0 or preparation_step % interval == 0 or preparation_step >= preparation_total:
+            _training_log(
+                "Подготовка BPE-словаря: " + str(preparation_step) + "/" + str(preparation_total)
+                + " объединений · размер словаря " + str(vocab_size) + "."
+            )
+    elif phase == "loading_corpus":
+        _training_log("Обучающие примеры загружены; подготавливаю токенизатор и модель.")
+    elif step > 0 and (step == 1 or step % 10 == 0 or step == target):
         _training_log(
             "Шаг " + str(step) + "/" + str(target)
-            + " · train loss " + format(float(progress.get("train_loss", 0.0)), ".4f")
+            + " · train loss " + format(float(progress.get("train_loss") or 0.0), ".4f")
             + " · validation loss "
             + (format(float(progress["validation_loss"]), ".4f") if progress.get("validation_loss") is not None else "ещё не измерен")
         )
+
+
 def _run_training(target_steps: int, schedule_steps: int) -> None:
     try:
         corpus = ROOT / "data" / "fross_corpus.jsonl"
+        with TRAINING_LOCK:
+            TRAINING_STATUS["phase"] = "checking_checkpoint"
+        _training_log("Проверяю сохранённую контрольную точку; проверка выполняется в фоне.")
+
+        # Never perform checkpoint disk I/O while holding TRAINING_LOCK. The status
+        # endpoint must remain responsive, and log helpers acquire this same lock.
         resume = False
+        existing_steps = 0
+        prior_metrics: dict[str, Any] = {}
         if TRAINING_OUTPUT_PATH.is_file():
             try:
                 import torch
@@ -768,11 +806,61 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
                     and int(saved.get("format_version", 0)) == 2
                     and isinstance(saved.get("resume_state"), dict)
                 )
-                if not resume:
-                    _training_log("Найден старый checkpoint без состояния оптимизатора; запускаю новый этап с нуля. Старый файл будет заменён только после успешного сохранения.")
+                if resume:
+                    prior_metrics = saved.get("metrics", {}) if isinstance(saved.get("metrics"), dict) else {}
+                    existing_steps = int(prior_metrics.get("training_steps", 0))
+                    if existing_steps < 1:
+                        raise ValueError("Контрольная точка содержит некорректное число шагов.")
+                    if target_steps <= existing_steps:
+                        with TRAINING_LOCK:
+                            TRAINING_STATUS.update({
+                                "state": "failed", "phase": "failed",
+                                "error": "В контрольной точке уже " + str(existing_steps)
+                                    + " шагов. Выбери цель больше, чтобы продолжить обучение.",
+                                "step": existing_steps, "targetSteps": target_steps,
+                                "trainLoss": prior_metrics.get("train_loss"),
+                                "validationLoss": prior_metrics.get("validation_loss"),
+                                "metrics": prior_metrics,
+                                "finishedAt": datetime.now(timezone.utc).isoformat(),
+                            })
+                        _training_log("Запрошенная цель не выше текущего checkpoint; обучение не запускалось.")
+                        return
+                else:
+                    _training_log(
+                        "Найдена старая контрольная точка без состояния оптимизатора; "
+                        "начинаю новый этап с нуля. Старый файл не будет удалён до успешного сохранения."
+                    )
             except Exception as checkpoint_error:
-                _training_log("Старый checkpoint не удалось проверить (" + type(checkpoint_error).__name__ + "); запускаю этап с нуля, не удаляя файл до сохранения.")
-        _training_log("Запуск обучения Transformer 1.4; режим: " + ("продолжение" if resume else "с нуля") + ".")
+                raise RuntimeError(
+                    "Не удалось проверить контрольную точку: "
+                    + type(checkpoint_error).__name__ + ": " + str(checkpoint_error)[:180]
+                ) from checkpoint_error
+
+        if TRAINING_CANCEL.is_set():
+            with TRAINING_LOCK:
+                TRAINING_STATUS.update({
+                    "state": "cancelled", "phase": "cancelled", "error": None,
+                    "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                    "finishedAt": datetime.now(timezone.utc).isoformat(),
+                })
+            _training_log("Запуск отменён во время проверки checkpoint; цикл обучения не запускался.")
+            return
+
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({
+                "state": "running", "phase": "loading_corpus",
+                "step": existing_steps if resume else 0,
+                "targetSteps": target_steps,
+                "trainLoss": prior_metrics.get("train_loss") if resume else None,
+                "validationLoss": prior_metrics.get("validation_loss") if resume else None,
+                "preparationStep": 0, "preparationTotal": 0,
+                "vocabSize": prior_metrics.get("vocab_size"),
+                "error": None,
+            })
+        _training_log(
+            "Запуск Transformer 1.4; режим: " + ("продолжение с шага " + str(existing_steps) if resume else "с нуля")
+            + ". Подготовка словаря может занять время; теперь её прогресс отображается отдельно."
+        )
         result = transformer.train_model(
             corpus_path=corpus,
             output_path=TRAINING_OUTPUT_PATH,
@@ -790,17 +878,46 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
         cancelled = bool(result.get("cancelled"))
         with TRAINING_LOCK:
             TRAINING_STATUS.update({
-                "state": "cancelled" if cancelled else "completed", "step": int(result.get("training_steps", target_steps)),
-                "targetSteps": target_steps, "trainLoss": result.get("train_loss"),
+                "state": "cancelled" if cancelled else "completed",
+                "phase": "cancelled" if cancelled else "complete",
+                "step": int(result.get("training_steps", existing_steps if resume else 0)),
+                "targetSteps": target_steps,
+                "trainLoss": result.get("train_loss"),
                 "validationLoss": result.get("validation_loss"),
-                "metrics": result, "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                "metrics": result,
+                "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                "error": None,
                 "finishedAt": datetime.now(timezone.utc).isoformat(),
             })
-        _training_log("Обучение отменено; checkpoint сохранён для продолжения." if cancelled else "Обучение завершено. Контрольная точка сохранена.")
+        if cancelled:
+            if TRAINING_OUTPUT_PATH.is_file():
+                _training_log("Обучение остановлено; существующая контрольная точка не удалена.")
+            else:
+                _training_log("Подготовка отменена до сохранения первой контрольной точки.")
+        else:
+            _training_log("Обучение завершено. Контрольная точка сохранена.")
+    except transformer.TrainingCancelled:
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({
+                "state": "cancelled", "phase": "cancelled", "error": None,
+                "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                "finishedAt": datetime.now(timezone.utc).isoformat(),
+            })
+        _training_log(
+            "Подготовка словаря отменена; "
+            + ("сохранённая контрольная точка оставлена без изменений." if TRAINING_OUTPUT_PATH.is_file()
+               else "контрольная точка ещё не создавалась.")
+        )
     except Exception as exc:
         with TRAINING_LOCK:
-            TRAINING_STATUS.update({"state": "failed", "error": type(exc).__name__ + ": " + str(exc)[:240]})
+            TRAINING_STATUS.update({
+                "state": "failed", "phase": "failed",
+                "error": type(exc).__name__ + ": " + str(exc)[:240],
+                "finishedAt": datetime.now(timezone.utc).isoformat(),
+            })
         _training_log("Ошибка обучения: " + type(exc).__name__ + ": " + str(exc)[:180])
+
+
 def _training_snapshot() -> dict[str, Any]:
     with TRAINING_LOCK:
         snapshot = dict(TRAINING_STATUS)
@@ -926,12 +1043,13 @@ class Handler(BaseHTTPRequestHandler):
                 respond(self, 401, {"ok": False, "error": "Unauthorized"})
                 return
             with TRAINING_LOCK:
-                if TRAINING_STATUS.get("state") != "running":
-                    respond(self, 409, {"ok": False, "error": "Обучение сейчас не выполняется."})
+                if TRAINING_STATUS.get("state") not in ("starting", "running"):
+                    respond(self, 409, {"ok": False, "error": "Обучение сейчас не выполняется или уже останавливается."})
                     return
                 TRAINING_CANCEL.set()
+                TRAINING_STATUS["state"] = "cancelling"
                 TRAINING_STATUS["cancelRequested"] = True
-            _training_log("Получен запрос на отмену; остановка после текущего шага.")
+            _training_log("Получен запрос на отмену; остановлю запуск или текущий шаг при ближайшей безопасной точке.")
             respond(self, 202, {"ok": True, "state": "cancelling"})
             return
         if path == "/admin/training/start":
@@ -957,43 +1075,40 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 respond(self, 400, {"ok": False, "error": str(exc)[:240]})
                 return
+
+            # Reserve the job quickly, then inspect any checkpoint in the worker thread.
+            # This makes the endpoint return immediately and avoids holding TRAINING_LOCK
+            # while torch.load runs (or while a log callback tries to acquire the lock).
             with TRAINING_LOCK:
-                if TRAINING_STATUS.get("state") in ("running", "cancelling"):
-                    respond(self, 409, {"ok": False, "error": "Обучение уже выполняется или останавливается."})
+                if TRAINING_STATUS.get("state") in ("starting", "running", "cancelling"):
+                    respond(self, 409, {"ok": False, "error": "Обучение уже запускается, выполняется или останавливается."})
                     return
-                has_checkpoint = TRAINING_OUTPUT_PATH.is_file()
-                resumable_checkpoint = False
-                existing_steps = 0
-                if has_checkpoint:
-                    try:
-                        import torch
-                        existing = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
-                        resumable_checkpoint = (
-                            isinstance(existing, dict)
-                            and int(existing.get("format_version", 0)) == 2
-                            and isinstance(existing.get("resume_state"), dict)
-                        )
-                        if resumable_checkpoint:
-                            existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
-                            if target_steps <= existing_steps:
-                                respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
-                                return
-                        else:
-                            _training_log("Обнаружена несовместимая или старая контрольная точка; этот запуск начнётся с нуля.")
-                    except Exception as exc:
-                        respond(self, 409, {"ok": False, "error": "Не удалось проверить контрольную точку (" + type(exc).__name__ + ")."})
-                        return
                 TRAINING_CANCEL.clear()
                 TRAINING_STATUS.update({
-                    "state": "running", "step": int(existing_steps if resumable_checkpoint else 0),
-                    "targetSteps": target_steps, "trainLoss": None, "validationLoss": None,
-                    "error": None, "metrics": None, "startedAt": datetime.now(timezone.utc).isoformat(),
+                    "state": "starting", "phase": "checking_checkpoint",
+                    "step": 0, "targetSteps": target_steps,
+                    "preparationStep": 0, "preparationTotal": 0, "vocabSize": None,
+                    "trainLoss": None, "validationLoss": None, "metrics": None,
+                    "error": None, "cancelRequested": False, "logs": [],
+                    "startedAt": datetime.now(timezone.utc).isoformat(),
                 })
-            threading.Thread(
-                target=_run_training, args=(target_steps, schedule_steps),
-                name="fross-transformer-training", daemon=True,
-            ).start()
-            respond(self, 202, {"ok": True, "state": "running", "targetSteps": target_steps})
+            try:
+                worker = threading.Thread(
+                    target=_run_training,
+                    args=(target_steps, schedule_steps),
+                    name="fross-transformer-training",
+                    daemon=True,
+                )
+                worker.start()
+            except Exception as exc:
+                with TRAINING_LOCK:
+                    TRAINING_STATUS.update({
+                        "state": "failed", "phase": "failed",
+                        "error": "Не удалось создать поток обучения: " + type(exc).__name__,
+                    })
+                respond(self, 503, {"ok": False, "error": "Не удалось запустить фоновый поток обучения."})
+                return
+            respond(self, 202, {"ok": True, "state": "starting", "targetSteps": target_steps})
             return
         if path == "/admin/model-upload":
             handle_model_upload(self)

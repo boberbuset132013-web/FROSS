@@ -33,6 +33,37 @@ class TransformerTests(unittest.TestCase):
         for text in samples:
             self.assertEqual(tokenizer.decode(tokenizer.encode(text)), text)
 
+    def test_bpe_tokenizer_reports_preparation_progress(self) -> None:
+        progress = []
+        tokenizer = transformer.BPETokenizer.train(
+            ["один два три four five", "один два снова"],
+            target_vocab_size=512,
+            progress_callback=progress.append,
+        )
+        self.assertTrue(tokenizer.pretokenized)
+        tokenizer_steps = [
+            item["preparation_step"] for item in progress
+            if item.get("phase") == "tokenizer"
+        ]
+        self.assertTrue(tokenizer_steps)
+        self.assertEqual(tokenizer_steps[0], 0)
+        self.assertEqual(tokenizer_steps, sorted(tokenizer_steps))
+        self.assertGreaterEqual(tokenizer_steps[-1], 1)
+
+    def test_bpe_tokenizer_can_be_cancelled_during_vocabulary_build(self) -> None:
+        progress = []
+        def report(item):
+            progress.append(item)
+        def should_stop():
+            return len(progress) >= 3
+        with self.assertRaises(transformer.TrainingCancelled):
+            transformer.BPETokenizer.train(
+                ["слово один два три четыре пять"] * 8,
+                target_vocab_size=512,
+                progress_callback=report,
+                stop_callback=should_stop,
+            )
+
     def test_brain_14_can_reach_target_vocabulary_without_merging_across_words(self) -> None:
         import itertools
         import string

@@ -84,6 +84,10 @@ DEFAULT_CONFIG = {
 _PRETOKEN_PATTERN = re.compile(r"\s+|[^\W_]+|_+|[^\w\s]+", flags=re.UNICODE)
 
 
+class TrainingCancelled(Exception):
+    """Raised when a training stage is cancelled at a safe boundary."""
+
+
 class BPETokenizer:
     """BPE tokenizer trained on word/whitespace/punctuation pieces.
 
@@ -123,6 +127,8 @@ class BPETokenizer:
         min_frequency: int | None = None,
         target_vocab_size: int | None = None,
         max_piece_chars: int = 24,
+        progress_callback: Any = None,
+        stop_callback: Any = None,
     ) -> "BPETokenizer":
         """Train a weighted BPE vocabulary, optionally targeting an exact vocabulary size."""
         # Preserve every Unicode character present in the training text as a
@@ -153,6 +159,8 @@ class BPETokenizer:
         # scanning identical character sequences.
         segment_counts: Counter[str] = Counter()
         for text in texts:
+            if stop_callback is not None and stop_callback():
+                raise TrainingCancelled("Training cancelled while reading the tokenizer corpus.")
             segment_counts.update(_PRETOKEN_PATTERN.findall(str(text)))
         sequences: list[tuple[list[int], int]] = []
         for segment, frequency in segment_counts.items():
@@ -162,7 +170,27 @@ class BPETokenizer:
 
         pieces = list(tokenizer.pieces)
         learned: list[tuple[int, int]] = []
-        for _ in range(merge_count):
+        progress_interval = max(1, merge_count // 100)
+        last_reported_merge = -1
+
+        def report_tokenizer_progress(completed_merges: int) -> None:
+            if progress_callback is None:
+                return
+            try:
+                progress_callback({
+                    "phase": "tokenizer",
+                    "preparation_step": completed_merges,
+                    "preparation_total": merge_count,
+                    "vocab_size": len(pieces),
+                })
+            except Exception:
+                pass
+
+        report_tokenizer_progress(0)
+        completed_merges = 0
+        for merge_index in range(merge_count):
+            if stop_callback is not None and stop_callback():
+                raise TrainingCancelled("Training cancelled while building the BPE vocabulary.")
             counts: Counter[tuple[int, int]] = Counter()
             for sequence, weight in sequences:
                 for pair in zip(sequence, sequence[1:]):
@@ -182,6 +210,14 @@ class BPETokenizer:
             new_id = len(pieces)
             learned.append(pair)
             pieces.append(pieces[left] + pieces[right])
+            completed_merges = merge_index + 1
+            if (
+                completed_merges == 1
+                or completed_merges % progress_interval == 0
+                or completed_merges == merge_count
+            ):
+                report_tokenizer_progress(completed_merges)
+                last_reported_merge = completed_merges
             merged_sequences: list[tuple[list[int], int]] = []
             for sequence, weight in sequences:
                 result: list[int] = []
@@ -195,6 +231,9 @@ class BPETokenizer:
                         index += 1
                 merged_sequences.append((result, weight))
             sequences = merged_sequences
+
+        if completed_merges != last_reported_merge:
+            report_tokenizer_progress(completed_merges)
 
         return cls(
             tokenizer.base_chars,
@@ -536,15 +575,47 @@ def train_model(
     val_count = max(2, int(len(records) * 0.1))
     validation_records, train_records = records[:val_count], records[val_count:]
 
+    if progress_callback is not None:
+        prior_metrics_for_progress = (
+            resume_checkpoint.get("metrics", {}) if isinstance(resume_checkpoint, dict) else {}
+        )
+        try:
+            progress_callback({
+                "phase": "loading_corpus",
+                "step": int(prior_metrics_for_progress.get("training_steps", 0)),
+                "target_steps": steps,
+                "train_loss": prior_metrics_for_progress.get("train_loss"),
+                "validation_loss": prior_metrics_for_progress.get("validation_loss"),
+                "device": "cpu" if force_cpu else str(_preferred_device()),
+            })
+        except Exception:
+            pass
+
     if resume and resume_checkpoint is not None:
         tokenizer = BPETokenizer(**resume_checkpoint["tokenizer"])
     else:
-        tokenizer = BPETokenizer.train(
-            [_format_record(row) for row in train_records],
-            merge_count=merge_count,
-            target_vocab_size=target_vocab_size if merge_count is None else None,
-            max_piece_chars=24,
-        )
+        try:
+            tokenizer = BPETokenizer.train(
+                [_format_record(row) for row in train_records],
+                merge_count=merge_count,
+                target_vocab_size=target_vocab_size if merge_count is None else None,
+                max_piece_chars=24,
+                progress_callback=progress_callback,
+                stop_callback=stop_callback,
+            )
+        except TrainingCancelled:
+            prior_metrics_for_cancel = (
+                resume_checkpoint.get("metrics", {}) if isinstance(resume_checkpoint, dict) else {}
+            )
+            prior_steps = int(prior_metrics_for_cancel.get("training_steps", 0))
+            return {
+                "ok": True, "version": VERSION, "output": str(target),
+                **prior_metrics_for_cancel,
+                "cancelled": True,
+                "training_steps": prior_steps,
+                "steps_this_run": 0,
+                "checkpoint_preserved": target.is_file(),
+            }
 
     train_stream = _encode_stream(train_records, tokenizer)
     validation_stream = _encode_stream(validation_records, tokenizer)
@@ -601,6 +672,21 @@ def train_model(
             for name, value in resume_checkpoint["state_dict"].items()
         }
 
+    if progress_callback is not None:
+        try:
+            progress_callback({
+                "phase": "training",
+                "step": start_step,
+                "target_steps": steps,
+                "train_loss": best_train_loss if math.isfinite(best_train_loss) else None,
+                "validation_loss": best_validation_loss if math.isfinite(best_validation_loss) else None,
+                "best_checkpoint_step": best_checkpoint_step,
+                "device": str(device),
+                "vocab_size": tokenizer.vocab_size,
+            })
+        except Exception:
+            pass
+
     last_start = len(train_stream) - actual_block - 1
     evaluation_interval = max(50, min(300, schedule_total // 8))
     completed_steps = start_step
@@ -637,6 +723,7 @@ def train_model(
         if progress_callback is not None:
             try:
                 progress_callback({
+                    "phase": "training",
                     "step": step + 1,
                     "target_steps": steps,
                     "train_loss": last_loss,
@@ -655,6 +742,18 @@ def train_model(
                 f"best validation loss {shown_val}",
                 flush=True,
             )
+
+    if was_cancelled and completed_steps == start_step == 0:
+        prior_metrics_for_cancel = (
+            resume_checkpoint.get("metrics", {}) if isinstance(resume_checkpoint, dict) else {}
+        )
+        return {
+            "ok": True, "version": VERSION, "output": str(target),
+            **prior_metrics_for_cancel,
+            "cancelled": True, "training_steps": 0, "steps_this_run": 0,
+            "vocab_size": tokenizer.vocab_size,
+            "checkpoint_preserved": target.is_file(),
+        }
 
     # Keep the true last training state separately from the best-validation inference weights.
     last_state_dict = {

@@ -6,6 +6,8 @@ import importlib.util
 import json
 import sys
 import threading
+import time
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
@@ -80,6 +82,61 @@ class PythonBrainRouteTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertIn(b"Service token is not configured", body)
         self.assertNotIn(b"Not found", body)
+
+    def test_legacy_checkpoint_does_not_deadlock_training_start_or_status(self) -> None:
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            legacy_checkpoint = Path(folder) / "old-checkpoint.pt"
+            legacy_checkpoint.write_bytes(b"legacy")
+            finished = threading.Event()
+            original_status = dict(brain.TRAINING_STATUS)
+
+            def fake_train_model(**kwargs):
+                finished.set()
+                return {
+                    "ok": True, "training_steps": 600, "steps_this_run": 600,
+                    "train_loss": 1.0, "validation_loss": 1.1,
+                    "vocab_size": 5000, "cancelled": False,
+                }
+
+            try:
+                with patch.object(brain, "SERVICE_TOKEN", "route-test-token"), \
+                     patch.object(brain, "TRAINING_OUTPUT_PATH", legacy_checkpoint), \
+                     patch("torch.load", return_value={"format_version": 1, "metrics": {}}), \
+                     patch.object(brain.transformer, "train_model", side_effect=fake_train_model):
+                    request = urllib.request.Request(
+                        self.base_url + "/admin/training/start",
+                        data=b'{"steps":600,"scheduleSteps":10000}',
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer route-test-token",
+                        },
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(request, timeout=3) as response:
+                        self.assertEqual(response.status, 202)
+                        data = json.loads(response.read().decode("utf-8"))
+                    self.assertTrue(data["ok"])
+                    self.assertTrue(finished.wait(3), "background training worker did not reach train_model")
+                    deadline = time.monotonic() + 3
+                    status_data = {}
+                    while time.monotonic() < deadline:
+                        request_status = urllib.request.Request(
+                            self.base_url + "/admin/training/status",
+                            headers={"Authorization": "Bearer route-test-token"},
+                        )
+                        with urllib.request.urlopen(request_status, timeout=1) as response:
+                            status_data = json.loads(response.read().decode("utf-8"))
+                        if status_data.get("state") == "completed":
+                            break
+                        time.sleep(0.02)
+                    self.assertEqual(status_data.get("state"), "completed")
+                    self.assertTrue(any("старая контрольная точка" in item for item in status_data.get("logs", [])))
+            finally:
+                with brain.TRAINING_LOCK:
+                    brain.TRAINING_STATUS.clear()
+                    brain.TRAINING_STATUS.update(original_status)
+                    brain.TRAINING_CANCEL.clear()
 
     def test_head_health_probe_is_supported(self) -> None:
         request = urllib.request.Request(self.base_url + "/health/", method="HEAD")
