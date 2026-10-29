@@ -719,6 +719,78 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
         return
 
 
+
+# Training runs independently of the browser request. Status is held in the service
+# process so closing the dashboard does not cancel an active run.
+TRAINING_OUTPUT_PATH = Path(os.environ.get(
+    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output.pt")
+))
+TRAINING_LOCK = threading.Lock()
+TRAINING_STATUS: dict[str, Any] = {
+    "ok": True, "state": "idle", "step": 0, "targetSteps": 600,
+    "trainLoss": None, "validationLoss": None, "logs": [],
+    "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+}
+def _training_log(message: str) -> None:
+    stamp = datetime.now(timezone.utc).astimezone().strftime("%H:%M:%S")
+    with TRAINING_LOCK:
+        logs = TRAINING_STATUS.setdefault("logs", [])
+        logs.append("[" + stamp + "] " + str(message)[:300])
+        del logs[:-120]
+def _training_progress(progress: dict[str, Any]) -> None:
+    with TRAINING_LOCK:
+        TRAINING_STATUS["step"] = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
+        TRAINING_STATUS["targetSteps"] = int(progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600)))
+        TRAINING_STATUS["trainLoss"] = progress.get("train_loss")
+        TRAINING_STATUS["validationLoss"] = progress.get("validation_loss")
+        TRAINING_STATUS["bestCheckpointStep"] = int(progress.get("best_checkpoint_step", 0))
+        TRAINING_STATUS["device"] = str(progress.get("device", "cpu"))
+        step = int(TRAINING_STATUS["step"])
+        target = max(1, int(TRAINING_STATUS["targetSteps"]))
+    if step == 1 or step % 10 == 0 or step == target:
+        _training_log(
+            "Шаг " + str(step) + "/" + str(target)
+            + " · train loss " + format(float(progress.get("train_loss", 0.0)), ".4f")
+            + " · validation loss "
+            + (format(float(progress["validation_loss"]), ".4f") if progress.get("validation_loss") is not None else "ещё не измерен")
+        )
+def _run_training(target_steps: int, schedule_steps: int) -> None:
+    try:
+        corpus = ROOT / "data" / "fross_corpus.jsonl"
+        resume = TRAINING_OUTPUT_PATH.is_file()
+        _training_log("Запуск обучения Transformer 1.4; режим: " + ("продолжение" if resume else "с нуля") + ".")
+        result = transformer.train_model(
+            corpus_path=corpus,
+            output_path=TRAINING_OUTPUT_PATH,
+            steps=target_steps,
+            batch_size=2,
+            block_size=320,
+            target_vocab_size=5000,
+            seed=1337,
+            resume=resume,
+            schedule_steps=schedule_steps,
+            progress_callback=_training_progress,
+        )
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({
+                "state": "completed", "step": int(result.get("training_steps", target_steps)),
+                "targetSteps": target_steps, "trainLoss": result.get("train_loss"),
+                "validationLoss": result.get("validation_loss"),
+                "metrics": result, "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                "finishedAt": datetime.now(timezone.utc).isoformat(),
+            })
+        _training_log("Обучение завершено. Контрольная точка сохранена.")
+    except Exception as exc:
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({"state": "failed", "error": type(exc).__name__ + ": " + str(exc)[:240]})
+        _training_log("Ошибка обучения: " + type(exc).__name__ + ": " + str(exc)[:180])
+def _training_snapshot() -> dict[str, Any]:
+    with TRAINING_LOCK:
+        snapshot = dict(TRAINING_STATUS)
+        snapshot["logs"] = list(TRAINING_STATUS.get("logs", []))
+        snapshot["checkpointAvailable"] = TRAINING_OUTPUT_PATH.is_file()
+        return snapshot
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "FROSS-Hybrid-Transformer/1.4"
 
@@ -727,6 +799,15 @@ class Handler(BaseHTTPRequestHandler):
         print("FROSS Python Transformer HTTP " + str(args[1] if len(args) > 1 else "request"))
 
     def do_GET(self) -> None:
+        if self.path == "/admin/training/status":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            respond(self, 200, _training_snapshot())
+            return
         if self.path == "/admin/model-upload":
             _send_html(self, MODEL_UPLOAD_HTML)
             return
@@ -752,6 +833,60 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def do_POST(self) -> None:
+        if self.path == "/admin/training/start":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 1 or length > 8192:
+                    raise ValueError("Request body size is invalid.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Expected a JSON object.")
+                target_steps = int(payload.get("steps", 600))
+                schedule_steps = int(payload.get("scheduleSteps", 3000))
+                if target_steps not in (600, 1200, 1800, 2400, 3000, 4000, 5000):
+                    raise ValueError("Choose a cumulative target from 600, 1200, 1800, 2400, 3000, 4000 or 5000.")
+                if schedule_steps < target_steps or schedule_steps > 5000:
+                    raise ValueError("Schedule must be between the selected target and 5000.")
+            except Exception as exc:
+                respond(self, 400, {"ok": False, "error": str(exc)[:240]})
+                return
+            with TRAINING_LOCK:
+                if TRAINING_STATUS.get("state") == "running":
+                    respond(self, 409, {"ok": False, "error": "Обучение уже выполняется."})
+                    return
+                has_checkpoint = TRAINING_OUTPUT_PATH.is_file()
+                if has_checkpoint:
+                    try:
+                        import torch
+                        existing = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
+                        existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
+                        existing_schedule = int(existing.get("resume_state", {}).get("schedule_steps", 0))
+                        if target_steps <= existing_steps:
+                            respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
+                            return
+                        if existing_schedule != schedule_steps:
+                            respond(self, 409, {"ok": False, "error": "Для продолжения нужен тот же график обучения: " + str(existing_schedule) + " шагов."})
+                            return
+                    except Exception as exc:
+                        respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})
+                        return
+                TRAINING_STATUS.update({
+                    "state": "running", "step": int(existing_steps if has_checkpoint else 0),
+                    "targetSteps": target_steps, "trainLoss": None, "validationLoss": None,
+                    "error": None, "metrics": None, "startedAt": datetime.now(timezone.utc).isoformat(),
+                })
+            threading.Thread(
+                target=_run_training, args=(target_steps, schedule_steps),
+                name="fross-transformer-training", daemon=True,
+            ).start()
+            respond(self, 202, {"ok": True, "state": "running", "targetSteps": target_steps})
+            return
         if self.path == "/admin/model-upload":
             handle_model_upload(self)
             return
