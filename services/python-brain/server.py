@@ -886,7 +886,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(payload, dict):
                     raise ValueError("Expected a JSON object.")
                 target_steps = int(payload.get("steps", 600))
-                schedule_steps = int(payload.get("scheduleSteps", 3000))
+                schedule_steps = int(payload.get("scheduleSteps", 10000))
                 if target_steps not in (600, 3000, 5000, 8000, 10000):
                     raise ValueError("Choose 600, 3000, 5000, 8000 or 10000 training steps.")
                 if schedule_steps != 10000 or schedule_steps < target_steps:
