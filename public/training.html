@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101116"><meta name="description" content="Панель обучения собственного Transformer FROSS.">
+<title>FROSS — Обучение нейросети</title>
+<style>
+:root{color-scheme:dark;--bg:#0c0d12;--panel:#151720;--line:#2b2e3a;--text:#f3f4f8;--muted:#9da3b4;--violet:#9c8bff;--green:#74e0b2}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -15%,#292347 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.wrap{width:min(1080px,100%);margin:auto;padding:26px 22px 45px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:38px}.brand{display:flex;align-items:center;gap:12px}.mark{height:43px;width:43px;border-radius:15px;background:linear-gradient(135deg,#a18fff,#667fff);display:grid;place-items:center;font-weight:900;font-size:18px;box-shadow:0 0 35px #8875ff36}.brand b{font-size:20px;letter-spacing:.3px}.brand small{display:block;color:var(--muted);font-size:11px;margin-top:-2px}.top-actions{display:flex;gap:9px;align-items:center}.btn{border:1px solid var(--line);border-radius:11px;background:#1b1e29;color:#e7e8f0;padding:10px 14px}.btn:hover{border-color:#71669c}.btn.primary{background:linear-gradient(110deg,#8c7bff,#6f85ff);border:0;color:#fff;font-weight:750}.hero{margin-bottom:25px}.eyebrow{color:#b8aaff;text-transform:uppercase;letter-spacing:2px;font-size:11px;font-weight:800}.hero h1{font-size:clamp(30px,5vw,49px);letter-spacing:-1.5px;line-height:1.1;margin:10px 0 12px}.gradient{background:linear-gradient(100deg,#cbbfff,#84b4ff);color:transparent;background-clip:text}.hero p{color:var(--muted);max-width:690px;margin:0}.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:17px}.card{border:1px solid var(--line);background:linear-gradient(145deg,#191b25,#13151c);border-radius:19px;padding:22px;min-width:0;box-shadow:0 15px 45px #0002}.card h2{font-size:17px;margin:0 0 4px}.sub{color:var(--muted);font-size:12px;margin:0 0 20px}.status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:17px 0 10px}.status{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#20212c;border:1px solid #353746;color:#bfc4d3;font-size:11px}.dot{width:7px;height:7px;background:#777e91;border-radius:50%}.status.running .dot{background:var(--green);box-shadow:0 0 0 4px #74e0b21a;animation:pulse 1.6s infinite}.status.completed .dot{background:var(--green)}.status.failed .dot{background:#ff858f}.percent{font-size:12px;color:#c4bbff;font-weight:750}.progress{height:9px;border-radius:20px;background:#272a35;overflow:hidden;border:1px solid #333643}.bar{height:100%;width:0;background:linear-gradient(90deg,#8c7bff,#74e0b2);border-radius:20px;transition:width .3s}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:17px 0}.stat{padding:13px 12px;border:1px solid #2d303c;background:#11131a;border-radius:12px;min-width:0}.stat small{display:block;color:var(--muted);font-size:10px;margin-bottom:5px}.stat b{font-size:18px;overflow-wrap:anywhere}.choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:20px 0 13px}.choice{border:1px solid #373746;background:#171923;color:#e2e3ed;border-radius:12px;padding:13px 9px;text-align:center}.choice strong{display:block;font-size:17px}.choice span{display:block;font-size:10px;color:var(--muted);margin-top:2px}.choice.selected{border-color:#9182e8;background:#24213a;box-shadow:inset 0 0 0 1px #9182e84a}.wide{width:100%;padding:13px 16px}.notice{border:1px solid #4a3f64;background:#211e30;color:#d1c8f8;border-radius:12px;padding:12px 13px;font-size:12px;margin-top:14px}.notice.good{border-color:#2e594d;background:#14251f;color:#b6ecd6}.notice.error{border-color:#653c49;background:#2a1820;color:#ffc5cc}.log{height:305px;overflow:auto;background:#0c0e13;border:1px solid #2b2e39;border-radius:12px;padding:13px;font:11px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace;color:#bfc4d2;white-space:pre-wrap;overflow-wrap:anywhere}.log .empty{color:#777e91}.field{display:grid;gap:6px;margin-top:13px}.field label{font-size:11px;color:var(--muted)}.field input{background:#10121a;color:var(--text);border:1px solid #373a48;border-radius:10px;padding:11px 12px;outline:0}.field input:focus{border-color:var(--violet)}.auth{max-width:440px;margin:40px auto}.hidden{display:none!important}.foot{font-size:11px;color:#707789;text-align:center;margin-top:26px}.metrics{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.8}.metrics b{color:#d9d9e8}.link{color:#b8aaff;text-decoration:none}.link:hover{text-decoration:underline}.sep{height:1px;background:var(--line);margin:19px 0}@keyframes pulse{50%{box-shadow:0 0 0 7px #74e0b20b}}@media(max-width:800px){.grid{grid-template-columns:1fr}.top{align-items:flex-start}.top-actions{flex-direction:column;align-items:stretch}.wrap{padding:18px 14px 35px}.card{padding:17px}.hero h1{font-size:35px}.stats{gap:6px}.stat{padding:11px 8px}.stat b{font-size:16px}.log{height:240px}}@media(max-width:440px){.choices{gap:5px}.choice{padding:11px 5px}.choice strong{font-size:15px}.choice span{font-size:9px}.brand b{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.4</small></div></div>
+  <div class="top-actions"><button id="chatLink" class="btn" type="button">← Вернуться в чат</button><button id="signOut" class="btn hidden" type="button">Выйти</button></div>
+</header>
+<section class="hero"><div class="eyebrow">Собственная нейросеть · без готовых LLM API</div><h1>Обучение <span class="gradient">FROSS Brain</span></h1><p>Запускай настоящее обучение параметров Transformer на корпусе FROSS. После запуска сервер продолжает работу, даже если закрыть эту страницу. Это не тестовая анимация: прогресс и loss поступают из процесса обучения.</p></section>
+<section id="authCard" class="card auth">
+  <h2>Войти для управления обучением</h2><p class="sub">Используется твой аккаунт FROSS.</p>
+  <button id="google" class="btn wide" type="button">Продолжить с Google</button>
+  <div class="sep"></div>
+  <form id="emailForm">
+    <div class="field"><label for="email">Электронная почта</label><input id="email" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="password">Пароль</label><input id="password" type="password" autocomplete="current-password" required></div>
+    <div style="display:flex;gap:9px;margin-top:14px"><button class="btn primary" style="flex:1" type="submit">Войти</button><button id="register" class="btn" type="button">Регистрация</button></div>
+  </form>
+  <div id="authMessage" class="notice hidden"></div>
+</section>
+<main id="dashboard" class="grid hidden">
+  <section class="card">
+    <h2>Состояние обучения</h2><p class="sub">Процесс выполняется на Python-сервере, а не в браузере.</p>
+    <div class="status-row"><span id="state" class="status"><i class="dot"></i><span>Проверка сервера</span></span><span id="percent" class="percent">0%</span></div>
+    <div class="progress"><div id="bar" class="bar"></div></div>
+    <div class="stats">
+      <div class="stat"><small>Шаги</small><b id="steps">— / —</b></div>
+      <div class="stat"><small>Train loss</small><b id="trainLoss">—</b></div>
+      <div class="stat"><small>Validation loss</small><b id="valLoss">—</b></div>
+    </div>
+    <h2 style="margin-top:23px">Цель обучения</h2><p class="sub">Начни с 600 шагов или выбери более длинный запуск. Можно продолжить с сохранённой контрольной точки.</p>
+    <div class="choices">
+      <button class="choice selected" data-steps="600" type="button"><strong>600</strong><span>Первый этап</span></button>
+      <button class="choice" data-steps="3000" type="button"><strong>3000</strong><span>Минимум для модели</span></button>
+      <button class="choice" data-steps="5000" type="button"><strong>5000</strong><span>Длинный запуск</span></button>
+    </div>
+    <button id="start" class="btn primary wide" type="button">▶ Начать обучение</button>
+    <div id="message" class="notice">Ожидание подключения к Python brain…</div>
+    <div id="metrics" class="metrics"></div>
+  </section>
+  <section class="card">
+    <h2>Журнал обучения</h2><p class="sub">Последние события и измерения функции потерь.</p>
+    <div id="logs" class="log"><span class="empty">Ожидание данных с сервера…</span></div>
+    <div class="notice">Не закрывай сервер и не перезапускай Hostless во время обучения. Закрыть эту страницу можно — запущенный поток останется на сервере, пока сам сервис работает.</div>
+  </section>
+</main>
+<p class="foot">FROSS Transformer 1.4 · Целевой словарь 5000 токенов · Контекст 320 · CPU/GPU определяется сервером</p>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+import { firebaseConfig } from "./firebase-config.js";
+const $=id=>document.getElementById(id);
+let auth=null,user=null,selectedSteps=600,pollHandle=null;
+$("chatLink").addEventListener("click",()=>location.href="./chat.html");
+function showAuthMessage(message,isError=false){$("authMessage").textContent=message;$("authMessage").classList.remove("hidden","error");if(isError)$("authMessage").classList.add("error");}
+function showMessage(message,type=""){const el=$("message");el.textContent=message;el.className="notice"+(type?" "+type:"");}
+function errorText(error){return String(error?.message||error||"Неизвестная ошибка").replace(/^Firebase: /,"").slice(0,260)}
+async function token(){if(!user)throw new Error("Войди в аккаунт.");return user.getIdToken();}
+async function api(path,options={}){const idToken=await token();const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json",...(options.headers||{})},cache:"no-store"});let data;try{data=await response.json()}catch{throw new Error(path+" вернул не JSON (HTTP "+response.status+").")};if(!response.ok||data.ok===false)throw new Error(data.error||("HTTP "+response.status));return data}
+function renderStatus(d){
+ const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||600),pct=target?Math.min(100,Math.round(step/target*100)):0;
+ $("state").className="status "+state;$("state").lastElementChild.textContent=({idle:"Готово к запуску",running:"Обучение выполняется",completed:"Обучение завершено",failed:"Ошибка обучения"})[state]||state;
+ $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
+ $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
+ $("valLoss").textContent=Number.isFinite(Number(d.validationLoss))&&d.validationLoss!==null?Number(d.validationLoss).toFixed(4):"—";
+ $("start").disabled=state==="running";$("start").textContent=state==="running"?"Обучение выполняется…":"▶ Начать обучение";
+ if(state==="running")showMessage("Обучение выполняется на сервере. Можно закрыть страницу; проверяй состояние позже.");
+ else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
+ else if(state==="failed")showMessage(d.error||"Обучение завершилось ошибкой.","error");
+ if(d.metrics){const m=d.metrics;$("metrics").innerHTML="Примеров обучения: <b>"+(m.training_examples??"—")+"</b><br>Примеров проверки: <b>"+(m.validation_examples??"—")+"</b><br>Размер словаря: <b>"+(m.vocab_size??"—")+"</b><br>Параметров модели: <b>"+(m.parameters?Number(m.parameters).toLocaleString("ru-RU"):"—")+"</b><br>Лучший шаг checkpoint: <b>"+(m.best_checkpoint_step??"—")+"</b>";}
+ if(Array.isArray(d.logs)&&d.logs.length){$("logs").textContent=d.logs.join("\n");$("logs").scrollTop=$("logs").scrollHeight}
+}
+async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){showMessage(errorText(e),"error")}}
+async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{const d=await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:5000})});showMessage("Сервер принял задачу. Обучение продолжится без открытой страницы.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=false}}
+document.querySelectorAll("[data-steps]").forEach(button=>button.addEventListener("click",()=>{selectedSteps=Number(button.dataset.steps);document.querySelectorAll("[data-steps]").forEach(b=>b.classList.toggle("selected",b===button))}));
+$("start").addEventListener("click",startTraining);
+$("google").addEventListener("click",async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){if(e.code==="auth/popup-blocked"){await signInWithRedirect(auth,new GoogleAuthProvider());return}showAuthMessage(errorText(e),true)}});
+$("emailForm").addEventListener("submit",async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
+$("register").addEventListener("click",async()=>{try{await createUserWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
+$("signOut").addEventListener("click",()=>signOut(auth));
+if(Object.values(firebaseConfig).every(v=>typeof v==="string"&&v&&!v.includes("YOUR_"))){auth=getAuth(initializeApp(firebaseConfig));onAuthStateChanged(auth,async current=>{user=current;$("authCard").classList.toggle("hidden",!!current);$("dashboard").classList.toggle("hidden",!current);$("signOut").classList.toggle("hidden",!current);if(current){await refresh();if(pollHandle)clearInterval(pollHandle);pollHandle=setInterval(refresh,3000)}else{if(pollHandle)clearInterval(pollHandle);pollHandle=null}})}else{showAuthMessage("Не настроена конфигурация Firebase в public/firebase-config.js.",true)}
+</script>
+</body></html>
