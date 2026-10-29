@@ -1862,7 +1862,7 @@ async function handleFrossTransformerTraining(request, env, action) {
       try { body = await request.json(); }
       catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
       const steps = Number(body?.steps ?? 600);
-      const scheduleSteps = Number(body?.scheduleSteps ?? 3000);
+      const scheduleSteps = Number(body?.scheduleSteps ?? 10000);
       if (![600,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
         return frossJson({ ok: false, error: "Выбери 600, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
       }
@@ -1900,7 +1900,9 @@ async function handleFrossTransformerModelDownload(request, env) {
     if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
       return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
     }
-    const basePath = configured.pathname.replace(/\\/+$/, "").replace(/\\/chat$/, "");
+    let basePath = configured.pathname;
+    while (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
+    if (basePath.endsWith("/chat")) basePath = basePath.slice(0, -5);
     configured.pathname = (basePath || "") + "/admin/training/model";
     configured.search = "";
     target = configured.toString();
