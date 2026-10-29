@@ -478,6 +478,7 @@ def train_model(
     seed: int = 1337,
     resume: bool = False,
     schedule_steps: int | None = None,
+    progress_callback: Any = None,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming an exact saved optimizer state.
 
@@ -626,6 +627,18 @@ def train_model(
                     name: value.detach().cpu().clone()
                     for name, value in model.state_dict().items()
                 }
+        if progress_callback is not None:
+            try:
+                progress_callback({
+                    "step": step + 1,
+                    "target_steps": steps,
+                    "train_loss": last_loss,
+                    "validation_loss": best_validation_loss if math.isfinite(best_validation_loss) else None,
+                    "best_checkpoint_step": best_checkpoint_step,
+                    "device": str(device),
+                })
+            except Exception:
+                pass
         if (step + 1) % max(1, (steps - start_step) // 5) == 0 or step + 1 == steps:
             shown_val = (
                 f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
