@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101116">
+<meta name="description" content="FROSS — персональный ИИ-помощник с веб-поиском и историей чатов."><title>FROSS — ИИ-помощник</title>
+<style>
+:root{color-scheme:dark;--bg:#101116;--panel:#171920;--line:#2a2d38;--text:#f4f5f8;--muted:#9ca1b2;--accent:#9b8cff}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}button,input,textarea{font:inherit}button{cursor:pointer}button:disabled,textarea:disabled{opacity:.48;cursor:not-allowed}.app{height:100%;display:grid;grid-template-columns:270px minmax(0,1fr)}.sidebar{background:#14161c;border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;min-width:0;gap:18px}.brand{display:flex;align-items:center;gap:11px;padding:2px 7px 10px}.brand-mark{width:39px;height:39px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#9d8cff,#5f83ff);color:white;font-weight:900;font-size:16px}.brand-title{font-weight:780;font-size:19px}.brand-sub{font-size:11px;color:var(--muted);margin-top:-3px}.primary{border:0;border-radius:12px;background:linear-gradient(110deg,#8c7bff,#6f85ff);color:white;font-weight:700;padding:12px 14px;display:flex;align-items:center;justify-content:center;gap:9px}.primary:hover{filter:brightness(1.1)}.side-label{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#777d8e;padding:0 8px}.chat-list{display:flex;flex-direction:column;gap:5px;overflow:auto;min-height:0}.chat-item{border:1px solid transparent;background:transparent;color:#b9bdc9;text-align:left;display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;min-width:0}.chat-item:hover{background:#1c1f27}.chat-item.active{background:#262333;color:#fff;border-color:#39344e}.chat-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-size:13px}.closed-label{font-size:10px;color:#c3a0ff;white-space:nowrap}.side-bottom{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}.user-row{display:flex;align-items:center;gap:10px;min-width:0;padding:8px}.avatar{width:35px;height:35px;border-radius:50%;background:#33364a;object-fit:cover;display:grid;place-items:center;flex-shrink:0}.user-meta{min-width:0;flex:1}.user-name{font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.user-email{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.logout{border:0;background:transparent;color:var(--muted);padding:7px;border-radius:8px}.main{min-width:0;display:flex;flex-direction:column;height:100%;position:relative}.topbar{height:66px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 25px;gap:16px}.top-title{font-weight:680}.model-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid #373149;background:#201e2b;color:#c6baff;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700}.model-dot{width:6px;height:6px;background:#7de0b3;border-radius:50%;box-shadow:0 0 0 3px #7de0b31e}.top-status{font-size:12px;color:var(--muted)}.messages-scroll{flex:1;overflow-y:auto;scroll-behavior:smooth}.welcome{min-height:100%;display:flex;align-items:center;justify-content:center;padding:40px 22px}.welcome-inner{width:min(720px,100%);text-align:center;margin:auto}.orbit{width:72px;height:72px;border-radius:25px;margin:0 auto 22px;background:linear-gradient(135deg,#292542,#202b48);border:1px solid #484266;display:grid;place-items:center;position:relative}.orbit:before{content:"";position:absolute;inset:-7px;border:1px solid #5e5a8b66;border-radius:30px;animation:halo 4s ease-in-out infinite}.orbit span{font-size:26px;font-weight:900;background:linear-gradient(135deg,#bdacff,#80a7ff);color:transparent;background-clip:text}.welcome h1{font-size:clamp(27px,4vw,41px);letter-spacing:-1.2px;line-height:1.12;margin:0 0 13px}.gradient{background:linear-gradient(100deg,#c5b7ff,#83adff);color:transparent;background-clip:text}.welcome p{max-width:490px;margin:0 auto;color:var(--muted);font-size:15px}.prompt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:32px;text-align:left}.prompt-card{background:#171920;border:1px solid var(--line);border-radius:13px;padding:14px;color:#d8d9e2;transition:border-color .2s,transform .2s;text-align:left}.prompt-card:hover{border-color:#5e5681;transform:translateY(-2px)}.prompt-card strong{font-size:13px;display:block;margin-bottom:3px}.prompt-card span{display:block;color:var(--muted);font-size:12px}.message-list{max-width:850px;padding:30px 25px 24px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:24px}.message{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;animation:arrive .25s ease both}.message .avatar{width:32px;height:32px;border-radius:11px}.message.user .avatar{background:#343247;color:#d0c7ff;font-size:11px;font-weight:800}.message.assistant .avatar{background:linear-gradient(135deg,#8c7bff,#6f85ff);color:white;font-weight:850}.message-body{min-width:0;padding-top:2px}.message-name{font-size:12px;font-weight:750;margin-bottom:6px;color:#d8d9e4}.message-content{white-space:pre-wrap;overflow-wrap:anywhere;color:#e5e6ee;line-height:1.72;font-size:14px}.message-content a{color:#b5a6ff;text-decoration:underline;text-underline-offset:3px}.message-content strong{color:#fff}.sources{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.source-link{font-size:11px;color:#bdb5f7;border:1px solid #36324a;background:#201e2b;border-radius:8px;padding:5px 8px;text-decoration:none}.typing{display:flex;align-items:center;gap:7px;color:#ada7d9;font-size:12px;margin-top:8px}.typing-dots{display:flex;gap:4px}.typing-dots i{width:5px;height:5px;background:#a89aff;border-radius:50%;animation:dots 1.1s infinite}.typing-dots i:nth-child(2){animation-delay:.14s}.typing-dots i:nth-child(3){animation-delay:.28s}.composer-wrap{padding:12px 22px 18px;background:linear-gradient(180deg,#10111600,#101116 22%)}.composer{max-width:850px;margin:0 auto;border:1px solid #373946;background:#1a1c24;border-radius:17px;padding:10px 11px 8px}.composer:focus-within{border-color:#645a96}.composer textarea{display:block;width:100%;resize:none;max-height:180px;min-height:32px;border:0;outline:0;background:transparent;color:#f6f6fa;padding:5px 7px;line-height:1.5}.composer textarea::placeholder{color:#74798a}.composer-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 2px 0}.composer-note{font-size:10px;color:#777b8b}.send-btn{height:34px;width:38px;border:0;border-radius:10px;background:#8c7bff;color:#fff;font-size:18px;display:grid;place-items:center}.limit-banner{text-align:center;font-size:12px;color:#d7c7ff;background:#211d30;padding:9px 15px;border:1px solid #403754;border-radius:11px;max-width:850px;margin:0 auto 8px}.disclaimer{text-align:center;font-size:10px;color:#666b7b;margin-top:8px}.hidden{display:none!important}.auth-cover{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:radial-gradient(ellipse at 48% 30%,#242039 0%,#111218 58%,#0d0e13 100%);padding:22px}.auth-card{width:min(440px,100%);background:#181a22;border:1px solid #363541;border-radius:25px;padding:34px;box-shadow:0 25px 90px #0008;animation:arrive .4s ease both}.auth-brand{text-align:center}.auth-brand .orbit{width:60px;height:60px;border-radius:20px;margin-bottom:15px}.auth-brand .orbit span{font-size:23px}.auth-card h2{font-size:26px;letter-spacing:-.5px;margin:0 0 8px}.auth-card p{color:var(--muted);font-size:13px;margin:0 0 23px}.google-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:#f5f5f5;color:#222;border:0;border-radius:12px;height:48px;font-weight:750}.google-btn:hover{background:white}.google-g{font-size:19px;font-weight:900;color:#4285f4}.auth-form{display:grid;gap:10px;margin-top:17px}.auth-input{width:100%;height:45px;border:1px solid #393b49;border-radius:11px;background:#11131a;color:#f4f5f8;padding:0 13px;outline:none}.auth-input:focus{border-color:#8c7bff}.auth-actions{display:flex;gap:9px}.auth-submit{flex:1;justify-content:center}.auth-secondary{border:1px solid #393b49;background:#20222c;color:#d4d5e0;border-radius:11px;padding:10px 12px;font-size:12px}.auth-switch{display:flex;justify-content:center;gap:5px;align-items:center;font-size:12px;color:var(--muted);margin-top:13px}.auth-switch button,.reset-btn{border:0;background:transparent;color:#b8aaff;padding:3px;font-size:12px}.auth-message{margin-top:15px;padding:11px 12px;background:#211f2a;border:1px solid #3c354d;color:#bbb3e7;border-radius:10px;font-size:12px;line-height:1.55}.auth-footer{font-size:10px;color:#6d7180;text-align:center;margin-top:20px}.auth-footer a{color:#a99cf6}.mobile-menu{display:none}.mobile-overlay{display:none}
+@keyframes dots{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}@keyframes arrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes halo{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(1.05);opacity:.9}}
+@media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{position:fixed;inset:0 auto 0 0;width:min(290px,86vw);z-index:5;transform:translateX(-105%);transition:transform .25s;box-shadow:18px 0 40px #0005}.sidebar.open{transform:translateX(0)}.mobile-overlay.show{display:block;position:fixed;inset:0;background:#0008;z-index:4}.topbar{height:59px;padding:0 15px}.mobile-menu{display:grid;place-items:center;border:1px solid var(--line);background:#1b1d25;width:35px;height:35px;border-radius:10px;color:#ddd}.top-left{display:flex;align-items:center;gap:10px}.top-status{display:none}.welcome{padding:25px 18px}.welcome h1{font-size:30px}.prompt-grid{grid-template-columns:1fr}.message-list{padding:23px 15px}.composer-wrap{padding:7px 12px 12px}.auth-card{padding:27px 22px}.model-pill{font-size:10px;padding:4px 8px}.settings-label{display:none}.message{grid-template-columns:30px minmax(0,1fr);gap:9px}.message .avatar{width:29px;height:29px;border-radius:10px}}
+
+:root{--font-scale:1}
+.settings-modal.hidden,.jump-bottom.hidden{display:none!important}
+.messages-scroll{min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#5b5579 #15161d}
+.messages-scroll::-webkit-scrollbar,.chat-list::-webkit-scrollbar{width:10px}
+.messages-scroll::-webkit-scrollbar-track,.chat-list::-webkit-scrollbar-track{background:#15161d;border-radius:10px}
+.messages-scroll::-webkit-scrollbar-thumb,.chat-list::-webkit-scrollbar-thumb{background:#504a68;border:2px solid #15161d;border-radius:10px}
+.messages-scroll::-webkit-scrollbar-thumb:hover,.chat-list::-webkit-scrollbar-thumb:hover{background:#8175b5}
+.message-content{font-size:calc(14px * var(--font-scale));min-width:0}
+.code-block{margin:14px 0;border:1px solid #3c3b50;background:#101116;border-radius:13px;overflow:hidden;max-width:100%;box-shadow:0 8px 22px #0002}
+.code-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#1e202a;border-bottom:1px solid #343342;color:#b9bbcb;font-size:11px}
+.code-copy{border:1px solid #454357;background:#292735;color:#e3e0f7;border-radius:8px;padding:5px 9px;font-size:11px;white-space:nowrap}
+.code-block pre{margin:0;padding:15px;overflow:auto;max-width:100%;white-space:pre;tab-size:2;scrollbar-width:thin;scrollbar-color:#625a82 #15161d}
+.code-block code{font:12.5px/1.65 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;color:#e1def5}
+.composer-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tool-btn{min-height:32px;border:1px solid #393746;background:#22232d;color:#c8c8d7;border-radius:9px;padding:5px 10px;font-size:11px;display:inline-flex;align-items:center;gap:6px}
+.tool-btn:hover{border-color:#7668a9;color:#fff}
+.tool-btn[aria-pressed="true"]{background:#302944;border-color:#9b8cff;color:#d5caff}
+.mode-level{font-size:10px;opacity:.8}
+.jump-bottom{position:absolute;right:26px;bottom:106px;z-index:2;width:38px;height:38px;border:1px solid #454158;border-radius:50%;background:#24232f;color:#e7e2ff;box-shadow:0 5px 18px #0005;display:grid;place-items:center}
+.settings-modal{position:fixed;inset:0;z-index:12;background:#080910b8;display:grid;place-items:center;padding:18px}
+.settings-card{width:min(420px,100%);background:#1a1b24;border:1px solid #3b394b;border-radius:20px;padding:22px;box-shadow:0 20px 80px #0008}
+.settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px;font-weight:750;font-size:17px}
+.settings-close{border:1px solid #444253;background:#272832;color:#eee;border-radius:9px;padding:5px 10px}
+.settings-field{display:grid;gap:9px;margin:17px 0;color:#c6c7d4;font-size:13px}
+.settings-field select{width:100%;padding:10px;border:1px solid #444253;border-radius:10px;background:#11131a;color:#f3f3f7}
+.settings-field input[type=range]{width:100%;accent-color:#9b8cff}
+.settings-note{font-size:11px;color:#9397a8;line-height:1.5}
+body.light-theme{--bg:#f4f5fb;--panel:#fff;--line:#dfe1ed;--text:#20212b;--muted:#656a7b;background:var(--bg);color:var(--text)}
+body.light-theme .sidebar,body.light-theme .composer,body.light-theme .prompt-card{background:#fff;color:#242531}
+body.light-theme .main,body.light-theme .messages-scroll{background:#f4f5fb}
+body.light-theme .topbar{border-color:#dfe1ed}
+body.light-theme .message-content{color:#292b38}
+body.light-theme .message-name{color:#353747}
+body.light-theme .composer textarea{color:#20212b}
+body.light-theme .composer-note,body.light-theme .disclaimer{color:#777b8a}
+body.light-theme .tool-btn{background:#fff;color:#383849;border-color:#d6d7e5}
+@media(max-width:760px){.topbar{padding:0 11px;gap:8px}.top-status{display:none}.composer-wrap{padding:7px 10px calc(12px + env(safe-area-inset-bottom))}.composer-bottom{align-items:flex-end}.composer-note{display:none}.composer-tools{gap:5px}.tool-btn{padding:5px 7px;font-size:10px}.jump-bottom{right:15px;bottom:120px}.message-list{padding:18px 12px}.code-block pre{font-size:11px;padding:11px}.settings-card{padding:18px}}
+@media(max-height:560px){.topbar{height:50px;flex-shrink:0}.composer-wrap{padding-top:5px;padding-bottom:7px}.disclaimer{display:none}.welcome{padding:18px}.welcome-inner .orbit{width:52px;height:52px;margin-bottom:12px}.prompt-grid{margin-top:15px}}
+
+
+/* Responsive layout hardening: always fit the available viewport */
+html{width:100%;height:100%;min-height:0;overflow:hidden}
+body{width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
+.app{width:100%;height:100vh;height:100dvh;min-width:0;min-height:0;overflow:hidden;grid-template-rows:minmax(0,1fr)}
+.sidebar{min-width:0;min-height:0;max-height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.brand,.sidebar>.primary,.side-label,.side-bottom{flex-shrink:0}
+.chat-list{flex:1 1 auto;min-width:0;min-height:36px;overscroll-behavior:contain}
+.main{width:100%;height:auto;min-width:0;min-height:0;overflow:hidden}
+.topbar{flex:0 0 66px;min-width:0;min-height:0;overflow:hidden}
+.top-left{flex:1 1 auto;min-width:0;overflow:hidden}
+#topTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar>div:last-child{flex:0 1 auto;min-width:0}
+.model-pill{flex-shrink:0;white-space:nowrap}
+.messages-scroll{flex:1 1 auto;width:100%;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.welcome{width:100%;min-width:0;min-height:100%;overflow:visible}
+.welcome-inner{width:min(720px,100%);max-width:100%;min-width:0}
+.prompt-grid{width:100%;min-width:0}
+.prompt-card{min-width:0;overflow-wrap:anywhere}
+.message-list{width:100%;max-width:900px;min-width:0;margin-inline:auto}
+.message,.message-body,.message-content{min-width:0;max-width:100%}
+.message-content{overflow-wrap:anywhere;word-break:normal}
+.code-block{width:100%;min-width:0;max-width:100%}
+.code-header{flex-wrap:wrap;min-width:0}
+.code-block pre{max-width:100%;overscroll-behavior-x:contain}
+.composer-wrap{flex:0 0 auto;width:100%;min-width:0;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.composer{width:100%;min-width:0}
+.composer-bottom,.composer-tools{min-width:0}
+.composer-note{min-width:0;overflow-wrap:anywhere}
+#messageInput{width:100%;min-width:0;max-width:100%}
+.jump-bottom{position:fixed;right:26px;bottom:calc(106px + env(safe-area-inset-bottom))}
+.settings-modal{overflow-y:auto;overscroll-behavior:contain}
+.settings-card{max-height:calc(100vh - 36px);max-height:calc(100dvh - 36px);overflow-y:auto;min-width:0}
+.auth-cover{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.auth-card{max-height:none;min-width:0}
+@media (min-width:761px) and (max-width:1000px){
+  .app{grid-template-columns:230px minmax(0,1fr)}
+  .sidebar{padding:14px 10px;gap:13px}
+  .topbar{padding-inline:14px;gap:10px}
+  .top-status{display:none}
+  .message-list{padding-inline:18px}
+  .composer-wrap{padding-inline:14px}
+}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .main{grid-column:1;grid-row:1}
+  .sidebar{width:min(290px,88vw);max-width:88vw;max-height:100dvh;padding:15px 12px}
+  .topbar{flex-basis:58px;padding-inline:10px;gap:8px}
+  .top-left{gap:8px}
+  #topTitle{max-width:40vw;font-size:14px}
+  .topbar>div:last-child{gap:6px!important}
+  .model-pill{padding:4px 7px;font-size:10px}
+  .welcome{padding:24px 14px}
+  .welcome-inner{width:100%}
+  .welcome h1{font-size:clamp(25px,7vw,32px)}
+  .prompt-grid{grid-template-columns:minmax(0,1fr);gap:8px;margin-top:22px}
+  .prompt-card{padding:12px}
+  .message-list{padding:18px 12px 24px;gap:20px}
+  .composer-wrap{padding:7px 10px calc(12px + env(safe-area-inset-bottom))}
+  .composer{padding:8px}
+  .composer-bottom{gap:7px}
+  .composer-tools{gap:5px}
+  .tool-btn{padding:5px 7px;font-size:10px}
+  .settings-label{display:none}
+  .jump-bottom{right:14px;bottom:calc(118px + env(safe-area-inset-bottom))}
+}
+@media (max-width:420px){
+  .topbar{padding-inline:7px;gap:5px}
+  .top-left{gap:6px}
+  #topTitle{max-width:34vw;font-size:13px}
+  .mobile-menu{width:32px;height:32px;flex:0 0 32px}
+  .model-pill{font-size:9px;padding:4px 5px;gap:4px}
+  .composer-tools{max-width:calc(100% - 43px)}
+  #reasoningBtn{max-width:100%;white-space:normal}
+  .code-header{gap:6px;padding:7px 8px}
+  .code-copy{font-size:10px;padding:5px 7px}
+}
+@media (max-height:650px){
+  .topbar{flex-basis:52px}
+  .composer-wrap{padding-top:5px;padding-bottom:max(7px,env(safe-area-inset-bottom))}
+  .disclaimer{display:none}
+  .composer textarea{max-height:110px}
+  .welcome{padding-block:16px}
+  .welcome .orbit{width:54px;height:54px;margin-bottom:13px}
+  .prompt-grid{margin-top:16px}
+  .auth-cover{place-items:start center}
+  .auth-card{margin:auto}
+}
+@media (max-height:430px){
+  .topbar{flex-basis:46px}
+  .composer textarea{max-height:78px}
+  .composer-wrap{padding-top:3px}
+  .welcome{align-items:flex-start}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+
+/* Complete light theme: override hard-coded dark surfaces throughout the UI */
+body.light-theme{color-scheme:light}
+body.light-theme .sidebar{background:#fff;border-color:#dfe1ed;color:#252637}
+body.light-theme .brand-title,body.light-theme .top-title,body.light-theme .user-name{color:#262737}
+body.light-theme .brand-sub,body.light-theme .user-email,body.light-theme .side-label{color:#75798b}
+body.light-theme .side-bottom{border-color:#e4e5ef}
+body.light-theme .chat-item{background:transparent;color:#515568;border-color:transparent}
+body.light-theme .chat-item:hover{background:#f1f1fa}
+body.light-theme .chat-item.active{background:#eeebff;border-color:#d3cafc;color:#39305d}
+body.light-theme .closed-label{color:#6e53ba}
+body.light-theme .primary{color:#fff}
+body.light-theme .main{background:#f5f6fb;color:#242535}
+body.light-theme .topbar{background:#fff;border-color:#e0e2ec}
+body.light-theme .model-pill{background:#efedff;border-color:#d9d2ff;color:#5d4a9d}
+body.light-theme .model-dot{background:#159b69;box-shadow:0 0 0 3px #159b6920}
+body.light-theme .mobile-menu{background:#fff;color:#34364a;border-color:#d9dbe8}
+body.light-theme .welcome p{color:#6c7184}
+body.light-theme .orbit{background:linear-gradient(135deg,#f0ecff,#e7efff);border-color:#d4ccf4}
+body.light-theme .orbit:before{border-color:#9c8fe766}
+body.light-theme .prompt-card{background:#fff;border-color:#e0e2ed;color:#2a2c3d}
+body.light-theme .prompt-card span{color:#73788a}
+body.light-theme .prompt-card:hover{border-color:#b6a9ed;box-shadow:0 5px 18px #6c5ab50e}
+body.light-theme .message-name{color:#53566a}
+body.light-theme .message-content{color:#2e3041}
+body.light-theme .message-content strong{color:#171927}
+body.light-theme .message-content a{color:#6650bd}
+body.light-theme .message.user .avatar{background:#e9e5ff;color:#51438f}
+body.light-theme .message.assistant .avatar{color:#fff}
+body.light-theme .source-link{background:#fff;border-color:#e0dbfa;color:#6651b4}
+body.light-theme .typing{color:#6a5bb0}
+body.light-theme .typing-dots i{background:#8874e4}
+body.light-theme .composer-wrap{background:linear-gradient(180deg,#f5f6fb00,#f5f6fb 22%)}
+body.light-theme .composer{background:#fff;border-color:#dfe1ed;box-shadow:0 7px 24px #313b650a}
+body.light-theme .composer:focus-within{border-color:#9f8ee8}
+body.light-theme .composer textarea{color:#232536}
+body.light-theme .composer textarea::placeholder{color:#8b8fa0}
+body.light-theme .composer-note,body.light-theme .disclaimer{color:#777c8e}
+body.light-theme .tool-btn{background:#fff;border-color:#d9dbea;color:#4a4d61}
+body.light-theme .tool-btn:hover{background:#f5f2ff;border-color:#b9abea;color:#433277}
+body.light-theme .tool-btn[aria-pressed="true"]{background:#eee9ff;border-color:#ad9aed;color:#52408e}
+body.light-theme .send-btn{color:#fff}
+body.light-theme .limit-banner{background:#f0ebff;border-color:#d7cbff;color:#5c469f}
+body.light-theme .code-block{background:#fbfbfe;border-color:#d9dbea;box-shadow:0 6px 20px #3034500a}
+body.light-theme .code-header{background:#f0f1f8;border-color:#dfe1ec;color:#4a4e62}
+body.light-theme .code-block code{color:#25283a}
+body.light-theme .code-copy{background:#fff;border-color:#d3d5e3;color:#45485d}
+body.light-theme .code-copy:hover{background:#f1edff;border-color:#bcb0ee}
+body.light-theme .messages-scroll{scrollbar-color:#c6c1de #f1f2f8}
+body.light-theme .messages-scroll::-webkit-scrollbar-track,body.light-theme .chat-list::-webkit-scrollbar-track{background:#f1f2f8;border-color:#f1f2f8}
+body.light-theme .messages-scroll::-webkit-scrollbar-thumb,body.light-theme .chat-list::-webkit-scrollbar-thumb{background:#c6c1de;border-color:#f1f2f8}
+body.light-theme .jump-bottom{background:#fff;border-color:#d5d3e4;color:#5d4b9c;box-shadow:0 5px 18px #25213c1a}
+body.light-theme .settings-modal{background:#17152666}
+body.light-theme .settings-card{background:#fff;border-color:#dfe1ed;color:#292b3c}
+body.light-theme .settings-head{color:#252739}
+body.light-theme .settings-close{background:#f6f6fb;border-color:#d8dae7;color:#42455a}
+body.light-theme .settings-field{color:#484b60}
+body.light-theme .settings-field select{background:#fff;border-color:#d9dbea;color:#25273a}
+body.light-theme .settings-note{color:#74798c}
+body.light-theme .auth-cover{background:radial-gradient(ellipse at 48% 30%,#e7e3fb 0%,#f5f6fb 58%,#eceef7 100%)}
+body.light-theme .auth-card{background:#fff;border-color:#dfe1ed;box-shadow:0 25px 90px #3034501a}
+body.light-theme .auth-card h2{color:#252638}
+body.light-theme .auth-card p{color:#6b7082}
+body.light-theme .auth-input{background:#fff;border-color:#d7d9e6;color:#242638}
+body.light-theme .auth-secondary{background:#f6f6fb;border-color:#d7d9e6;color:#4a4d61}
+body.light-theme .auth-message{background:#f1effb;border-color:#ddd7f5;color:#5b527d}
+body.light-theme .auth-footer{color:#777c8e}
+body.light-theme .auth-footer a,body.light-theme .auth-switch button,body.light-theme .reset-btn{color:#6550b9}
+body.light-theme .mobile-overlay.show{background:#25243b55}
+
+
+.chat-item{cursor:pointer;position:relative;gap:8px;padding-right:6px}
+.chat-item:focus-visible{outline:2px solid #9b8cff;outline-offset:1px}
+.chat-delete{flex:0 0 28px;width:28px;height:28px;border:1px solid transparent;border-radius:8px;background:transparent;color:#8e91a1;display:grid;place-items:center;font-size:18px;line-height:1;opacity:.72}
+.chat-delete:hover{background:#48272e;border-color:#71414a;color:#ffc1c7;opacity:1}
+.chat-delete:disabled{opacity:.35;cursor:wait}
+body.light-theme .chat-delete{color:#777b8d}
+body.light-theme .chat-delete:hover{background:#fff0f0;border-color:#ecc8ce;color:#a42b44}
+
+
+.training-modal-card{width:min(620px,100%);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto}
+.training-description{font-size:12px;line-height:1.55;color:#9da1b1;margin:0 0 14px}
+.training-form{display:flex;gap:8px;align-items:center}
+.training-input{flex:1;min-width:0;height:42px;padding:0 12px;border:1px solid #444253;border-radius:10px;background:#11131a;color:#f1f2f8}
+.training-run{white-space:nowrap}
+.training-status{font-size:12px;line-height:1.5;color:#b6addf;margin:10px 0}
+.knowledge-list{display:grid;gap:8px;margin-top:12px}
+.knowledge-item{border:1px solid #3c3a4c;background:#20212b;border-radius:10px;padding:10px;display:flex;gap:10px;align-items:flex-start}
+.knowledge-item-content{flex:1;min-width:0}
+.knowledge-item-title{font-size:12px;font-weight:700;overflow-wrap:anywhere}
+.knowledge-item-meta{font-size:10px;color:#9699ac;margin-top:4px;overflow-wrap:anywhere}
+.knowledge-summary{font-size:11px;color:#d4d5e3;line-height:1.5;margin-top:7px;overflow-wrap:anywhere}.knowledge-keywords{font-size:10px;color:#b4a7f6;line-height:1.4;margin-top:5px;overflow-wrap:anywhere}
+.knowledge-delete{border:1px solid #494354;background:#292630;color:#e1d7eb;border-radius:8px;padding:4px 8px;flex-shrink:0}
+.knowledge-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.training-warning{font-size:11px;color:#8f93a6;line-height:1.5;margin-top:12px}
+body.light-theme .training-description,body.light-theme .training-warning{color:#6f7488}
+body.light-theme .training-input{background:#fff;border-color:#d9dbea;color:#27293a}
+body.light-theme .knowledge-item{background:#fff;border-color:#dfe1ed}
+body.light-theme .knowledge-item-title{color:#292b3c}
+body.light-theme .knowledge-item-meta{color:#71768a}
+body.light-theme .knowledge-delete{background:#fff;color:#4b4d61;border-color:#d7d9e6}
+@media(max-width:520px){.training-form{flex-direction:column;align-items:stretch}.training-run{width:100%}.training-modal-card{padding:14px}}
+
+/* Brain training is local-only now; hide browser-side learning controls. */
+#publicKnowledgeBtn,
+#settingsLearningBtn,
+#trainingModal { display: none !important; }
+
+/* FROSS visual refresh: ambient depth, restrained motion, clearer focus states */
+:root{
+  --fross-accent:#a78bfa;
+  --fross-accent-2:#66e3d3;
+  --fross-glass:rgba(23,24,35,.82);
+  --fross-border:rgba(171,157,255,.17);
+}
+body{
+  background:
+    radial-gradient(ellipse at 12% 4%,rgba(115,76,206,.10),transparent 36%),
+    radial-gradient(ellipse at 88% 90%,rgba(51,183,170,.075),transparent 38%),
+    #101116;
+}
+body::before,body::after{
+  content:"";
+  position:fixed;
+  width:420px;height:420px;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:0;
+  filter:blur(72px);
+  opacity:.13;
+  will-change:transform;
+}
+body::before{
+  left:-180px;top:12%;
+  background:#9274ff;
+  animation:fross-ambient-a 25s ease-in-out infinite alternate;
+}
+body::after{
+  right:-190px;bottom:-4%;
+  background:#45dbc6;
+  animation:fross-ambient-b 31s ease-in-out infinite alternate;
+}
+.app{position:relative;z-index:1;isolation:isolate}
+.sidebar{
+  background:linear-gradient(165deg,rgba(24,25,37,.96),rgba(17,18,25,.94))!important;
+  border-right:1px solid var(--fross-border);
+  box-shadow:12px 0 48px rgba(0,0,0,.12);
+  backdrop-filter:blur(18px);
+}
+.brand .orbit,.auth-brand .orbit{
+  box-shadow:0 0 0 1px rgba(174,157,255,.23),0 0 34px rgba(144,117,255,.16);
+  animation:fross-orbit-breathe 5.5s ease-in-out infinite;
+}
+.topbar{
+  background:rgba(17,18,25,.76);
+  backdrop-filter:blur(18px) saturate(145%);
+  border-bottom:1px solid rgba(167,139,250,.13);
+}
+.model-pill{
+  border-color:rgba(172,153,255,.25);
+  background:linear-gradient(110deg,rgba(145,119,245,.13),rgba(78,204,188,.07));
+  box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+.model-dot{box-shadow:0 0 12px rgba(93,231,208,.65);animation:fross-status-pulse 2.7s ease-in-out infinite}
+.welcome-inner .orbit{
+  box-shadow:0 0 70px rgba(137,109,255,.15),inset 0 0 22px rgba(104,231,207,.06);
+  animation:fross-orbit-breathe 6s ease-in-out infinite;
+}
+.welcome h1 .gradient{
+  background-size:220% 100%;
+  animation:fross-gradient-flow 9s ease-in-out infinite;
+}
+.prompt-card,.chat-item,.tool-btn,.send-btn,.settings-close,.code-copy{
+  transition:transform .18s ease,border-color .2s ease,background .2s ease,box-shadow .22s ease,color .2s ease;
+}
+.prompt-card{
+  border-color:rgba(155,143,219,.14);
+  background:linear-gradient(145deg,rgba(29,30,43,.88),rgba(22,23,32,.88));
+}
+.prompt-card:hover{
+  transform:translateY(-3px);
+  border-color:rgba(167,139,250,.55);
+  box-shadow:0 12px 30px rgba(0,0,0,.16),0 0 0 1px rgba(167,139,250,.07);
+}
+.chat-item:hover{transform:translateX(2px);border-color:rgba(167,139,250,.24)}
+.message{animation:fross-message-in .24s ease-out both}
+.message .avatar{
+  transition:transform .25s ease,box-shadow .25s ease;
+}
+.message.assistant .avatar{
+  box-shadow:0 0 0 1px rgba(167,139,250,.20),0 0 22px rgba(128,99,232,.10);
+}
+.message.assistant:hover .avatar{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(167,139,250,.34),0 0 26px rgba(128,99,232,.18)}
+.message-content{line-height:1.78;letter-spacing:.002em}
+.message.assistant .message-content{color:#e2e2ed}
+.composer{
+  background:rgba(25,26,36,.88);
+  border-color:rgba(158,146,209,.22);
+  box-shadow:0 14px 42px rgba(0,0,0,.13),inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter:blur(20px);
+  transition:border-color .2s ease,box-shadow .22s ease,transform .2s ease;
+}
+.composer:focus-within{
+  border-color:rgba(167,139,250,.65);
+  box-shadow:0 14px 46px rgba(0,0,0,.18),0 0 0 3px rgba(167,139,250,.065),inset 0 1px rgba(255,255,255,.04);
+}
+.tool-btn:hover,.settings-close:hover,.code-copy:hover{
+  border-color:rgba(167,139,250,.62);
+  box-shadow:0 4px 18px rgba(116,90,208,.10);
+  transform:translateY(-1px);
+}
+.tool-btn:active,.prompt-card:active,.send-btn:active{transform:scale(.975)}
+.tool-btn[aria-pressed="true"]{
+  box-shadow:0 0 0 1px rgba(167,139,250,.12),0 0 24px rgba(124,93,235,.13);
+}
+.send-btn{
+  background:linear-gradient(135deg,#a78bfa,#7d72e8 62%,#67dccc);
+  box-shadow:0 4px 18px rgba(137,111,239,.22);
+}
+.send-btn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 7px 24px rgba(137,111,239,.32)}
+.typing{animation:fross-soft-in .3s ease-out}
+.typing-dots i{animation:fross-dot 1.15s ease-in-out infinite}
+.typing-dots i:nth-child(2){animation-delay:.16s}
+.typing-dots i:nth-child(3){animation-delay:.32s}
+#voiceBtn[aria-pressed="true"]{
+  color:#ffc1d1;
+  border-color:rgba(255,124,164,.58);
+  background:rgba(255,124,164,.09);
+  box-shadow:0 0 0 3px rgba(255,124,164,.05);
+}
+.code-block{border-color:rgba(158,146,209,.19);box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.code-header{background:rgba(42,39,59,.75)}
+.auth-card,.settings-card,.training-modal-card{
+  border-color:rgba(167,139,250,.20);
+  box-shadow:0 28px 100px rgba(0,0,0,.38),0 0 70px rgba(102,76,180,.055);
+}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+  outline:2px solid rgba(167,139,250,.85);
+  outline-offset:3px;
+}
+body.light-theme::before,body.light-theme::after{opacity:.075}
+body.light-theme .topbar{background:rgba(249,249,255,.84);backdrop-filter:blur(18px)}
+body.light-theme .composer{background:rgba(255,255,255,.91)}
+body.light-theme .message.assistant .message-content{color:#292b38}
+@keyframes fross-ambient-a{0%{transform:translate3d(0,0,0) scale(.9)}50%{transform:translate3d(65px,38px,0) scale(1.08)}100%{transform:translate3d(20px,-35px,0) scale(1)}}
+@keyframes fross-ambient-b{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-55px,-45px,0) scale(1.12)}100%{transform:translate3d(-15px,20px,0) scale(.92)}}
+@keyframes fross-orbit-breathe{0%,100%{transform:translateY(0);filter:saturate(1)}50%{transform:translateY(-2px);filter:saturate(1.18)}}
+@keyframes fross-gradient-flow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes fross-status-pulse{0%,100%{opacity:.8;box-shadow:0 0 8px rgba(93,231,208,.4)}50%{opacity:1;box-shadow:0 0 15px rgba(93,231,208,.85)}}
+@keyframes fross-message-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fross-soft-in{from{opacity:.55;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fross-dot{0%,60%,100%{opacity:.28;transform:translateY(0) scale(.85)}30%{opacity:1;transform:translateY(-3px) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  body::before,body::after{animation:none!important}
+}
+
+
+/* Floating FROSS atmosphere — purely decorative and independent of the chat layout. */
+.ambient-orbs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;contain:layout paint;isolation:isolate}
+.ambient-orb{position:absolute;display:block;width:clamp(150px,23vw,330px);aspect-ratio:1;border-radius:50%;opacity:.2;filter:blur(10px);mix-blend-mode:screen;will-change:transform;transform:translate3d(0,0,0)}
+.orb-green{left:-7vw;top:8vh;background:radial-gradient(circle at 38% 34%,rgba(110,255,190,.9) 0%,rgba(43,215,141,.38) 32%,rgba(43,215,141,0) 72%);animation:fross-float-green 34s ease-in-out infinite alternate}
+.orb-violet{right:-5vw;top:16vh;width:clamp(130px,20vw,275px);background:radial-gradient(circle at 35% 30%,rgba(176,137,255,.82) 0%,rgba(127,88,245,.34) 35%,rgba(127,88,245,0) 73%);animation:fross-float-violet 42s ease-in-out infinite alternate}
+.orb-blue{left:34vw;bottom:-20vh;width:clamp(170px,25vw,350px);background:radial-gradient(circle at 38% 35%,rgba(105,169,255,.84) 0%,rgba(78,125,242,.32) 36%,rgba(78,125,242,0) 74%);animation:fross-float-blue 39s ease-in-out infinite alternate}
+.orb-teal{right:23vw;bottom:2vh;width:clamp(110px,16vw,220px);background:radial-gradient(circle at 35% 32%,rgba(107,244,223,.78) 0%,rgba(45,199,187,.29) 37%,rgba(45,199,187,0) 74%);animation:fross-float-teal 47s ease-in-out infinite alternate}
+@keyframes fross-float-green{0%{transform:translate3d(0,0,0) scale(.88)}30%{transform:translate3d(35vw,26vh,0) scale(1.12)}65%{transform:translate3d(55vw,54vh,0) scale(.95)}100%{transform:translate3d(78vw,18vh,0) scale(1.06)}}
+@keyframes fross-float-violet{0%{transform:translate3d(0,0,0) scale(1)}35%{transform:translate3d(-38vw,35vh,0) scale(.88)}70%{transform:translate3d(-55vw,-4vh,0) scale(1.14)}100%{transform:translate3d(-21vw,52vh,0) scale(.96)}}
+@keyframes fross-float-blue{0%{transform:translate3d(0,0,0) scale(.94)}40%{transform:translate3d(28vw,-52vh,0) scale(1.1)}75%{transform:translate3d(52vw,-28vh,0) scale(.86)}100%{transform:translate3d(14vw,-64vh,0) scale(1.04)}}
+@keyframes fross-float-teal{0%{transform:translate3d(0,0,0) scale(1.04)}30%{transform:translate3d(-42vw,-15vh,0) scale(.9)}65%{transform:translate3d(-24vw,-57vh,0) scale(1.16)}100%{transform:translate3d(18vw,-35vh,0) scale(.94)}}
+.app{position:relative;z-index:1}
+.auth-cover{background:radial-gradient(ellipse at 48% 30%,rgba(36,32,57,.86) 0%,rgba(17,18,24,.9) 58%,rgba(13,14,19,.92) 100%)}
+body.light-theme{color-scheme:light;--bg:#f4f5fb;--panel:#fff;--line:#dfe1ed;--text:#20212b;--muted:#656a7b;background:#f4f5fb!important;color:#20212b}
+body.light-theme .ambient-orb{mix-blend-mode:multiply;opacity:.11;filter:blur(16px)}
+body.light-theme::before{opacity:.035}
+body.light-theme::after{opacity:.045}
+body.light-theme .app,body.light-theme .main,body.light-theme .messages-scroll{background:transparent;color:#20212b}
+body.light-theme .sidebar{background:rgba(255,255,255,.94);border-color:#e0e2ed;color:#262839}
+body.light-theme .brand-title,body.light-theme .top-title,body.light-theme .user-name{color:#262839}
+body.light-theme .brand-sub,body.light-theme .user-email,body.light-theme .side-label{color:#777b8b}
+body.light-theme .topbar{background:rgba(255,255,255,.78);border-color:#e0e2ed}
+body.light-theme .model-pill{background:#efedff;color:#5d4a9d;border-color:#d9d2ff}
+body.light-theme .top-status{color:#73788a}
+body.light-theme .chat-item{color:#515568}
+body.light-theme .chat-item:hover{background:#f1f1fa}
+body.light-theme .chat-item.active{background:#eeebff;border-color:#d3cafc;color:#39305d}
+body.light-theme .welcome h1{color:#242536}
+body.light-theme .welcome p{color:#6c7184}
+body.light-theme .prompt-card{background:rgba(255,255,255,.88);border-color:#dfe1ed;color:#2a2c3d}
+body.light-theme .prompt-card span{color:#73788a}
+body.light-theme .message-name{color:#53566a}
+body.light-theme .message-content{color:#2e3041}
+body.light-theme .message-content strong{color:#171927}
+body.light-theme .message-content a{color:#6650bd}
+body.light-theme .message.user .avatar{background:#e9e5ff;color:#51438f}
+body.light-theme .source-link{background:#fff;border-color:#e0dbfa;color:#6651b4}
+body.light-theme .typing{color:#6a5bb0}
+body.light-theme .typing-dots i{background:#8874e4}
+body.light-theme .composer-wrap{background:linear-gradient(180deg,rgba(244,245,251,0),rgba(244,245,251,.94) 28%)}
+body.light-theme .composer{background:rgba(255,255,255,.94);border-color:#dfe1ed;box-shadow:0 8px 28px rgba(49,59,101,.08)}
+body.light-theme .composer:focus-within{border-color:#9f8ee8;box-shadow:0 0 0 3px rgba(159,142,232,.12),0 8px 28px rgba(49,59,101,.08)}
+body.light-theme .composer textarea{color:#232536}
+body.light-theme .composer textarea::placeholder{color:#8b8fa0}
+body.light-theme .composer-note,body.light-theme .disclaimer{color:#777c8e}
+body.light-theme .tool-btn{background:rgba(255,255,255,.92);border-color:#d9dbea;color:#4a4d61}
+body.light-theme .tool-btn:hover{background:#f5f2ff;border-color:#b9abea;color:#433277}
+body.light-theme .tool-btn[aria-pressed=true]{background:#eee9ff;border-color:#ad9aed;color:#52408e}
+body.light-theme .code-block{background:#fbfbfe;border-color:#d9dbea;box-shadow:0 6px 20px rgba(48,52,80,.04)}
+body.light-theme .code-header{background:#f0f1f8;border-color:#dfe1ec;color:#4a4e62}
+body.light-theme .code-block code{color:#25283a}
+body.light-theme .code-copy{background:#fff;border-color:#d3d5e3;color:#45485d}
+body.light-theme .limit-banner{background:#f0ebff;border-color:#d7cbff;color:#5c469f}
+body.light-theme .jump-bottom{background:#fff;border-color:#d5d3e4;color:#5d4b9c;box-shadow:0 5px 18px rgba(37,33,60,.1)}
+body.light-theme .settings-modal,body.light-theme .training-modal{background:rgba(23,21,38,.32)}
+body.light-theme .settings-card,body.light-theme .training-modal-card{background:rgba(255,255,255,.98);border-color:#dfe1ed;color:#292b3c}
+body.light-theme .settings-head{color:#252739}
+body.light-theme .settings-close,body.light-theme .auth-secondary{background:#f6f6fb;border-color:#d8dae7;color:#42455a}
+body.light-theme .settings-field{color:#484b60}
+body.light-theme .settings-field select{background:#fff;border-color:#d9dbea;color:#25273a}
+body.light-theme .settings-note,body.light-theme .training-description,body.light-theme .training-warning{color:#6f7488}
+body.light-theme .auth-cover{background:radial-gradient(ellipse at 48% 30%,rgba(231,227,251,.89) 0%,rgba(245,246,251,.9) 58%,rgba(236,238,247,.94) 100%)}
+body.light-theme .auth-card{background:rgba(255,255,255,.97);border-color:#dfe1ed;box-shadow:0 25px 90px rgba(48,52,80,.12)}
+body.light-theme .auth-card h2{color:#252638}
+body.light-theme .auth-card p{color:#6b7082}
+body.light-theme .auth-input,body.light-theme .training-input{background:#fff;border-color:#d7d9e6;color:#242638}
+body.light-theme .auth-message{background:#f1effb;border-color:#ddd7f5;color:#5b527d}
+body.light-theme .auth-footer{color:#777c8e}
+body.light-theme .auth-footer a,body.light-theme .auth-switch button,body.light-theme .reset-btn{color:#6550b9}
+body.light-theme .knowledge-item{background:#fff;border-color:#dfe1ed}
+body.light-theme .knowledge-item-title{color:#292b3c}
+body.light-theme .knowledge-item-meta{color:#71768a}
+body.light-theme .knowledge-delete{background:#fff;color:#4b4d61;border-color:#d7d9e6}
+body.light-theme .training-status{color:#4b4d61}
+body.light-theme .training-input{color:#27293a}
+body.light-theme .side-bottom{border-color:#e4e5ef}
+@media(max-width:760px){.ambient-orb{opacity:.13;filter:blur(14px)}body.light-theme .ambient-orb{opacity:.075}}
+@media(prefers-reduced-motion:reduce){.ambient-orb{animation:none!important;will-change:auto;transform:none!important}}
+
+.study-logs{display:flex;flex-direction:column;gap:6px;max-height:150px;overflow:auto;padding-left:22px;color:var(--muted);font-size:11px}.study-logs li{line-height:1.5;overflow-wrap:anywhere}.study-result{padding:12px 0;border-bottom:1px solid var(--line);min-width:0}.study-result-title{font-size:13px;font-weight:750;color:var(--text);line-height:1.45;overflow-wrap:anywhere}.study-result-meta{font-size:10px;color:var(--muted);margin:4px 0;overflow-wrap:anywhere}.study-result-summary{font-size:12px;color:var(--text);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.study-result a{font-size:11px;color:#b5a6ff;overflow-wrap:anywhere}.study-results-empty{font-size:11px;color:var(--muted);padding:8px 0}
+
+.message-actions{display:flex;gap:8px;align-items:center;margin-top:9px;opacity:0;pointer-events:none;transition:opacity .16s ease}.message.show-actions .message-actions,.message:focus-within .message-actions{opacity:1;pointer-events:auto}.message-copy-btn{border:1px solid #393746;background:#22232d;color:#c8c8d7;border-radius:8px;padding:5px 9px;font-size:11px;line-height:1.35}.message-copy-btn:hover{border-color:#8c7bff;color:#fff}.message-copy-btn:focus-visible{outline:2px solid #9b8cff;outline-offset:2px}body.light-theme .message-copy-btn{background:#fff;color:#484a5e;border-color:#d6d7e5}body.light-theme .message-copy-btn:hover{border-color:#8c7bff;color:#4d3c9b}@media(hover:none){.message.show-actions .message-actions,.message:focus-within .message-actions{opacity:1;pointer-events:auto}}
+
+/* FROSS 1.2 polish: restrained glow, clear keyboard focus, and Telegram creator link */
+:where(button,a,input,textarea,select):focus-visible{
+  outline:2px solid rgba(121,239,205,.9);
+  outline-offset:3px;
+}
+.prompt-card{
+  box-shadow:0 5px 18px rgba(0,0,0,.08);
+  background:linear-gradient(145deg,rgba(28,30,41,.94),rgba(21,22,30,.94));
+}
+.prompt-card:hover{
+  box-shadow:0 12px 28px rgba(91,82,155,.18);
+}
+.composer{
+  box-shadow:0 10px 36px rgba(0,0,0,.12);
+  transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;
+}
+.composer:focus-within{
+  box-shadow:0 0 0 3px rgba(112,235,204,.07),0 12px 38px rgba(0,0,0,.18);
+}
+.model-pill{
+  transition:border-color .2s ease,background .2s ease;
+}
+.model-pill:hover{border-color:rgba(117,234,204,.42)}
+#programmerModeBtn{
+  border-style:dashed;
+  border-color:rgba(155,140,255,.38);
+  background:rgba(35,32,50,.56);
+  color:#c9c0fa;
+  opacity:.82;
+}
+#programmerModeBtn .mode-level{
+  color:#9d95c7;
+  font-size:10px;
+}
+#programmerModeBtn:disabled{cursor:not-allowed}
+.creator-credit{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:5px;
+  padding:10px 8px 0;
+  color:#85899a;
+  font-size:11px;
+}
+.creator-link{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  max-width:100%;
+  color:#b8aaff;
+  text-decoration:none;
+  text-underline-offset:3px;
+  overflow-wrap:anywhere;
+  transition:color .18s ease,text-shadow .18s ease;
+}
+.creator-link::before{
+  content:"↗";
+  font-size:12px;
+  opacity:.8;
+}
+.creator-link:hover{
+  color:#8ef0d0;
+  text-decoration:underline;
+  text-shadow:0 0 16px rgba(110,240,206,.15);
+}
+@media(max-width:760px){
+  .creator-credit{padding-top:12px}
+  .prompt-card{min-height:76px}
+  .composer:focus-within{transform:translateY(-1px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .prompt-card,.composer,.model-pill,.creator-link{transition:none!important}
+  .composer:focus-within{transform:none!important}
+}
+
+</style></head><body>
+<div class="ambient-orbs" aria-hidden="true"><span class="ambient-orb orb-green"></span><span class="ambient-orb orb-violet"></span><span class="ambient-orb orb-blue"></span><span class="ambient-orb orb-teal"></span></div>
+<div id="appRoot" class="app">
+<aside id="sidebar" class="sidebar"><div class="brand"><div class="brand-mark">F</div><div><div class="brand-title">FROSS</div><div class="brand-sub">PERSONAL AI · 1.1</div></div></div>
+<button id="newChatBtn" class="primary"><span>＋</span> Новый чат</button><button id="knowledgeBtn" class="tool-btn hidden" type="button" style="width:100%;justify-content:flex-start">✧ Пополнять знания FROSS</button><div class="side-label">История</div><div id="chatList" class="chat-list"></div>
+<div class="side-bottom"><div class="user-row"><img id="userAvatar" class="avatar hidden" alt=""><div id="userInitial" class="avatar">F</div><div class="user-meta"><div id="userName" class="user-name">Гость</div><div id="userEmail" class="user-email">Вход не выполнен</div></div><button id="logoutBtn" class="logout hidden" title="Выйти">↗</button></div><div class="creator-credit">Создатель FROSS: <a class="creator-link" href="https://t.me/Spamton_BigShot_hahaha" target="_blank" rel="noopener noreferrer" aria-label="Открыть Telegram-профиль создателя FROSS">@Spamton_BigShot_hahaha</a></div></div></aside>
+<div id="mobileOverlay" class="mobile-overlay"></div>
+<main class="main"><header class="topbar"><div class="top-left"><button id="mobileMenu" class="mobile-menu" aria-label="Меню">☰</button><div id="topTitle" class="top-title">Новый чат</div></div><div style="display:flex;align-items:center;gap:8px"><button id="settingsBtn" class="tool-btn" type="button" aria-label="Настройки">⚙ <span class="settings-label">Настройки</span></button><span class="top-status" id="topStatus">Готов помочь</span><span class="model-pill"><i class="model-dot"></i> FROSS 1.2</span></div></header>
+<section id="messagesScroll" class="messages-scroll"><div id="welcome" class="welcome"><div class="welcome-inner"><div class="orbit"><span>F</span></div><h1>Привет, я <span class="gradient">FROSS.</span></h1><p>Твой ИИ-помощник. Помогаю разбираться в вопросах, учиться, искать информацию и объяснять сложное понятным языком.</p>
+<div class="prompt-grid"><button class="prompt-card" data-prompt="Объясни сложную тему простыми словами"><strong>✧ Разобраться в теме</strong><span>Объясню понятно и по шагам</span></button><button class="prompt-card" data-prompt="Найди свежую информацию о технологиях и приведи источники"><strong>⌕ Найти информацию</strong><span>Поиск по доступным источникам</span></button><button class="prompt-card" data-prompt="Помоги придумать интересный проект и составить план"><strong>◈ Придумать проект</strong><span>Идеи, план и следующие шаги</span></button><button class="prompt-card" data-prompt="Расскажи, что ты умеешь и как со мной работаешь"><strong>↗ Познакомиться</strong><span>Узнай, как работает FROSS 1.2</span></button></div></div></div><div id="messageList" class="message-list hidden"></div></section>
+<div class="composer-wrap"><div id="limitBanner" class="limit-banner hidden">Достигнут примерный лимит чата — 1 000 000 токенов. Создай новый чат.</div><form id="composer" class="composer"><textarea id="messageInput" rows="1" maxlength="30000" placeholder="Напиши сообщение для FROSS (до 30 000 символов)..." aria-label="Сообщение"></textarea><div class="composer-bottom"><div class="composer-tools"><button id="programmerModeBtn" class="tool-btn" type="button" disabled aria-disabled="true" title="Режим «Программист» пока недоступен">⌘ <span>Программист</span> <span class="mode-level">скоро</span></button><button id="reasoningBtn" class="tool-btn" type="button" aria-pressed="false" title="Генерировать более подробный ответ">✧ <span id="reasoningLabel">Рассуждение</span> <span class="mode-level" id="modeLevel">8</span></button><button id="voiceBtn" class="tool-btn" type="button" aria-label="Голосовой ввод" title="Надиктовать текст на русском">🎙 <span>Голос</span></button><span id="composerNote" class="composer-note">Enter — отправить · Shift + Enter — новая строка</span></div><button id="sendBtn" class="send-btn" type="submit" aria-label="Отправить">↑</button></div></form><div class="disclaimer">FROSS может ошибаться — проверяй важные сведения по источникам.</div></div></main></div>
+<div id="authCover" class="auth-cover"><div class="auth-card"><div class="auth-brand"><div class="orbit"><span>F</span></div><h2>Встречай <span class="gradient">FROSS 1.2</span></h2><p>Войди через Google или используй электронную почту и пароль.</p></div><button id="googleBtn" class="google-btn"><span class="google-g">G</span><span>Продолжить с Google</span></button><div style="display:flex;align-items:center;gap:12px;margin:17px 0 0;color:#737889;font-size:11px"><span style="height:1px;background:#353744;flex:1"></span>ИЛИ ПО ЭЛЕКТРОННОЙ ПОЧТЕ<span style="height:1px;background:#353744;flex:1"></span></div><form id="emailAuthForm" class="auth-form"><input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="Электронная почта" required><input id="authPassword" class="auth-input" type="password" autocomplete="current-password" minlength="6" placeholder="Пароль (не менее 6 символов)" required><button id="emailSubmitBtn" class="primary auth-submit" type="submit">Войти</button></form><div class="auth-switch"><span id="authSwitchText">Нет аккаунта?</span><button id="authSwitchBtn" type="button">Создать аккаунт</button></div><div style="text-align:center;margin-top:7px"><button id="resetPasswordBtn" class="reset-btn" type="button">Забыл пароль</button></div><div id="authMessage" class="auth-message">Для регистрации укажи почту и придумай пароль. Пароль хранится и проверяется Firebase.</div><div style="margin-top:14px;border-top:1px solid #353744;padding-top:14px"><button id="publicKnowledgeBtn" class="tool-btn" type="button" style="width:100%;justify-content:center">✧ Обучение FROSS</button><p id="publicLearningStatus" class="training-description" role="status" aria-live="polite" style="margin:8px 0 0">Общее обучение доступно всем, без входа.</p></div><div class="auth-footer">Продолжая, используй сервис ответственно.<br><a href="https://github.com/boberbuset132013-web/FROSS/blob/main/SETUP.md" target="_blank" rel="noopener noreferrer">Инструкция по настройке</a></div></div></div>
+<button id="jumpBottomBtn" class="jump-bottom hidden" type="button" aria-label="Вниз к последнему сообщению" title="К последнему сообщению">↓</button>
+<div id="settingsModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="settings-card"><div class="settings-head"><span id="settingsTitle">Настройки чата</span><button id="settingsClose" class="settings-close" type="button">Закрыть</button></div><label class="settings-field">Размер текста <span id="fontSizeValue">100%</span><input id="fontSizeRange" type="range" min="90" max="125" step="5" value="100"></label><button id="settingsLearningBtn" class="tool-btn" type="button" style="width:100%;justify-content:center;margin:4px 0 12px">✧ Обучение FROSS</button><button id="settingsModelUploadBtn" class="tool-btn" type="button" style="width:100%;justify-content:center;margin:4px 0 12px">⬆ Загрузить модель FROSS</button><div class="settings-note">Настройки применяются сразу в этом браузере. Режим рассуждения делает ответ подробнее, но не показывает скрытые внутренние рассуждения модели.</div></div></div>
+<div id="modelUploadModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modelUploadTitle"><div class="settings-card training-modal-card"><div class="settings-head"><span id="modelUploadTitle">Загрузка модели FROSS</span><button id="modelUploadClose" class="settings-close" type="button">Закрыть</button></div><p class="training-description">Выбери checkpoint FROSS Transformer 1.4. Сервер проверит минимум 3000 шагов обучения, словарь 5000 токенов и совместимость. После успешной проверки копия сохранится в GitHub Releases и модель переключится без повторной загрузки файла.</p><form id="modelUploadForm" class="training-form"><label class="settings-field" for="modelUploadFile">Файл модели (.pt, до 90 МБ)</label><input id="modelUploadFile" class="training-input" type="file" accept=".pt,application/octet-stream" required><button id="modelUploadSubmit" class="primary training-run" type="submit" style="width:100%;justify-content:center;margin-top:12px">Проверить и загрузить модель</button></form><div class="bar" style="height:8px;background:#303846;border-radius:9px;overflow:hidden;margin-top:16px"><span id="modelUploadProgress" style="display:block;width:0;height:8px;background:#20c77a;transition:width .1s"></span></div><div id="modelUploadStatus" class="training-status" role="status" aria-live="polite">Ожидаю файл модели.</div><p class="training-warning">Время загрузки и проверки может достигать 30 минут. Не закрывай вкладку до результата. GitHub-токен сайт не запрашивает — он хранится в серверных секретах.</p></div></div>
+<div id="trainingModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainingTitle"><div class="settings-card training-modal-card"><div class="settings-head"><span id="trainingTitle">Обучение FROSS</span><button id="trainingClose" class="settings-close" type="button">Закрыть</button></div><p class="training-description">Текстовое обучение без аудио. Программирование ограничено JavaScript, Python, HTML и CSS; также есть письменные темы по английскому, китайскому, русскому языку, науке и пониманию запросов пользователя. Автообучение изучает одну текстовую тему сейчас, затем продолжает другую примерно раз в 2 минуты. Кнопки «Стоп» и «Старт» управляют циклом. Оставь вкладку открытой: браузер может замедлять фоновые таймеры, а закрытие вкладки останавливает работу. Заметки сохраняются в память аккаунта или браузера; общая база требует GitHub-токен.</p><div class="auto-study-controls" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(84px,.3fr);gap:8px;margin:0 0 12px"><button id="autoStudyBtn" class="primary training-run" type="button" style="width:100%;justify-content:center">▶ Старт автообучения</button><button id="autoStudyStopBtn" class="tool-btn" type="button" style="width:100%;justify-content:center" disabled>■ Стоп</button></div><form id="publicStudyForm" class="training-form"><input id="publicStudyTopic" class="training-input" type="text" maxlength="180" placeholder="Введи вопрос или тему: CSS, Promise в JS, намерение пользователя…" aria-label="Вопрос или тема для изучения"><button id="publicStudySubmit" class="tool-btn" type="submit" style="width:100%;justify-content:center">Найти тему и изучить</button></form><div id="trainingStatus" class="training-status" role="status" aria-live="polite">Автообучение остановлено. Нажми «Старт автообучения» для немедленного запуска и продолжения каждые 2 минуты.</div><section aria-label="Журнал обучения"><div class="knowledge-item-title" style="margin-top:16px">Журнал</div><ol id="publicStudyLogs" class="study-logs" aria-live="polite"><li>Ожидаю запуска.</li></ol></section><section aria-label="Результаты обучения"><div class="knowledge-item-title" style="margin-top:16px">Результаты</div><div id="publicStudyResults" class="knowledge-list"></div></section><p class="training-warning">Это пополнение справочной базы, а не переобучение весов Transformer.</p></div></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+const $=id=>document.getElementById(id);
+const configReady=Object.values(firebaseConfig).every(v=>typeof v==="string"&&v&&!v.includes("YOUR_"));
+let auth=null,db=null,currentUser=null,activeChat=null,activeMessages=[],busy=false,chats=[];
+let knowledgeNotes=[],pythonBrainReady=false,speechRecognition=null;
+const FROSS_AUTO_STUDY_STORAGE_KEY="fross-auto-study-enabled-v1";
+const FROSS_AUTO_STUDY_TOPIC_INDEX_KEY="fross-auto-study-topic-index-v1";
+const FROSS_AUTO_STUDY_INTERVAL_MS=120000;
+let autoStudyEnabled=false,autoStudyTimer=null,autoStudyInFlight=false,autoStudyInitialTopic="",autoStudyNextAllowedAt=0,autoStudyTopicIndex=0;
+const FROSS_AUTO_STUDY_TOPICS=[
+  "JavaScript: основы и типы данных","JavaScript: функции, массивы и объекты","JavaScript: события и DOM","JavaScript: async, fetch и ошибки",
+  "Python: основы, условия и циклы","Python: функции, списки и словари","Python: исключения, файлы и JSON",
+  "HTML: структура и семантические элементы","HTML: формы, ссылки и доступность",
+  "CSS: селекторы и блочная модель","CSS: Flexbox и Grid","CSS: адаптивный дизайн",
+  "Понимание намерения пользователя","Продолжение диалога и исправление недопонимания","Как отвечать точно и по делу",
+  "Английский: письменные диалоги и словарь","Английский: грамматика в примерах",
+  "Китайский: иероглифы и письменные фразы","Китайский: порядок слов и грамматика",
+  "Русский: орфография и пунктуация","Русский: понятный письменный ответ",
+  "Критическое мышление и проверка фактов","Наука: космос и солнечная система","Наука: биология и экология","История и культура"
+];
+function setAuthNote(text,error=false){$("authMessage").textContent=text;$("authMessage").style.borderColor=error?"#704344":"#3c354d";$("authMessage").style.color=error?"#ffb5b5":"#bbb3e7"}
+function escapeHtml(v){return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function formattedContent(v){const parts=String(v||"").split("```");return parts.map((part,index)=>{if(index%2===1){const nl=part.indexOf("\n");const first=nl>=0?part.slice(0,nl).trim():"";const lang=/^[a-zA-Z0-9_+#.-]{1,24}$/.test(first)?first:"Код";const code=first===lang&&nl>=0?part.slice(nl+1):part;return '<div class="code-block"><div class="code-header"><span>'+escapeHtml(lang)+'</span><button class="code-copy" type="button">⧉ Копировать код</button></div><pre><code>'+escapeHtml(code.replace(/\n$/,""))+'</code></pre></div>'}return escapeHtml(part).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")}).join("")}
+function chatPath(){return ["users",currentUser.uid,"chats"]}
+function getChatRef(id){return doc(db,...chatPath(),id)}
+function knowledgePath(){return ["users",currentUser.uid,"knowledge"]}
+async function frossReadJsonResponse(response,path){const text=await response.text();try{return JSON.parse(text)}catch{const contentType=response.headers.get("content-type")||"не указан";if(contentType.toLowerCase().includes("text/html")||/^\s*</.test(text)){throw new Error(path+" вернул HTML вместо JSON (HTTP "+response.status+"). Проверь, что последний Worker опубликован и wrangler.jsonc направляет /api/* в Worker. Ответ сервера: "+text.replace(/\s+/g," ").slice(0,120))}throw new Error(path+" вернул некорректный JSON (HTTP "+response.status+").")}}
+async function frossApiPost(path,payload={}){if(!currentUser)throw new Error("Войди в аккаунт.");const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const response=await fetch(path,{method:"POST",headers,body:JSON.stringify(payload)});const data=await frossReadJsonResponse(response,path);if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Ошибка сервера "+response.status)}return data}
+function chooseKnowledgeForMessage(message,limit=80){
+  const queryTerms=[...new Set((String(message||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]).filter(word=>!["это","как","что","для","или","при","the","and","how","what"].includes(word)))];
+  const termSet=value=>new Set((String(value||"").toLowerCase().replace(/ё/g,"е").match(/[a-zа-я0-9+#]{2,}/g)||[]));
+  const coverage=(terms,value)=>{if(!terms.length)return 0;const haystack=termSet(value);return terms.filter(term=>haystack.has(term)).length/terms.length};
+  return knowledgeNotes.map((note,index)=>{
+    const topic=coverage(queryTerms,note.topic);
+    const title=coverage(queryTerms,note.title);
+    const keywords=coverage(queryTerms,Array.isArray(note.keywords)?note.keywords.join(" "):"");
+    const summary=coverage(queryTerms,[note.summary||"",...(Array.isArray(note.keyPoints)?note.keyPoints:[])].join(" "));
+    const body=coverage(queryTerms,note.snippet||"");
+    const recency=Math.max(0,Math.min(1,Number(index===0?1:0.5)));
+    return {note,index,score:topic*3.5+title*2.5+keywords*3+summary*1.7+body*0.7+recency*0.001};
+  }).sort((a,b)=>b.score-a.score||a.index-b.index).slice(0,limit).map(({note})=>({
+    schemaVersion:Number(note.schemaVersion)===2?2:1,
+    kind:String(note.kind||"source-note"),
+    topic:String(note.topic||""),
+    title:String(note.title||""),
+    url:String(note.url||""),
+    snippet:String(note.snippet||""),
+    summary:String(note.summary||""),
+    keyPoints:Array.isArray(note.keyPoints)?note.keyPoints.slice(0,5):[],
+    keywords:Array.isArray(note.keywords)?note.keywords.slice(0,24):[],
+    source:String(note.source||""),
+    score:Number(note.score)||0
+  }));
+}
+async function loadKnowledge(){if(!currentUser){knowledgeNotes=[];renderKnowledgeList();return}try{const snap=await getDocs(query(collection(db,...knowledgePath()),orderBy("savedAt","desc")));knowledgeNotes=snap.docs.map(item=>({id:item.id,...item.data()}));renderKnowledgeList();$("trainingStatus").textContent="В памяти сохранено заметок: "+knowledgeNotes.length+"."; }catch(error){$("trainingStatus").textContent="Не удалось открыть память. Опубликуй новые Firestore Rules: "+String(error?.message||error)}}
+
+const FROSS_BROWSER_STUDY_NOTES_KEY="fross-public-study-notes-v1";
+function cleanStudyNote(note,topic){
+  return {schemaVersion:2,kind:String(note?.kind||"source-note").slice(0,40),topic:String(note?.topic||topic||"Общая тема").slice(0,180),title:String(note?.title||"Источник").slice(0,260),url:/^https?:\/\//i.test(note?.url||"")?String(note.url).slice(0,700):"",snippet:String(note?.snippet||"").slice(0,3200),summary:String(note?.summary||"").slice(0,900),keyPoints:Array.isArray(note?.keyPoints)?note.keyPoints.slice(0,5).map(v=>String(v).slice(0,300)):[],keywords:Array.isArray(note?.keywords)?note.keywords.slice(0,24).map(v=>String(v).slice(0,40)):[],source:String(note?.source||"web study").slice(0,80),score:Number(note?.score)||0};
+}
+function studyNoteKey(note){return String(note?.topic||"").toLowerCase().trim()+"|"+String(note?.url||note?.title||note?.summary||"").toLowerCase().trim()}
+function rememberStudyNotesInBrowser(topic,notes){
+  const incoming=(Array.isArray(notes)?notes:[]).map(note=>cleanStudyNote(note,topic));let old=[];
+  try{const parsed=JSON.parse(localStorage.getItem(FROSS_BROWSER_STUDY_NOTES_KEY)||"[]");if(Array.isArray(parsed))old=parsed}catch{}
+  const map=new Map();for(const note of [...old,...incoming])map.set(studyNoteKey(note),note);
+  const merged=[...map.values()].slice(-120);localStorage.setItem(FROSS_BROWSER_STUDY_NOTES_KEY,JSON.stringify(merged));
+  return {scope:"browser",count:incoming.length,total:merged.length};
+}
+async function saveStudyNotesToMemory(topic,notes){
+  const safe=(Array.isArray(notes)?notes:[]).map(note=>cleanStudyNote(note,topic)).filter(note=>note.title&&(note.snippet||note.url||note.summary));
+  if(!safe.length)return {scope:"none",count:0,total:0};
+  let browserSaved;
+  try{browserSaved=rememberStudyNotesInBrowser(topic,safe)}catch(error){writeStudyLog("Не удалось сохранить резервную копию браузера: "+String(error?.message||error),"warning");browserSaved={scope:"none",count:0,total:0,error:String(error?.message||error)}}
+  if(!currentUser)return browserSaved;
+  try{
+    await loadKnowledge();let added=0;
+    for(const note of safe){if(knowledgeNotes.some(old=>studyNoteKey(old)===studyNoteKey(note)))continue;await addDoc(collection(db,...knowledgePath()),{...note,savedAt:serverTimestamp()});added++}
+    await loadKnowledge();localStorage.removeItem(FROSS_BROWSER_STUDY_NOTES_KEY);
+    return {scope:"account",count:safe.length,added,total:knowledgeNotes.length};
+  }catch(error){writeStudyLog("Не получилось сохранить в памяти аккаунта; оставил заметки в браузере: "+String(error?.message||error),"warning");return {...browserSaved,error:String(error?.message||error)}}
+}
+async function importBrowserStudyNotesToAccount(){
+  if(!currentUser)return;let pending=[];
+  try{const parsed=JSON.parse(localStorage.getItem(FROSS_BROWSER_STUDY_NOTES_KEY)||"[]");if(Array.isArray(parsed))pending=parsed}catch{}
+  if(!pending.length)return;
+  try{
+    await loadKnowledge();let added=0;
+    for(const raw of pending){const note=cleanStudyNote(raw,raw?.topic);if(!note.title||knowledgeNotes.some(old=>studyNoteKey(old)===studyNoteKey(note)))continue;await addDoc(collection(db,...knowledgePath()),{...note,savedAt:serverTimestamp()});added++}
+    localStorage.removeItem(FROSS_BROWSER_STUDY_NOTES_KEY);await loadKnowledge();
+    writeStudyLog("Импорт гостевых заметок в память аккаунта: "+added+".");
+  }catch(error){writeStudyLog("Не удалось импортировать гостевые заметки: "+String(error?.message||error),"warning")}
+}
+
+function renderKnowledgeList(){
+  const box=$("knowledgeList");if(!box)return;box.replaceChildren();
+  if(!knowledgeNotes.length){const empty=document.createElement("div");empty.className="settings-note";empty.textContent="Пока нет сохранённых записей в базе знаний.";box.append(empty);return}
+  for(const note of knowledgeNotes){
+    const row=document.createElement("div");row.className="knowledge-item";
+    const content=document.createElement("div");content.className="knowledge-item-content";
+    const title=document.createElement("div");title.className="knowledge-item-title";title.textContent=note.title||note.topic||"Материал";
+    const meta=document.createElement("div");meta.className="knowledge-item-meta";
+    const pointCount=Array.isArray(note.keyPoints)?note.keyPoints.length:0;
+    const keywordCount=Array.isArray(note.keywords)?note.keywords.length:0;
+    meta.textContent=(note.topic||"Без темы")+" · "+(pointCount?pointCount+" тезисов · ":"")+(keywordCount?keywordCount+" ключевых слов · ":"")+(note.source||"источник")+(note.url?" · "+note.url:"");
+    content.append(title,meta);
+    const summary=document.createElement("div");summary.className="knowledge-summary";summary.textContent=note.summary||String(note.snippet||"").slice(0,220);if(summary.textContent)content.append(summary);
+    if(Array.isArray(note.keywords)&&note.keywords.length){const terms=document.createElement("div");terms.className="knowledge-keywords";terms.textContent="Термины: "+note.keywords.slice(0,12).join(" · ");content.append(terms)}
+    if(note.url&&/^https?:\/\//i.test(note.url)){const link=document.createElement("a");link.href=note.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Открыть источник";link.style.fontSize="11px";content.append(link)}
+    const del=document.createElement("button");del.className="knowledge-delete";del.type="button";del.textContent="×";del.title="Удалить заметку";del.addEventListener("click",()=>deleteKnowledgeNote(note.id,del));
+    row.append(content,del);box.append(row);
+  }
+}
+function writeStudyLog(message,level="info"){
+  const box=$("publicStudyLogs");if(!box)return;
+  const item=document.createElement("li");item.className="study-log "+level;
+  item.textContent="["+new Date().toLocaleTimeString()+"] "+String(message||"");
+  box.append(item);box.scrollTop=box.scrollHeight;
+}
+function clearStudyOutput(){$("publicStudyLogs").replaceChildren();$("publicStudyResults").replaceChildren()}
+function renderPublicStudyResults(results){
+  const box=$("publicStudyResults");box.replaceChildren();const items=Array.isArray(results)?results:[];
+  if(!items.length){const empty=document.createElement("div");empty.className="study-results-empty";empty.textContent="Подходящие материалы пока не найдены.";box.append(empty);return}
+  for(const note of items.slice(0,8)){
+    const card=document.createElement("article");card.className="study-result";
+    const title=document.createElement("div");title.className="study-result-title";title.textContent=note.title||"Источник без названия";
+    const meta=document.createElement("div");meta.className="study-result-meta";meta.textContent=[note.source||"Веб-поиск",note.topic||"",note.url||""].filter(Boolean).join(" · ");
+    const summary=document.createElement("div");summary.className="study-result-summary";summary.textContent=note.summary||note.snippet||"Текст источника недоступен; ссылка сохранена для проверки.";
+    card.append(title,meta,summary);
+    if(note.url&&/^https?:\/\//i.test(note.url)){const link=document.createElement("a");link.href=note.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Открыть источник";link.style.display="inline-block";link.style.marginTop="7px";card.append(link)}
+    if(Array.isArray(note.keyPoints)&&note.keyPoints.length){const ul=document.createElement("ul");ul.style.margin="8px 0 0";ul.style.paddingLeft="20px";for(const point of note.keyPoints.slice(0,5)){const li=document.createElement("li");li.textContent=String(point);ul.append(li)}card.append(ul)}
+    box.append(card);
+  }
+}
+async function refreshLearningPanel(){
+  if(currentUser){try{await loadKnowledge();await importBrowserStudyNotesToAccount()}catch(error){writeStudyLog("Не удалось обновить память аккаунта: "+String(error?.message||error),"warning")}}
+  $("trainingStatus").textContent="Готово к запуску. Можно изучить учебную тему или указать свою.";
+}
+function updateAutoStudyControls(){
+  const start=$("autoStudyBtn"),stop=$("autoStudyStopBtn");
+  if(!start||!stop)return;
+  start.disabled=autoStudyEnabled||autoStudyInFlight;
+  start.textContent=autoStudyEnabled?"✓ Автообучение включено":"▶ Старт автообучения";
+  stop.disabled=!autoStudyEnabled;
+  stop.title=autoStudyEnabled?"Остановить автоматические запуски":"Автообучение сейчас остановлено";
+}
+function stopAutoStudy(){
+  if(autoStudyTimer){clearTimeout(autoStudyTimer);autoStudyTimer=null}
+  autoStudyEnabled=false;
+  try{localStorage.setItem(FROSS_AUTO_STUDY_STORAGE_KEY,"0")}catch{}
+  updateAutoStudyControls();
+  const status=autoStudyInFlight
+    ?"Остановка принята. Уже начатая тема завершится, но новые автоматические запуски больше не будут начинаться."
+    :"Автообучение остановлено. Нажми «Старт автообучения», когда захочешь продолжить.";
+  $("trainingStatus").textContent=status;
+  writeStudyLog("Автообучение остановлено пользователем. Текущий запрос не прерывается, новые циклы отключены.","warning");
+}
+function startAutoStudy(){
+  if(autoStudyEnabled)return;
+  autoStudyEnabled=true;
+  autoStudyInitialTopic=String($("publicStudyTopic").value||"").trim();
+  try{localStorage.setItem(FROSS_AUTO_STUDY_STORAGE_KEY,"1")}catch{}
+  updateAutoStudyControls();
+  $("trainingStatus").textContent="Автообучение запущено. Первая тема начнётся сейчас, следующие будут запускаться примерно раз в 2 минуты. Оставь вкладку открытой.";
+  writeStudyLog("Автообучение запущено пользователем; интервал — 2 минуты.","success");
+  void runAutoStudyCycle();
+}
+async function runAutoStudyCycle(){
+  if(!autoStudyEnabled)return;
+  if(autoStudyInFlight){
+    autoStudyTimer=setTimeout(()=>{autoStudyTimer=null;void runAutoStudyCycle()},1000);
+    return;
+  }
+  let topic=autoStudyInitialTopic;
+  autoStudyInitialTopic="";
+  const usesCurriculumQueue=!topic;
+  if(usesCurriculumQueue)topic=FROSS_AUTO_STUDY_TOPICS[autoStudyTopicIndex%FROSS_AUTO_STUDY_TOPICS.length];
+  writeStudyLog("Автоматический запуск темы: "+topic+".");
+  const result=await runPublicStudy(topic,true);
+  if(!autoStudyEnabled)return;
+  if(usesCurriculumQueue&&(result?.ok||result?.status===400||result?.status===404)){
+    autoStudyTopicIndex=(autoStudyTopicIndex+1)%FROSS_AUTO_STUDY_TOPICS.length;
+    try{localStorage.setItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY,String(autoStudyTopicIndex))}catch{}
+  }
+  const serverAt=Date.parse(result?.nextAvailableAt||"");
+  const scheduledAt=Number.isFinite(serverAt)?serverAt:(autoStudyNextAllowedAt||Date.now()+FROSS_AUTO_STUDY_INTERVAL_MS);
+  const delay=Math.max(1500,scheduledAt-Date.now()+1200);
+  const nextTime=new Date(Date.now()+delay).toLocaleTimeString();
+  const currentStatus=$("trainingStatus").textContent|| (result?.ok?"Тема «"+(result.topic||topic)+"» завершена.":"Изучение темы завершилось с предупреждением.");
+  $("trainingStatus").textContent=currentStatus+" Автоматическое продолжение примерно в "+nextTime+". Нажми «Стоп», чтобы отключить следующие запуски.";
+  writeStudyLog("Следующий автоматический запуск примерно в "+nextTime+".");
+  autoStudyTimer=setTimeout(()=>{autoStudyTimer=null;void runAutoStudyCycle()},delay);
+}
+async function runPublicStudy(topicOverride,isAutomatic=false){
+  const button=$("autoStudyBtn"),searchButton=$("publicStudySubmit"),guestButton=$("publicKnowledgeBtn");
+  const topic=String(typeof topicOverride==="string"?topicOverride:$("publicStudyTopic").value||"").trim();
+  if(topic.length===1){$("trainingStatus").textContent="Введи тему из двух или более символов.";return {ok:false}}
+  if(autoStudyInFlight){$("trainingStatus").textContent="Изучение уже выполняется. Дождись завершения текущей темы.";return {ok:false,busy:true}}
+  if(autoStudyEnabled&&!isAutomatic){$("trainingStatus").textContent="Автообучение включено. Нажми «Стоп» перед отдельным ручным изучением темы.";return {ok:false,busy:true}}
+  autoStudyInFlight=true;button.disabled=true;searchButton.disabled=true;if(guestButton)guestButton.disabled=true;
+  clearStudyOutput();$("trainingStatus").textContent=topic?"Ищу источники по теме «"+topic+"» и собираю заметки…":"Запускаю следующий шаг общего учебного плана…";
+  writeStudyLog(topic?"Тема запроса: "+topic:"Тема не указана; выберу следующий шаг учебного плана.");
+  writeStudyLog("Запрашиваю поиск, обработку источников и сохранение структурированных заметок.");
+  let responseData=null;
+  try{
+    const response=await fetch("/api/auto-study",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic})});
+    const data=await frossReadJsonResponse(response,"/api/auto-study");
+    responseData={...data,httpStatus:response.status};
+    const serverNext=Date.parse(data?.nextAvailableAt||"");
+    if(Number.isFinite(serverNext))autoStudyNextAllowedAt=serverNext;
+    else if(Number.isFinite(Number(data?.retryAfterSeconds))&&Number(data.retryAfterSeconds)>0)autoStudyNextAllowedAt=Date.now()+Number(data.retryAfterSeconds)*1000;
+    if(Array.isArray(data.logs))data.logs.forEach(message=>writeStudyLog(message));
+    renderPublicStudyResults(data.results||[]);
+    if(!response.ok||data?.ok!==true)throw new Error(data?.error||"Не удалось завершить изучение темы.");
+    const personal=await saveStudyNotesToMemory(data.topic||topic,data.results||[]);
+    const next=data.nextAvailableAt?" Следующий запуск доступен примерно после "+new Date(data.nextAvailableAt).toLocaleTimeString()+".":"";
+    const memoryLabel=personal.scope==="account"?"память аккаунта":personal.scope==="browser"?"этот браузер":"локальную память";
+    if(data.saved===true){
+      $("trainingStatus").textContent="Готово: «"+data.topic+"». Общая база обновлена, заметки также сохранены в "+memoryLabel+"."+next;
+      writeStudyLog("Общая GitHub-база обновлена: "+String(data.githubStorage?.path||"memory/knowledge")+".","success");
+      writeStudyLog("Дополнительно записано в "+memoryLabel+": "+(personal.count||0)+" заметок.","success");
+      if(data.githubStorage?.commitUrl)writeStudyLog("Коммит: "+data.githubStorage.commitUrl,"success");
+    }else{
+      const reason=data.githubStorage?.message||"FROSS_GITHUB_TOKEN не настроен";
+      $("trainingStatus").textContent="Тема «"+data.topic+"» изучена. Заметки сохранены в "+memoryLabel+" ("+(personal.count||0)+"). Общая GitHub-база пока недоступна: "+String(reason).slice(0,180)+"."+next;
+      writeStudyLog("Общая GitHub-база не обновлена: "+String(reason).slice(0,200)+".","warning");
+      writeStudyLog("Заметки сохранены отдельно; FROSS сможет использовать их из "+memoryLabel+".","success");
+    }
+    if(isAutomatic&&!autoStudyEnabled)$("trainingStatus").textContent="Текущая тема «"+data.topic+"» завершена. Автообучение остановлено; новых автоматических запусков не будет.";
+    return {ok:true,status:response.status,nextAvailableAt:data.nextAvailableAt||null,topic:data.topic||topic};
+  }catch(error){
+    const retry=responseData?.nextAvailableAt|| (autoStudyNextAllowedAt?new Date(autoStudyNextAllowedAt).toISOString():null);
+    $("trainingStatus").textContent=(isAutomatic&&!autoStudyEnabled?"Текущая тема завершилась с предупреждением; автообучение остановлено. ":"Не удалось завершить изучение: ")+String(error?.message||error);
+    writeStudyLog("Ошибка: "+String(error?.message||error),"error");
+    return {ok:false,status:responseData?.httpStatus||0,nextAvailableAt:retry,retryAfterSeconds:responseData?.retryAfterSeconds||null};
+  }finally{
+    autoStudyInFlight=false;searchButton.disabled=false;if(guestButton)guestButton.disabled=false;
+    updateAutoStudyControls();
+  }
+}
+function resumeAutoStudySetting(){
+  try{
+    const index=Number(localStorage.getItem(FROSS_AUTO_STUDY_TOPIC_INDEX_KEY));
+    autoStudyTopicIndex=Number.isInteger(index)&&index>=0?index%FROSS_AUTO_STUDY_TOPICS.length:0;
+    if(localStorage.getItem(FROSS_AUTO_STUDY_STORAGE_KEY)!=="1")return;
+    autoStudyEnabled=true;
+    updateAutoStudyControls();
+    $("trainingStatus").textContent="Автообучение возобновлено из сохранённых настроек; следующая тема запустится сейчас.";
+    setTimeout(()=>{if(autoStudyEnabled)void runAutoStudyCycle()},1200);
+  }catch{}
+}
+function startVoiceInput(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const input=$("messageInput"),button=$("voiceBtn"),note=$("composerNote");
+  if(!SpeechRecognition){
+    note.textContent="Распознавание речи недоступно в этом браузере. Открой FROSS в актуальном Chrome и разреши микрофон.";
+    return;
+  }
+  if(speechRecognition){speechRecognition.stop();return}
+  const recognition=new SpeechRecognition();
+  const base=input.value.trim();
+  recognition.lang="ru-RU";
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=1;
+  speechRecognition=recognition;
+  button.textContent="■ Стоп";
+  button.setAttribute("aria-pressed","true");
+  note.textContent="Слушаю… говори, затем проверь распознанный текст перед отправкой.";
+  recognition.onresult=event=>{
+    let finalText="",interimText="";
+    for(let i=0;i<event.results.length;i++){
+      const transcript=String(event.results[i][0]?.transcript||"").trim();
+      if(event.results[i].isFinal)finalText+=(finalText?" ":"")+transcript;
+      else interimText+=(interimText?" ":"")+transcript;
+    }
+    input.value=[base,finalText,interimText].filter(Boolean).join(" ").slice(0,30000);
+    resizeInput();
+    note.textContent=interimText?"Распознаю: "+interimText:"Речь распознана. Проверь текст перед отправкой.";
+  };
+  recognition.onerror=event=>{
+    const reason=event.error==="not-allowed"?"Разреши браузеру доступ к микрофону.":event.error==="no-speech"?"Речь не обнаружена. Попробуй ещё раз.":"Не удалось распознать речь ("+event.error+").";
+    note.textContent=reason;
+  };
+  recognition.onend=()=>{
+    if(speechRecognition===recognition)speechRecognition=null;
+    button.textContent="🎙 Голос";
+    button.setAttribute("aria-pressed","false");
+  };
+  try{recognition.start()}catch(error){
+    speechRecognition=null;
+    button.textContent="🎙 Голос";
+    button.setAttribute("aria-pressed","false");
+    note.textContent="Не удалось запустить микрофон. Проверь разрешение и попробуй снова.";
+  }
+}
+
+function closeSidebar(){$("sidebar").classList.remove("open");$("mobileOverlay").classList.remove("show")}
+const CHAT_TOKEN_LIMIT=1000000;function estimateTokens(text){return Math.ceil(String(text||"").length/3)}function estimateChatTokens(messages){return (Array.isArray(messages)?messages:[]).reduce((sum,item)=>sum+estimateTokens(item?.content||""),0)}function setChatScreen(){const closed=!activeChat||activeChat.status==="closed"||(Number(activeChat.tokenCount)||0)>=CHAT_TOKEN_LIMIT;$("topTitle").textContent=activeChat?.title||"Новый чат";$("topStatus").textContent=activeChat?(closed?"Чат закрыт":"Готов помочь"):"Создай чат";$("limitBanner").classList.toggle("hidden",!activeChat||!closed);$("messageInput").disabled=busy||closed;$("sendBtn").disabled=busy||closed;$("messageInput").placeholder=closed?"Этот чат закрыт":"Напиши сообщение для FROSS..."}
+function renderMessage(item){const row=document.createElement("article");row.className="message "+(item.role==="user"?"user":"assistant");const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=item.role==="user"?((currentUser?.displayName||"Я").charAt(0).toUpperCase()):"F";const body=document.createElement("div");body.className="message-body";const name=document.createElement("div");name.className="message-name";name.textContent=item.role==="user"?"Ты":"FROSS";const content=document.createElement("div");content.className="message-content";content.innerHTML=formattedContent(item.content||"");body.append(name,content);if(item.sources?.length&&item.role==="assistant"){const sources=document.createElement("div");sources.className="sources";for(const s of item.sources.slice(0,6)){if(!s.url||!/^https?:\/\//i.test(s.url))continue;const a=document.createElement("a");a.className="source-link";a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.title||"Источник";sources.append(a)}if(sources.childElementCount)body.append(sources)}{const actions=document.createElement("div");actions.className="message-actions";const copy=document.createElement("button");copy.type="button";copy.className="message-copy-btn";copy.textContent="⧉ Скопировать сообщение";copy.setAttribute("aria-label","Скопировать это сообщение");copy.addEventListener("click",async()=>{const original=String(item.content||"");try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(original)}else throw new Error("Clipboard API unavailable");copy.textContent="✓ Скопировано"}catch{const area=document.createElement("textarea");area.value=original;area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";area.style.pointerEvents="none";document.body.append(area);area.select();let ok=false;try{ok=document.execCommand("copy")}catch{}area.remove();copy.textContent=ok?"✓ Скопировано":"Не удалось скопировать"}setTimeout(()=>{if(copy.isConnected)copy.textContent="⧉ Скопировать сообщение"},1600)});actions.append(copy);body.append(actions)}row.append(avatar,body);row.addEventListener("click",event=>{if(event.target.closest("button,a"))return;row.classList.toggle("show-actions")});row.tabIndex=0;row.addEventListener("keydown",event=>{if((event.key==="Enter"||event.key===" ")&&event.target===row){event.preventDefault();row.classList.toggle("show-actions")}});return row}
+function renderActiveMessages(){$("welcome").classList.toggle("hidden",activeMessages.length>0);$("messageList").classList.toggle("hidden",activeMessages.length===0);$("messageList").replaceChildren(...activeMessages.map(renderMessage));$("messagesScroll").scrollTop=$("messagesScroll").scrollHeight}
+function showTyping(message=""){$("welcome").classList.add("hidden");$("messageList").classList.remove("hidden");const row=document.createElement("article");row.className="message assistant";row.id="typingRow";row.innerHTML='<div class="avatar">F</div><div class="message-body"><div class="message-name">FROSS</div><div class="typing"><span id="typingText">Думаю</span><span class="typing-dots"><i></i><i></i><i></i></span></div></div>';$("messageList").append(row);const wantsSearch=/\b(сейчас|сегодня|последн|актуальн|найди|найти|поищи|поиск|в интернете|ссылк|источник|новост|цена|погода|курс|версия|дата|кто такой|что произошло|какие сайты|официальн|документац|обновлен|202[5-9])\b/i.test(String(message||""));const stages=["Думаю","Проверяю, что именно нужно узнать",...(wantsSearch?["Ищу в интернете","Сопоставляю найденную информацию"]:[]),"Составляю ответ","Проверяю ответ"];let i=0;const timer=setInterval(()=>{const el=$("typingText");if(el)el.textContent=stages[(++i)%stages.length]},reasoningEnabled?1050:850);return()=>{clearInterval(timer);$("typingRow")?.remove()}}
+async function loadChats(){if(!currentUser)return;const snap=await getDocs(query(collection(db,...chatPath()),orderBy("updatedAt","desc")));chats=snap.docs.map(d=>({id:d.id,...d.data()}));const list=$("chatList");list.replaceChildren();for(const c of chats){const row=document.createElement("div");row.className="chat-item"+(activeChat?.id===c.id?" active":"");row.tabIndex=0;row.setAttribute("role","button");row.setAttribute("aria-label","Открыть чат: "+(c.title||"Новый чат"));const icon=document.createElement("span");icon.textContent=c.status==="closed"?"◉":"◌";icon.setAttribute("aria-hidden","true");const title=document.createElement("span");title.className="chat-title";title.textContent=c.title||"Новый чат";row.append(icon,title);if(c.status==="closed"||(Number(c.tokenCount)||0)>=CHAT_TOKEN_LIMIT){const tag=document.createElement("span");tag.className="closed-label";tag.textContent="закрыт";row.append(tag)}const del=document.createElement("button");del.type="button";del.className="chat-delete";del.textContent="×";del.title="Удалить чат";del.setAttribute("aria-label","Удалить чат: "+(c.title||"Новый чат"));del.addEventListener("click",event=>{event.stopPropagation();deleteChat(c.id,del)});row.append(del);row.addEventListener("click",event=>{if(event.target.closest(".chat-delete"))return;openChat(c.id).catch(error=>alert("Не удалось открыть чат: "+String(error?.message||error)))});row.addEventListener("keydown",event=>{if(event.target===row&&(event.key==="Enter"||event.key===" ")){event.preventDefault();openChat(c.id).catch(error=>alert("Не удалось открыть чат: "+String(error?.message||error)))}});list.append(row)}}
+async function deleteChat(id,button){if(!currentUser||busy)return;const target=chats.find(item=>item.id===id);const title=target?.title||"Новый чат";if(!window.confirm("Удалить чат «"+title+"» и всю его историю? Это действие нельзя отменить."))return;button.disabled=true;try{const messages=await getDocs(collection(db,...chatPath(),id,"messages"));const docs=messages.docs;for(let i=0;i<docs.length;i+=400){await Promise.all(docs.slice(i,i+400).map(item=>deleteDoc(item.ref)))}await deleteDoc(getChatRef(id));if(activeChat?.id===id){activeChat=null;activeMessages=[];renderActiveMessages();setChatScreen()}await loadChats();if(!activeChat&&chats.length){await openChat(chats[0].id)}else if(!activeChat){renderActiveMessages();setChatScreen()}closeSidebar()}catch(error){button.disabled=false;alert("Не удалось удалить чат: "+String(error?.message||error)+"\nПроверь, что опубликованы новые правила Firestore из файла firestore.rules.")}}
+async function createChat(){if(!currentUser||busy)return;const ref=await addDoc(collection(db,...chatPath()),{ownerUid:currentUser.uid,title:"Новый чат",status:"open",userMessageCount:0,tokenCount:0,lastUserMessageId:"",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});await loadChats();await openChat(ref.id);$("messageInput").focus();closeSidebar()}
+async function openChat(id){if(!currentUser||busy)return;activeChat=chats.find(c=>c.id===id)||null;if(!activeChat){const snap=await getDoc(getChatRef(id));if(!snap.exists())return;activeChat={id:snap.id,...snap.data()}}const snap=await getDocs(query(collection(db,...chatPath(),id,"messages"),orderBy("createdAt","asc")));activeMessages=snap.docs.map(d=>({id:d.id,...d.data()}));if(!Number.isFinite(Number(activeChat.tokenCount))){activeChat.tokenCount=estimateChatTokens(activeMessages);activeChat.status=activeChat.tokenCount>=CHAT_TOKEN_LIMIT?"closed":"open";updateDoc(getChatRef(id),{tokenCount:activeChat.tokenCount,status:activeChat.status}).catch(()=>{})}renderActiveMessages();setChatScreen();await loadChats();$("messageInput").focus()}
+async function saveAssistantMessage(id,text,sources=[]){const item={role:"assistant",content:String(text||"Не удалось получить ответ.").slice(0,50000),createdAt:serverTimestamp()};await addDoc(collection(db,...chatPath(),id,"messages"),item);const extra=estimateTokens(item.content);const chatRef=getChatRef(id);let total=0;await runTransaction(db,async tx=>{const snap=await tx.get(chatRef);if(!snap.exists())return;total=(Number(snap.data().tokenCount)||0)+extra;tx.update(chatRef,{tokenCount:total,status:total>=CHAT_TOKEN_LIMIT?"closed":"open",updatedAt:serverTimestamp()})});if(activeChat?.id===id){activeChat.tokenCount=total;activeChat.status=total>=CHAT_TOKEN_LIMIT?"closed":"open"}activeMessages.push({...item,createdAt:new Date(),sources})}
+function resizeInput(){const el=$("messageInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,180)+"px"}
+function recentChatContext(messages,maxUserMessages=5){const items=Array.isArray(messages)?messages:[];let userCount=0,startIndex=items.length;for(let index=items.length-1;index>=0;index--){if(items[index]?.role==="user"){if(userCount>=maxUserMessages)break;userCount++;startIndex=index}else if(userCount<maxUserMessages){startIndex=index}}return items.slice(startIndex).map(item=>({role:item?.role==="assistant"?"assistant":"user",content:String(item?.content||"").slice(0,4000)}))}
+async function sendMessage(raw){const message=String(raw||"").trim();if(message.length>30000){setAuthNote("Сообщение слишком длинное: максимум 30 000 символов.",true);return}if(!message||!currentUser||!activeChat||busy)return;if(activeChat.status==="closed"||(Number(activeChat.tokenCount)||0)>=CHAT_TOKEN_LIMIT){setChatScreen();return}if((Number(activeChat.tokenCount)||0)+estimateTokens(message)>CHAT_TOKEN_LIMIT){activeChat.status="closed";updateDoc(getChatRef(activeChat.id),{status:"closed"}).catch(()=>{});setChatScreen();setAuthNote("Сообщение превысит примерный лимит чата в 1 000 000 токенов. Создай новый чат.",true);return}busy=true;$("messageInput").value="";resizeInput();$("messageInput").disabled=true;$("sendBtn").disabled=true;const chatId=activeChat.id,parentRef=getChatRef(chatId),msgRef=doc(collection(db,...chatPath(),chatId,"messages")),history=recentChatContext(activeMessages,5);try{await runTransaction(db,async tx=>{const snap=await tx.get(parentRef);if(!snap.exists())throw new Error("Чат не найден.");const c=snap.data();const nextTokens=(Number(c.tokenCount)||Number(activeChat.tokenCount)||0)+estimateTokens(message);if(c.status==="closed"||nextTokens>CHAT_TOKEN_LIMIT)throw new Error("Чат закрыт: достигнут лимит 1 000 000 токенов.");const count=Number(c.userMessageCount||0)+1;tx.update(parentRef,{userMessageCount:count,tokenCount:nextTokens,status:nextTokens>=CHAT_TOKEN_LIMIT?"closed":"open",lastUserMessageId:msgRef.id,updatedAt:serverTimestamp()});tx.set(msgRef,{role:"user",content:message,state:"pending",createdAt:serverTimestamp()})});activeChat.userMessageCount=Number(activeChat.userMessageCount||0)+1;activeChat.tokenCount=(Number(activeChat.tokenCount)||0)+estimateTokens(message);activeChat.status=activeChat.tokenCount>=CHAT_TOKEN_LIMIT?"closed":"open";activeChat.lastUserMessageId=msgRef.id;if(activeChat.title==="Новый чат"){activeChat.title=message.slice(0,36)+(message.length>36?"…":"");updateDoc(parentRef,{title:activeChat.title,updatedAt:serverTimestamp()}).catch(()=>{})}activeMessages.push({id:msgRef.id,role:"user",content:message,createdAt:new Date()});renderActiveMessages();await loadChats();setChatScreen();const stop=showTyping(message);try{const token=await currentUser.getIdToken();const headers={"Content-Type":"application/json","Authorization":"Bearer "+token};const response=await fetch("/api/chat",{method:"POST",headers,body:JSON.stringify({message,chatId,messageId:msgRef.id,history,mode:reasoningEnabled?"reasoning":"normal",knowledge:chooseKnowledgeForMessage(message,24)})});const data=await frossReadJsonResponse(response,"/api/chat");if(!response.ok){const details=[data?.error,data?.diagnostic?("Диагностика: "+data.diagnostic):"",data?.errorId?("Код: "+data.errorId):""].filter(Boolean).join(" — ");throw new Error(details||"Сервер вернул ошибку "+response.status)}await updateDoc(msgRef,{state:"answered"});await saveAssistantMessage(chatId,data.reply,data.sources||[])}catch(error){await updateDoc(msgRef,{state:"answered"}).catch(()=>{});await saveAssistantMessage(chatId,"Не получилось получить ответ: "+String(error?.message||error)+"\n\nПроверь настройку из SETUP.md.",[])}finally{stop();busy=false;await loadChats().catch(()=>{});setChatScreen();renderActiveMessages();$("messageInput").focus()}}catch(error){busy=false;setChatScreen();const text=String(error?.message||error);if(/closed|токенов|закрыт/i.test(text)){activeChat.status="closed";setChatScreen()}else setAuthNote("Не удалось сохранить сообщение: "+text,true)}}
+async function handleGoogleSignIn(){if(!auth)return;googleBtn.disabled=true;setAuthNote("Подключаю Google…");const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:"select_account"});try{await signInWithPopup(auth,provider);setAuthNote("Вход выполнен.")}catch(error){if(error?.code==="auth/popup-blocked"||error?.code==="auth/popup-closed-by-user"){try{await signInWithRedirect(auth,provider)}catch(e){setAuthNote("Не удалось войти: "+String(e?.message||e),true)}}else setAuthNote("Не удалось войти ("+(error?.code||"ошибка")+"): "+String(error?.message||error),true)}finally{googleBtn.disabled=false}}
+let authMode="login";
+function setAuthMode(mode){authMode=mode;const register=mode==="register";$("emailSubmitBtn").textContent=register?"Создать аккаунт":"Войти";$("authSwitchText").textContent=register?"Уже есть аккаунт?":"Нет аккаунта?";$("authSwitchBtn").textContent=register?"Войти":"Создать аккаунт";$("authPassword").autocomplete=register?"new-password":"current-password";$("resetPasswordBtn").classList.toggle("hidden",register);$("authPassword").placeholder=register?"Придумай пароль (не менее 6 символов)":"Пароль";}
+$("authSwitchBtn").addEventListener("click",()=>setAuthMode(authMode==="login"?"register":"login"));
+$("emailAuthForm").addEventListener("submit",async e=>{e.preventDefault();if(!auth)return;const email=$("authEmail").value.trim();const password=$("authPassword").value;const btn=$("emailSubmitBtn");btn.disabled=true;try{if(authMode==="register"){await createUserWithEmailAndPassword(auth,email,password);setAuthNote("Аккаунт создан. Вход выполнен.")}else{await signInWithEmailAndPassword(auth,email,password);setAuthNote("Вход выполнен.")}}catch(error){const messages={"auth/email-already-in-use":"Этот адрес уже зарегистрирован. Попробуй войти.","auth/invalid-email":"Проверь адрес электронной почты.","auth/weak-password":"Пароль слишком простой — используй не менее 6 символов.","auth/invalid-credential":"Неверная почта или пароль.","auth/user-not-found":"Аккаунт с таким адресом не найден.","auth/wrong-password":"Неверный пароль.","auth/operation-not-allowed":"В Firebase ещё не включён способ Email/Password.","auth/too-many-requests":"Слишком много попыток. Попробуй позже."};setAuthNote(messages[error?.code]||("Не удалось выполнить вход: "+String(error?.message||error)),true)}finally{btn.disabled=false}});
+$("resetPasswordBtn").addEventListener("click",async()=>{if(!auth)return;const email=$("authEmail").value.trim();if(!email){setAuthNote("Сначала введи почту в поле выше, затем нажми «Забыл пароль».",true);$("authEmail").focus();return}try{await sendPasswordResetEmail(auth,email);setAuthNote("Если аккаунт с этой почтой существует, Firebase отправит письмо для сброса пароля.")}catch(error){setAuthNote("Не удалось отправить письмо: "+String(error?.message||error),true)}});
+
+let reasoningEnabled=false;
+function updateReasoningButton(){$("reasoningBtn").setAttribute("aria-pressed",String(reasoningEnabled));$("reasoningLabel").textContent=reasoningEnabled?"Глубокое рассуждение":"Обычный режим";$("modeLevel").textContent=reasoningEnabled?"14":"7";$("reasoningBtn").title=reasoningEnabled?"Brain 1.1: расширенный план обработки из 14 этапов":"Brain 1.1: обычный план обработки из 7 этапов; нажми для 14 этапов"}
+$("reasoningBtn").addEventListener("click",()=>{reasoningEnabled=!reasoningEnabled;updateReasoningButton()});
+function applyCustomization(){localStorage.removeItem("fross-theme");document.body.classList.remove("light-theme");const scale=Number(localStorage.getItem("fross-font-scale")||100);$("fontSizeRange").value=String(scale);$("fontSizeValue").textContent=scale+"%";document.documentElement.style.setProperty("--font-scale",String(scale/100))}
+$("settingsBtn").addEventListener("click",()=>{$("settingsModal").classList.remove("hidden")});
+$("settingsClose").addEventListener("click",()=>{$("settingsModal").classList.add("hidden")});
+$("settingsLearningBtn").addEventListener("click",()=>{$("settingsModal").classList.add("hidden");$("trainingModal").classList.remove("hidden");$("publicStudyTopic").focus()});
+$("settingsModelUploadBtn").addEventListener("click",()=>{$("settingsModal").classList.add("hidden");$("modelUploadModal").classList.remove("hidden");$("modelUploadFile").focus()});
+$("modelUploadClose").addEventListener("click",()=>{$("modelUploadModal").classList.add("hidden")});
+$("modelUploadModal").addEventListener("click",e=>{if(e.target===$("modelUploadModal"))$("modelUploadModal").classList.add("hidden")});
+$("modelUploadForm").addEventListener("submit",async e=>{e.preventDefault();const file=$("modelUploadFile").files?.[0];if(!currentUser){$("modelUploadStatus").textContent="Сначала войди в FROSS.";return}if(!file){$("modelUploadStatus").textContent="Выбери файл модели.";return}if(!file.name.toLowerCase().endsWith(".pt")){$("modelUploadStatus").textContent="Нужен файл с расширением .pt.";return}if(file.size<1000000||file.size>90*1024*1024){$("modelUploadStatus").textContent="Размер модели должен быть от 1 МБ до 90 МБ.";return}const button=$("modelUploadSubmit");button.disabled=true;$("modelUploadProgress").style.width="0%";$("modelUploadStatus").textContent="Передаю файл на сервер…";try{const idToken=await currentUser.getIdToken();const xhr=new XMLHttpRequest();xhr.open("POST","/api/model-upload");xhr.timeout=30*60*1000;xhr.setRequestHeader("Authorization","Bearer "+idToken);xhr.setRequestHeader("Content-Type","application/octet-stream");xhr.setRequestHeader("X-FROSS-Filename",file.name);xhr.upload.onprogress=event=>{if(event.lengthComputable){const pct=Math.round(event.loaded/event.total*100);$("modelUploadProgress").style.width=pct+"%";$("modelUploadStatus").textContent=pct>=100?"Файл отправлен. Проверяю модель и сохраняю резервную копию в GitHub…":"Передача файла: "+pct+"%";}};xhr.onload=()=>{let data={};try{data=JSON.parse(xhr.responseText||"{}")}catch{}if(xhr.status>=200&&xhr.status<300&&data.ok){$("modelUploadProgress").style.width="100%";$("modelUploadStatus").textContent="МОДЕЛЬ ГОТОВА\nШаги обучения: "+data.training_steps+"\nСловарь: "+data.vocab_size+"\nSHA-256: "+data.sha256+"\nGitHub: "+(data.release_url||"сохранено")+(data.manifest_warning?"\nПредупреждение: "+data.manifest_warning:"");$("modelUploadFile").value="";}else{$("modelUploadStatus").textContent="Ошибка HTTP "+xhr.status+": "+(data.error||xhr.responseText||"Не удалось загрузить модель.")}button.disabled=false;};xhr.onerror=()=>{$("modelUploadStatus").textContent="Сетевая ошибка. Проверь /api/health и доступность Hostless, прежде чем повторять загрузку.";button.disabled=false};xhr.ontimeout=()=>{$("modelUploadStatus").textContent="Истекли 30 минут ожидания. Перед повтором проверь /api/health и GitHub Releases.";button.disabled=false};xhr.send(file);}catch(error){$("modelUploadStatus").textContent="Не удалось начать загрузку: "+String(error?.message||error);button.disabled=false}});
+
+$("settingsModal").addEventListener("click",e=>{if(e.target===$("settingsModal"))$("settingsModal").classList.add("hidden")});
+$("knowledgeBtn").addEventListener("click",()=>{$("trainingModal").classList.remove("hidden");$("publicStudyTopic").focus()});
+$("publicKnowledgeBtn").addEventListener("click",()=>{$("trainingModal").classList.remove("hidden");$("publicStudyTopic").focus()});
+$("trainingClose").addEventListener("click",()=>{$("trainingModal").classList.add("hidden")});
+$("trainingModal").addEventListener("click",e=>{if(e.target===$("trainingModal"))$("trainingModal").classList.add("hidden")});
+$("publicStudyForm").addEventListener("submit",event=>{event.preventDefault();runPublicStudy()});
+$("autoStudyBtn").addEventListener("click",startAutoStudy);
+$("autoStudyStopBtn").addEventListener("click",stopAutoStudy);
+resumeAutoStudySetting();
+
+$("fontSizeRange").addEventListener("input",e=>{localStorage.setItem("fross-font-scale",e.target.value);applyCustomization()});
+$("jumpBottomBtn").addEventListener("click",()=>{$("messagesScroll").scrollTo({top:$("messagesScroll").scrollHeight,behavior:"smooth"})});
+$("messagesScroll").addEventListener("scroll",()=>{const el=$("messagesScroll");const nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<180;$("jumpBottomBtn").classList.toggle("hidden",nearBottom||activeMessages.length===0)});
+$("messageList").addEventListener("click",async e=>{const btn=e.target.closest(".code-copy");if(!btn)return;const code=btn.closest(".code-block")?.querySelector("code")?.textContent||"";try{await navigator.clipboard.writeText(code);btn.textContent="✓ Скопировано";setTimeout(()=>{if(btn.isConnected)btn.textContent="⧉ Копировать код"},1400)}catch{const area=document.createElement("textarea");area.value=code;area.style.position="fixed";area.style.opacity="0";document.body.append(area);area.select();const ok=document.execCommand("copy");area.remove();btn.textContent=ok?"✓ Скопировано":"Не удалось";setTimeout(()=>{if(btn.isConnected)btn.textContent="⧉ Копировать код"},1400)}});
+applyCustomization();updateReasoningButton();
+
+$("googleBtn").addEventListener("click",handleGoogleSignIn);
+$("logoutBtn").addEventListener("click",()=>signOut(auth).catch(e=>setAuthNote("Не удалось выйти: "+e.message,true)));
+$("newChatBtn").addEventListener("click",()=>createChat().catch(e=>setAuthNote("Не удалось создать чат: "+e.message,true)));
+$("composer").addEventListener("submit",e=>{e.preventDefault();sendMessage($("messageInput").value)});
+$("voiceBtn").addEventListener("click",startVoiceInput);
+$("messageInput").addEventListener("input",resizeInput);
+$("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("composer").requestSubmit()}});
+document.querySelectorAll("[data-prompt]").forEach(b=>b.addEventListener("click",()=>{if(!currentUser)return;$("messageInput").value=b.dataset.prompt;resizeInput();$("composer").requestSubmit()}));
+$("mobileMenu").addEventListener("click",()=>{$("sidebar").classList.add("open");$("mobileOverlay").classList.add("show")});
+$("mobileOverlay").addEventListener("click",closeSidebar);
+async function boot(){if(!configReady){$("googleBtn").disabled=true;setAuthNote("Сначала вставь настройки Firebase Web App в public/firebase-config.js, включи Google в Authentication и опубликуй Firestore Rules. Подробные шаги — по ссылке ниже.",true);return}try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);await getRedirectResult(auth).catch(()=>null);onAuthStateChanged(auth,async user=>{currentUser=user;if(!user){knowledgeNotes=[];$("knowledgeBtn").classList.add("hidden");$("trainingModal").classList.add("hidden");activeChat=null;activeMessages=[];chats=[];$("chatList").replaceChildren();$("userName").textContent="Гость";$("userEmail").textContent="Вход не выполнен";$("userInitial").classList.remove("hidden");$("userAvatar").classList.add("hidden");$("logoutBtn").classList.add("hidden");$("messageList").replaceChildren();$("messageList").classList.add("hidden");$("welcome").classList.remove("hidden");$("messageInput").value="";$("topTitle").textContent="Новый чат";$("messageInput").disabled=true;$("sendBtn").disabled=true;$("limitBanner").classList.add("hidden");$("authCover").classList.remove("hidden");return}$("authCover").classList.add("hidden");$("userName").textContent=user.displayName||"Пользователь";$("userEmail").textContent=user.email||"";$("userInitial").textContent=(user.displayName||user.email||"F").charAt(0).toUpperCase();if(user.photoURL){$("userAvatar").src=user.photoURL;$("userAvatar").classList.remove("hidden");$("userInitial").classList.add("hidden")} $("logoutBtn").classList.remove("hidden");try{await loadChats();if(!activeChat||!chats.some(c=>c.id===activeChat.id)){if(chats.length)await openChat(chats[0].id);else await createChat()}else await openChat(activeChat.id)}catch(e){setAuthNote("Не удалось загрузить историю чатов из Firestore: "+String(e?.message||e)+". Проверь опубликованные firestore.rules и доступ к коллекции users/"+user.uid+"/chats.",true);$("authCover").classList.remove("hidden")}try{await refreshLearningPanel()}catch(e){$("trainingStatus").textContent="Не удалось проверить панель обучения: "+String(e?.message||e)}})}catch(e){setAuthNote("Ошибка запуска Firebase: "+String(e?.message||e),true)}}
+boot();
+</script></body></html>
