@@ -66,6 +66,7 @@ export default {
     });
     if (path === "/api/training/status") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "status"));
     if (path === "/api/training/start") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "start"));
+    if (path === "/api/training/cancel") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "cancel"));
     if (path === "/api/training/model") return frossApiGuard(path, request, () => handleFrossTransformerModelDownload(request, env));
     if (path === "/api/teacher-training/status") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStatus(request, env));
     if (path === "/api/teacher-training/step") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStep(request, env));
@@ -1848,7 +1849,7 @@ async function handleFrossTransformerTraining(request, env, action) {
       return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
     }
     const basePath = configured.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
-    configured.pathname = (basePath || "") + (action === "status" ? "/admin/training/status" : "/admin/training/start");
+    configured.pathname = (basePath || "") + (action === "status" ? "/admin/training/status" : action === "cancel" ? "/admin/training/cancel" : "/admin/training/start");
     configured.search = "";
     target = configured.toString();
   } catch {
@@ -1863,8 +1864,8 @@ async function handleFrossTransformerTraining(request, env, action) {
       catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
       const steps = Number(body?.steps ?? 600);
       const scheduleSteps = Number(body?.scheduleSteps ?? 10000);
-      if (![600,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
-        return frossJson({ ok: false, error: "Выбери 600, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
+      if (![600,1200,1800,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
+        return frossJson({ ok: false, error: "Выбери 600, 1200, 1800, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
       }
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify({ steps, scheduleSteps });
