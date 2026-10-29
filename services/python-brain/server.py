@@ -904,12 +904,8 @@ class Handler(BaseHTTPRequestHandler):
                         import torch
                         existing = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
                         existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
-                        existing_schedule = int(existing.get("resume_state", {}).get("schedule_steps", 0))
                         if target_steps <= existing_steps:
                             respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
-                            return
-                        if existing_schedule != schedule_steps:
-                            respond(self, 409, {"ok": False, "error": "Для продолжения нужен тот же график обучения: " + str(existing_schedule) + " шагов."})
                             return
                     except Exception as exc:
                         respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})
