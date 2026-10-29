@@ -758,7 +758,20 @@ def _training_progress(progress: dict[str, Any]) -> None:
 def _run_training(target_steps: int, schedule_steps: int) -> None:
     try:
         corpus = ROOT / "data" / "fross_corpus.jsonl"
-        resume = TRAINING_OUTPUT_PATH.is_file()
+        resume = False
+        if TRAINING_OUTPUT_PATH.is_file():
+            try:
+                import torch
+                saved = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
+                resume = (
+                    isinstance(saved, dict)
+                    and int(saved.get("format_version", 0)) == 2
+                    and isinstance(saved.get("resume_state"), dict)
+                )
+                if not resume:
+                    _training_log("Найден старый checkpoint без состояния оптимизатора; запускаю новый этап с нуля. Старый файл будет заменён только после успешного сохранения.")
+            except Exception as checkpoint_error:
+                _training_log("Старый checkpoint не удалось проверить (" + type(checkpoint_error).__name__ + "); запускаю этап с нуля, не удаляя файл до сохранения.")
         _training_log("Запуск обучения Transformer 1.4; режим: " + ("продолжение" if resume else "с нуля") + ".")
         result = transformer.train_model(
             corpus_path=corpus,
@@ -945,24 +958,34 @@ class Handler(BaseHTTPRequestHandler):
                 respond(self, 400, {"ok": False, "error": str(exc)[:240]})
                 return
             with TRAINING_LOCK:
-                if TRAINING_STATUS.get("state") == "running":
-                    respond(self, 409, {"ok": False, "error": "Обучение уже выполняется."})
+                if TRAINING_STATUS.get("state") in ("running", "cancelling"):
+                    respond(self, 409, {"ok": False, "error": "Обучение уже выполняется или останавливается."})
                     return
                 has_checkpoint = TRAINING_OUTPUT_PATH.is_file()
+                resumable_checkpoint = False
+                existing_steps = 0
                 if has_checkpoint:
                     try:
                         import torch
                         existing = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
-                        existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
-                        if target_steps <= existing_steps:
-                            respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
-                            return
+                        resumable_checkpoint = (
+                            isinstance(existing, dict)
+                            and int(existing.get("format_version", 0)) == 2
+                            and isinstance(existing.get("resume_state"), dict)
+                        )
+                        if resumable_checkpoint:
+                            existing_steps = int(existing.get("metrics", {}).get("training_steps", 0))
+                            if target_steps <= existing_steps:
+                                respond(self, 409, {"ok": False, "error": "В контрольной точке уже " + str(existing_steps) + " шагов. Выбери цель больше."})
+                                return
+                        else:
+                            _training_log("Обнаружена несовместимая или старая контрольная точка; этот запуск начнётся с нуля.")
                     except Exception as exc:
-                        respond(self, 409, {"ok": False, "error": "Не удалось прочитать контрольную точку (" + type(exc).__name__ + ")."})
+                        respond(self, 409, {"ok": False, "error": "Не удалось проверить контрольную точку (" + type(exc).__name__ + ")."})
                         return
                 TRAINING_CANCEL.clear()
                 TRAINING_STATUS.update({
-                    "state": "running", "step": int(existing_steps if has_checkpoint else 0),
+                    "state": "running", "step": int(existing_steps if resumable_checkpoint else 0),
                     "targetSteps": target_steps, "trainLoss": None, "validationLoss": None,
                     "error": None, "metrics": None, "startedAt": datetime.now(timezone.utc).isoformat(),
                 })
