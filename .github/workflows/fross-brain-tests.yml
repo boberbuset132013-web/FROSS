@@ -90,7 +90,7 @@ jobs:
           worker = Path("worker.js").read_text(encoding="utf-8")
           page = Path("public/chat.html").read_text(encoding="utf-8")
           training_page = Path("public/training.html").read_text(encoding="utf-8")
-          assert "Обучение FROSS Brain" in training_page
+          assert "Обучение нейросети" in training_page
           assert 'data-steps="600"' in training_page and 'data-steps="3000"' in training_page and 'data-steps="5000"' in training_page
           assert '"/api/training/start"' in training_page and '"/api/training/status"' in training_page
           rules = Path("firestore.rules").read_text(encoding="utf-8")
