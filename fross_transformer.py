@@ -601,6 +601,7 @@ def train_model(
 
     last_start = len(train_stream) - actual_block - 1
     evaluation_interval = max(50, min(300, schedule_total // 8))
+    completed_steps = start_step
     for step in range(start_step, steps):
         starts = [random.randint(0, last_start) for _ in range(batch_size)]
         x = torch.tensor([train_stream[i:i + actual_block] for i in starts], dtype=torch.long, device=device)
@@ -626,9 +627,11 @@ def train_model(
                     name: value.detach().cpu().clone()
                     for name, value in model.state_dict().items()
                 }
+        completed_steps = step + 1
+        should_continue = True
         if progress_callback is not None:
             try:
-                progress_callback({
+                callback_result = progress_callback({
                     "step": step + 1,
                     "target_steps": steps,
                     "train_loss": last_loss,
@@ -636,8 +639,13 @@ def train_model(
                     "best_checkpoint_step": best_checkpoint_step,
                     "device": str(device),
                 })
+                if callback_result is False:
+                    should_continue = False
             except Exception:
                 pass
+        if not should_continue:
+            print(f"Training cancellation requested at step {completed_steps}.", flush=True)
+            break
         if (step + 1) % max(1, (steps - start_step) // 5) == 0 or step + 1 == steps:
             shown_val = (
                 f"{best_validation_loss:.4f}" if math.isfinite(best_validation_loss) else "not-yet-measured"
@@ -688,7 +696,7 @@ def train_model(
             "optimizer_state_dict": saved_optimizer_state,
             "python_rng_state": saved_python_rng_state,
             "torch_rng_state": saved_torch_rng_state,
-            "completed_steps": steps,
+            "completed_steps": completed_steps,
             "corpus_sha256": corpus_sha256,
             "seed": seed,
             "schedule_steps": schedule_total,
@@ -699,7 +707,7 @@ def train_model(
             "training_device": str(device),
             "training_examples": len(train_records),
             "validation_examples": len(validation_records),
-            "training_steps": steps,
+            "training_steps": completed_steps,
             "steps_this_run": steps - start_step,
             "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or steps,
