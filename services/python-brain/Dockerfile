@@ -11,6 +11,7 @@ RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 --index-url h
     && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2"
 
 COPY fross_transformer.py /app/fross_transformer.py
+COPY data/ /app/data/
 COPY training/distillation/verify_checkpoint.py /app/training/distillation/verify_checkpoint.py
 COPY services/python-brain/server.py /app/server.py
 COPY services/python-brain/download_model.py /app/download_model.py

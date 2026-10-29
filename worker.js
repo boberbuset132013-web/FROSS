@@ -64,6 +64,8 @@ export default {
         chatMemoryUserMessages: FROSS_MAX_HISTORY_USER_MESSAGES
       }, 200, request);
     });
+    if (path === "/api/training/status") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "status"));
+    if (path === "/api/training/start") return frossApiGuard(path, request, () => handleFrossTransformerTraining(request, env, "start"));
     if (path === "/api/teacher-training/status") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStatus(request, env));
     if (path === "/api/teacher-training/step") return frossApiGuard(path, request, () => handleFrossTeacherTrainingStep(request, env));
     if (path === "/api/identity") return frossApiGuard(path, request, () => handleFrossIdentity(request, env));
@@ -1815,6 +1817,60 @@ async function frossProbePythonHealth(endpoint, token = "", timeoutMs = 8000) {
       generationModelLoaded: healthData?.generationModelLoaded === true,
       error: error?.name === "AbortError" ? "Python health/readiness check timed out." : "Python service is unreachable."
     };
+  }
+}
+
+
+async function handleFrossTransformerTraining(request, env, action) {
+  if (request.method === "OPTIONS") return corsPreflight();
+  const expectedMethod = action === "status" ? "GET" : "POST";
+  if (request.method !== expectedMethod) {
+    return frossJson({ ok: false, error: expectedMethod + " is required for /api/training/" + action + "." }, 405, request);
+  }
+  const auth = await frossVerifyFirebaseToken(request);
+  if (!auth) return frossJson({ ok: false, error: "Войди в FROSS, чтобы управлять обучением." }, 401, request);
+  const serviceToken = frossBrainServiceToken(env);
+  if (serviceToken.length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
+    return frossJson({ ok: false, error: "Секрет FROSS_BRAIN_SERVICE_TOKEN не настроен." }, 503, request);
+  }
+  let target;
+  try {
+    const configured = new URL(frossPythonBrainUrl(env));
+    if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
+      return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
+    }
+    const basePath = configured.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
+    configured.pathname = (basePath || "") + (action === "status" ? "/admin/training/status" : "/admin/training/start");
+    configured.search = "";
+    target = configured.toString();
+  } catch {
+    return frossJson({ ok: false, error: "Неверно настроен адрес Python brain." }, 503, request);
+  }
+  try {
+    const headers = { "Authorization": "Bearer " + serviceToken, "Accept": "application/json", "Cache-Control": "no-store" };
+    const init = { method: expectedMethod, headers, cache: "no-store" };
+    if (action === "start") {
+      let body;
+      try { body = await request.json(); }
+      catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
+      const steps = Number(body?.steps ?? 600);
+      const scheduleSteps = Number(body?.scheduleSteps ?? 3000);
+      if (![600,1200,1800,2400,3000,4000,5000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps < steps || scheduleSteps > 5000) {
+        return frossJson({ ok: false, error: "Выбери корректную цель обучения от 600 до 5000 шагов." }, 400, request);
+      }
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify({ steps, scheduleSteps });
+    }
+    const response = await fetch(target, init);
+    let data;
+    try { data = await response.json(); }
+    catch { data = { ok: false, error: "Python brain вернул некорректный JSON." }; }
+    return frossJson(data, response.status, request);
+  } catch (error) {
+    return frossJson({
+      ok: false,
+      error: error?.name === "AbortError" ? "Python brain не ответил вовремя." : "Не удалось связаться с Python brain."
+    }, 502, request);
   }
 }
 
