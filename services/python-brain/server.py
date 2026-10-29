@@ -726,6 +726,7 @@ TRAINING_OUTPUT_PATH = Path(os.environ.get(
     "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output.pt")
 ))
 TRAINING_LOCK = threading.Lock()
+TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
     "ok": True, "state": "idle", "step": 0, "targetSteps": 600,
     "trainLoss": None, "validationLoss": None, "logs": [],
@@ -770,20 +771,25 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
             resume=resume,
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
+            cancel_callback=TRAINING_CANCEL.is_set,
+            force_cpu=True,
         )
         with TRAINING_LOCK:
+            was_cancelled = TRAINING_CANCEL.is_set()
             TRAINING_STATUS.update({
-                "state": "completed", "step": int(result.get("training_steps", target_steps)),
+                "state": "cancelled" if was_cancelled else "completed", "step": int(result.get("training_steps", target_steps)),
                 "targetSteps": target_steps, "trainLoss": result.get("train_loss"),
                 "validationLoss": result.get("validation_loss"),
                 "metrics": result, "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
                 "finishedAt": datetime.now(timezone.utc).isoformat(),
             })
-        _training_log("Обучение завершено. Контрольная точка сохранена.")
+        _training_log("Обучение отменено. Частичная контрольная точка сохранена." if was_cancelled else "Обучение завершено. Контрольная точка сохранена.")
+        TRAINING_CANCEL.clear()
     except Exception as exc:
         with TRAINING_LOCK:
             TRAINING_STATUS.update({"state": "failed", "error": type(exc).__name__ + ": " + str(exc)[:240]})
         _training_log("Ошибка обучения: " + type(exc).__name__ + ": " + str(exc)[:180])
+        TRAINING_CANCEL.clear()
 def _training_snapshot() -> dict[str, Any]:
     with TRAINING_LOCK:
         snapshot = dict(TRAINING_STATUS)
@@ -901,6 +907,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if path == "/admin/training/cancel":
+            if not SERVICE_TOKEN:
+                respond(self, 503, {"ok": False, "error": "Service token is not configured."})
+                return
+            if not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SERVICE_TOKEN):
+                respond(self, 401, {"ok": False, "error": "Unauthorized"})
+                return
+            with TRAINING_LOCK:
+                if TRAINING_STATUS.get("state") != "running":
+                    respond(self, 409, {"ok": False, "error": "Обучение сейчас не выполняется."})
+                    return
+                TRAINING_CANCEL.set()
+                TRAINING_STATUS["state"] = "cancelling"
+                logs = TRAINING_STATUS.setdefault("logs", [])
+                logs.append("[отмена] Запрошена остановка; завершается текущий шаг и сохраняется checkpoint.")
+                del logs[:-120]
+            respond(self, 202, {"ok": True, "state": "cancelling", "message": "Остановка будет выполнена после текущего шага."})
+            return
         if path == "/admin/training/start":
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
@@ -928,6 +952,7 @@ class Handler(BaseHTTPRequestHandler):
                 if TRAINING_STATUS.get("state") == "running":
                     respond(self, 409, {"ok": False, "error": "Обучение уже выполняется."})
                     return
+                TRAINING_CANCEL.clear()
                 has_checkpoint = TRAINING_OUTPUT_PATH.is_file()
                 if has_checkpoint:
                     try:
@@ -960,7 +985,7 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "Not found",
                 "method": "POST",
                 "path": path,
-                "routes": ["POST /chat", "POST /ready", "POST /admin/training/start", "POST /admin/model-upload"]
+                "routes": ["POST /chat", "POST /ready", "POST /admin/training/start", "POST /admin/training/cancel", "POST /admin/model-upload"]
             })
             return
         if not SERVICE_TOKEN:
