@@ -98,7 +98,7 @@ function renderStatus(d){
  if(Array.isArray(d.logs)&&d.logs.length){$("logs").textContent=d.logs.join("\n");$("logs").scrollTop=$("logs").scrollHeight}
 }
 async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){canDownloadModel=false;$("downloadModel").disabled=true;showMessage(errorText(e),"error")}}
-async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000})});showMessage("Сервер принял задачу. Закрытие вкладки не остановит обучение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=false}}
+async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000})});showMessage("Сервер принял задачу. Закрытие вкладки не остановит обучение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=$("state").classList.contains("running")}}
 async function downloadModel(){
  const btn=$("downloadModel");btn.disabled=true;btn.textContent="Подготовка файла…";
  try{
@@ -106,7 +106,7 @@ async function downloadModel(){
   const response=await fetch("/api/training/model",{method:"GET",headers:{"Authorization":"Bearer "+idToken},cache:"no-store"});
   if(!response.ok){let data=null;try{data=await response.json()}catch{}throw new Error(data?.error||("Не удалось скачать модель (HTTP "+response.status+")."))}
   const blob=await response.blob();if(!blob.size)throw new Error("Сервер вернул пустой файл модели.");
-  const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="fross-transformer.pt";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="fross-transformer.pt";document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   showMessage("Файл fross-transformer.pt подготовлен для скачивания.","good");
  }catch(e){showMessage(errorText(e),"error")}
  finally{btn.textContent="⬇ Скачать модель (.pt)";btn.disabled=!canDownloadModel}
