@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.5: a small decoder-only language model.
+"""FROSS Transformer Brain 1.6: a 64M decoder-only language model.
 
 No third-party pretrained LLM or hosted LLM API is used. A SentencePiece Unigram tokenizer
 and new token embeddings are learned from the repository corpus. Optionally, compatible
@@ -545,7 +545,7 @@ def initialize_model_from_checkpoint(
     model: FrossTransformer,
     checkpoint_path: str | Path,
 ) -> dict[str, Any]:
-    """Transfer compatible decoder layers from a Brain 1.4 or 1.5 checkpoint.
+    """Transfer compatible decoder layers from a Brain 1.4 or 1.6 checkpoint.
 
     Token embeddings are never copied because the target SentencePiece vocabulary
     has newly trained token IDs. A larger target may add decoder layers; common
@@ -560,7 +560,7 @@ def initialize_model_from_checkpoint(
 
     source_version = checkpoint.get("version")
     if source_version not in {"FROSS Transformer 1.4", VERSION}:
-        raise ValueError("Warm-start source must be FROSS Transformer 1.4 or 1.5; got "
+        raise ValueError("Warm-start source must be FROSS Transformer 1.4 or 1.6; got "
                          + repr(source_version) + ".")
     source_format = int(checkpoint.get("format_version", 0))
     supported_formats = {1, 2} if source_version == "FROSS Transformer 1.4" else {3}
@@ -800,7 +800,7 @@ def train_model(
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
     if merge_count is not None:
-        raise ValueError("The Brain 1.5 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
+        raise ValueError("The Brain 1.6 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
 
     target = Path(output_path)
     resume_checkpoint: dict[str, Any] | None = None
@@ -812,7 +812,7 @@ def train_model(
         if int(resume_checkpoint.get("format_version", 0)) != 3:
             raise ValueError(
                 "This checkpoint does not include resumable optimizer state. "
-                "Start a new 600-step run with the current Brain 1.5 code first."
+                "Start a new Brain 1.6 run with the current training code first."
             )
         resume_state = resume_checkpoint.get("resume_state")
         if not isinstance(resume_state, dict):
@@ -886,7 +886,7 @@ def train_model(
         raise ValueError(
             f"SentencePiece built only {tokenizer.vocab_size}/{target_vocab_size} tokens. "
             "The training corpus is too small or repetitive for the requested vocabulary; "
-            "add more diverse text examples before training Brain 1.5."
+            "add more diverse text examples before training Brain 1.6."
         )
 
     train_stream = _encode_stream(train_records, tokenizer)
@@ -1454,7 +1454,7 @@ def main() -> int:
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--steps", type=int, default=25000, help="Cumulative training-step target; continue the same run up to 100000.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
-    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.5 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
+    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.6 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
     parser.add_argument("--schedule-steps", type=int, default=100000, help="Total learning-rate schedule horizon. Keep this at 100000 for the Brain 1.6 website cycle.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=1)
