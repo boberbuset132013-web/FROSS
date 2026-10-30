@@ -32,6 +32,47 @@ class TransformerTests(unittest.TestCase):
         self.assertGreaterEqual(parameter_count, 5_000_000)
         self.assertLessEqual(parameter_count, 8_000_000)
 
+    def test_brain_14_warm_start_transfers_only_architecture_compatible_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy_config = {
+                "block_size": 320, "n_embd": 192, "n_head": 6,
+                "n_layer": 6, "dropout": 0.08,
+            }
+            legacy_model = transformer.FrossTransformer(5000, legacy_config)
+            seed_path = root / "brain14-seed.pt"
+            torch.save({
+                "format_version": 2,
+                "version": "FROSS Transformer 1.4",
+                "config": legacy_config,
+                "state_dict": legacy_model.state_dict(),
+                "metrics": {"training_steps": 3000, "vocab_size": 5000},
+            }, seed_path)
+
+            target_model = transformer.FrossTransformer(25000)
+            original_embedding = target_model.token_embedding.weight.detach().clone()
+            result = transformer.initialize_model_from_checkpoint(target_model, seed_path)
+
+            self.assertEqual(result["source_version"], "FROSS Transformer 1.4")
+            self.assertEqual(result["source_training_steps"], 3000)
+            self.assertEqual(result["source_vocab_size"], 5000)
+            self.assertEqual(result["copied_position_rows"], 320)
+            self.assertTrue(result["token_embeddings_reinitialized"])
+            self.assertGreater(result["transferred_parameters"], 0)
+            self.assertTrue(torch.equal(
+                target_model.blocks[0].attention.query.weight,
+                legacy_model.blocks[0].attention.query.weight,
+            ))
+            self.assertTrue(torch.equal(
+                target_model.position_embedding.weight[:320],
+                legacy_model.position_embedding.weight[:320],
+            ))
+            self.assertTrue(torch.equal(
+                target_model.token_embedding.weight,
+                original_embedding,
+            ))
+            self.assertEqual(target_model.token_embedding.num_embeddings, 25000)
+
     def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
         samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
         tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=300)
