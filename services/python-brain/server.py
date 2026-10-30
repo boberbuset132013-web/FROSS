@@ -787,6 +787,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 TRAINING_OUTPUT_PATH = Path(os.environ.get(
     "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-8k-64m.pt")
 ))
+INFERENCE_PACKAGE_PATH = TRAINING_OUTPUT_PATH.with_name("fross-transformer-1.6-64m-int8.pt")
 TRAINING_LOCK = threading.Lock()
 TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
@@ -1099,22 +1100,34 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with TRAINING_LOCK:
                 training_state = str(TRAINING_STATUS.get("state", "idle"))
-            if training_state == "running":
-                respond(self, 409, {"ok": False, "error": "Сначала дождись завершения обучения, затем скачай контрольную точку."})
+            if training_state in ("starting", "running", "cancelling"):
+                respond(self, 409, {"ok": False, "error": "Сначала дождись завершения обучения, затем скачай модель."})
                 return
             if not TRAINING_OUTPUT_PATH.is_file():
                 respond(self, 404, {"ok": False, "error": "Сохранённая модель не найдена. Сначала запусти и заверши обучение."})
                 return
             try:
-                model_file = TRAINING_OUTPUT_PATH.open("rb")
-            except OSError:
-                respond(self, 500, {"ok": False, "error": "Не удалось открыть файл модели."})
+                import torch
+                training_checkpoint = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
+                metrics = training_checkpoint.get("metrics", {}) if isinstance(training_checkpoint, dict) else {}
+                trained_steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
+                if trained_steps < 100000:
+                    respond(self, 409, {"ok": False, "error": "Новая модель доступна для загрузки только после завершения всех 100 000 шагов."})
+                    return
+                if (
+                    not INFERENCE_PACKAGE_PATH.is_file()
+                    or INFERENCE_PACKAGE_PATH.stat().st_mtime < TRAINING_OUTPUT_PATH.stat().st_mtime
+                ):
+                    transformer.package_inference_checkpoint(TRAINING_OUTPUT_PATH, INFERENCE_PACKAGE_PATH)
+                model_file = INFERENCE_PACKAGE_PATH.open("rb")
+            except Exception as exc:
+                respond(self, 500, {"ok": False, "error": "Не удалось подготовить компактную модель: " + type(exc).__name__ + ": " + str(exc)[:180]})
                 return
             with model_file:
                 file_size = os.fstat(model_file.fileno()).st_size
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Content-Disposition", 'attachment; filename="fross-transformer.pt"')
+                self.send_header("Content-Disposition", 'attachment; filename="fross-transformer-1.6-64m-int8.pt"')
                 self.send_header("Content-Length", str(file_size))
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
@@ -1210,8 +1223,8 @@ class Handler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("Expected a JSON object.")
-                target_steps = int(payload.get("steps", 600))
-                schedule_steps = int(payload.get("scheduleSteps", 10000))
+                target_steps = int(payload.get("steps", 25000))
+                schedule_steps = int(payload.get("scheduleSteps", 100000))
                 fresh_run = payload.get("freshRun", False) is True
                 if target_steps not in (25000, 50000, 75000, 100000):
                     raise ValueError("Choose 25000, 50000, 75000 or 100000 training steps.")
