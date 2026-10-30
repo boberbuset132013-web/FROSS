@@ -871,7 +871,11 @@ def _best_initialization_checkpoint() -> tuple[str | None, int]:
     import torch
 
     legacy_training_path = Path(tempfile.gettempdir()) / "fross-training-output.pt"
-    candidates = [Path(TRANSFORMER_MODEL_PATH), legacy_training_path]
+    archived_training_paths = sorted(
+        TRAINING_OUTPUT_PATH.parent.glob(TRAINING_OUTPUT_PATH.name + ".archive-*"),
+        reverse=True,
+    )
+    candidates = [Path(TRANSFORMER_MODEL_PATH), legacy_training_path, *archived_training_paths]
     best_path: str | None = None
     best_steps = -1
     for candidate in candidates:
