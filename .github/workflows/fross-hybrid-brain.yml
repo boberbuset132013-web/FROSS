@@ -75,10 +75,10 @@ jobs:
           assert int(config.get("n_layer", 0)) == 6, config
           assert int(config.get("block_size", 0)) == 320, config
 
-          model = brain.FrossTransformer(25000, brain.DEFAULT_CONFIG)
+          model = brain.FrossTransformer(30000, brain.DEFAULT_CONFIG)
           transfer = brain.initialize_model_from_checkpoint(model, checkpoint_path)
           parameter_count = sum(parameter.numel() for parameter in model.parameters())
-          assert parameter_count == 7_565_568, parameter_count
+          assert parameter_count == 8_970_432, parameter_count
           assert transfer["copied_position_rows"] == 320, transfer
           assert transfer["transferred_parameters"] > 0, transfer
           assert transfer["token_embeddings_reinitialized"] is True, transfer
