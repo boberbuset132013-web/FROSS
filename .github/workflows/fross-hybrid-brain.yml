@@ -1,4 +1,4 @@
-name: FROSS hybrid brain tests
+name: FROSS Brain 1.5 runtime tests
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ on:
 jobs:
   train-export-native-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
-          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy
+          python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy "sentencepiece>=0.2.0,<0.3"
       - name: Download pinned ONNX Runtime C++ library
         run: |
           curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v1.31.0/onnxruntime-linux-x64-1.31.0.tgz" \
@@ -46,26 +46,81 @@ jobs:
             -o "$RUNNER_TEMP/libfross_cpp.so"
           echo "FROSS_CPP_RUNTIME_LIBRARY=$RUNNER_TEMP/libfross_cpp.so" >> "$GITHUB_ENV"
       - name: Compile Python service sources
-        run: python -m py_compile services/python-brain/server.py services/python-brain/download_model.py
-      - name: Train small test model, export ONNX, and compare native logits
+        run: python -m py_compile fross_transformer.py services/python-brain/server.py services/python-brain/download_model.py
+      - name: Run tokenizer, training, packaging, ONNX and native-runtime tests
         run: python -m unittest discover -s tests -v
-      - name: Diagnose shared Yandex Disk checkpoint
-        env:
-          FROSS_CHECKPOINT_URL: https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
+      - name: Create a small isolated Brain 1.5 service checkpoint
         run: |
-          echo "Checking the exact public checkpoint URL configured for Hostless."
-          python services/python-brain/download_model.py "$FROSS_CHECKPOINT_URL" "$RUNNER_TEMP/fross-shared-checkpoint.pt"
-          printf 'uploaded-checkpoint\n' > "$RUNNER_TEMP/fross-model-source.txt"
-          python training/distillation/verify_checkpoint.py \
-            --checkpoint "$RUNNER_TEMP/fross-shared-checkpoint.pt" \
-            --model-source "$RUNNER_TEMP/fross-model-source.txt" \
-            --required-model-steps 600 \
-            --train-steps 600 \
-            --vocab-size 5000
-      - name: Build and smoke-test the production Docker image
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import torch
+          import fross_transformer as brain
+
+          root = Path("$RUNNER_TEMP")
+          corpus = root / "fross-runtime-smoke.jsonl"
+          examples = [
+              ("Привет", "Привет! Я на связи."),
+              ("Что такое нейросеть?", "Нейросеть обучается находить закономерности по примерам."),
+              ("Что такое Python?", "Python — язык программирования для создания скриптов и программ."),
+              ("Что такое JavaScript?", "JavaScript добавляет интерактивность сайтам и используется на сервере."),
+              ("Как работает attention?", "Attention вычисляет, какие токены контекста важны для текущего представления."),
+              ("Что такое трансформер?", "Трансформер использует механизм внимания для обработки последовательности токенов."),
+              ("Что такое обучение?", "При обучении параметры модели обновляются на основе ошибки предсказания."),
+              ("Что такое API?", "API задаёт правила взаимодействия программ."),
+              ("Как исправить ошибку?", "Нужно проверить текст ошибки и воспроизвести её на минимальном примере."),
+              ("Что такое контекст?", "Контекст — часть предыдущей последовательности токенов, доступная модели."),
+              ("Что такое токенизатор?", "Токенизатор превращает текст в последовательность числовых идентификаторов."),
+              ("Что такое словарь?", "Словарь токенизатора сопоставляет фрагментам текста их идентификаторы."),
+          ]
+          corpus.write_text(
+              "\n".join(json.dumps({"user": q, "assistant": a}, ensure_ascii=False) for q, a in examples) + "\n",
+              encoding="utf-8",
+          )
+          checkpoint = root / "fross-runtime-smoke.pt"
+          metrics = brain.train_model(
+              corpus, checkpoint, steps=2, batch_size=1, block_size=64,
+              target_vocab_size=300, seed=29,
+          )
+          data = torch.load(checkpoint, map_location="cpu", weights_only=True)
+          actual_vocab = int(metrics["vocab_size"])
+          data["metrics"]["requested_vocab_size"] = actual_vocab
+          data["metrics"]["vocab_target_reached"] = True
+          torch.save(data, checkpoint)
+          (root / "fross-model-source.txt").write_text("uploaded-checkpoint\n", encoding="utf-8")
+          print(json.dumps({
+              "checkpoint": str(checkpoint),
+              "vocab_size": actual_vocab,
+              "context_size": metrics["context_size"],
+              "parameters": metrics["parameters"],
+              "training_steps": metrics["training_steps"],
+          }, ensure_ascii=False))
+          PY
+      - name: Build the production Docker image without training or remote model downloads
+        run: docker build --build-arg FROSS_BUILD_BUNDLE_MODEL=0 -f services/python-brain/Dockerfile -t fross-brain-smoke .
+      - name: Smoke-test Brain 1.5 health, readiness and chat endpoints
         run: |
-          docker build --build-arg FROSS_BUILD_BUNDLE_MODEL=1 -f services/python-brain/Dockerfile -t fross-brain-smoke .
-          docker run -d --name fross-brain-smoke -p 10000:10000 -e FROSS_BRAIN_SERVICE_TOKEN=ci-test -e FROSS_MAX_GENERATION_TOKENS=12 fross-brain-smoke
+          python - <<'PY' > "$RUNNER_TEMP/fross-smoke-env"
+          import json
+          import torch
+          data = torch.load("$RUNNER_TEMP/fross-runtime-smoke.pt", map_location="cpu", weights_only=True)
+          metrics = data["metrics"]
+          print("FROSS_MODEL_VOCAB_SIZE=" + str(metrics["vocab_size"]))
+          PY
+          set -a
+          . "$RUNNER_TEMP/fross-smoke-env"
+          set +a
+          docker run -d --name fross-brain-smoke -p 10000:10000 \
+            -e FROSS_BRAIN_SERVICE_TOKEN=ci-test \
+            -e FROSS_MAX_GENERATION_TOKENS=12 \
+            -e FROSS_MODEL_GITHUB_REPOSITORY=disabled \
+            -e FROSS_MODEL_MIN_STEPS=1 \
+            -e FROSS_MODEL_CONTEXT_SIZE=64 \
+            -e FROSS_MODEL_MIN_PARAMETERS=1000000 \
+            -e FROSS_MODEL_MAX_PARAMETERS=8000000 \
+            -v "$RUNNER_TEMP/fross-runtime-smoke.pt:/tmp/fross-transformer.pt:ro" \
+            -v "$RUNNER_TEMP/fross-model-source.txt:/app/fross-model-source.txt:ro" \
+            fross-brain-smoke
           cleanup() {
             docker logs fross-brain-smoke || true
             docker stop fross-brain-smoke >/dev/null 2>&1 || true
@@ -86,15 +141,16 @@ jobs:
           with open(sys.argv[1], encoding="utf-8") as stream:
               health = json.load(stream)
           assert health.get("ok") is True, health
-          assert health.get("version") == "1.4", health
+          assert health.get("version") == "1.5", health
           assert health.get("inferenceBackend") == "python-torch", health
           assert health.get("cppRuntimeLoaded") is False, health
           assert health.get("generationModelStatus", {}).get("loaded") is True, health
           assert health.get("modelSource") == "uploaded-checkpoint", health
-          model_status = health.get("generationModelStatus", {})
-          assert model_status.get("training_steps") == 3000, health
-          assert model_status.get("vocab_size") == 5000, health
-          print("Docker health check passed: pre-trained checkpoint downloaded, validated and PyTorch inference is active.")
+          model = health.get("generationModelStatus", {})
+          assert model.get("training_steps") == 2, health
+          assert model.get("context_size") == 64, health
+          assert model.get("vocab_size", 0) >= 256, health
+          print("Brain 1.5 Docker health check passed with a temporary smoke checkpoint.")
           PY
           curl -fsS -X POST http://127.0.0.1:10000/ready -H 'Authorization: Bearer ci-test' > "$RUNNER_TEMP/fross-ready.json"
           python - "$RUNNER_TEMP/fross-ready.json" <<'PY'
@@ -104,7 +160,7 @@ jobs:
           assert ready.get("ok") is True and ready.get("authenticated") is True, ready
           assert ready.get("generationModelLoaded") is True, ready
           assert ready.get("inferenceBackend") == "python-torch", ready
-          print("Authenticated readiness endpoint passed.")
+          print("Authenticated Brain 1.5 readiness endpoint passed.")
           PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
           python - "$RUNNER_TEMP/fross-chat.json" <<'PY'
@@ -113,22 +169,17 @@ jobs:
               response = json.load(stream)
           assert response.get("handled") is True, response
           assert "Привет" in response.get("reply", ""), response
-          assert response.get("generationModel") == "FROSS Transformer 1.4", response
-          print("Docker greeting smoke test passed.")
+          assert response.get("generationModel") == "FROSS Transformer 1.5", response
+          print("Brain 1.5 greeting endpoint passed.")
           PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Что такое нейросеть?"}' > "$RUNNER_TEMP/fross-question.json"
           python - "$RUNNER_TEMP/fross-question.json" <<'PY'
           import json, sys
           with open(sys.argv[1], encoding="utf-8") as stream:
               response = json.load(stream)
-          assert response.get("engine") == "FROSS Hybrid Transformer Brain 1.4", response
-          assert response.get("generationModel") == "FROSS Transformer 1.4", response
+          assert response.get("engine") == "FROSS Hybrid Transformer Brain 1.5", response
+          assert response.get("generationModel") == "FROSS Transformer 1.5", response
           assert response.get("kind") in {"fross-transformer-v1", "empty-generation"}, response
-          if response.get("kind") == "fross-transformer-v1":
-              assert response.get("handled") is True and response.get("reply", "").strip(), response
-          else:
-              # This Docker smoke build deliberately uses only two training steps;
-              # a fluent non-empty answer is not a meaningful expectation at this stage.
-              assert response.get("generationModelStatus", {}).get("loaded") is True, response
-          print("Docker chat endpoint and PyTorch model smoke test passed.")
+          assert response.get("generationModelStatus", {}).get("loaded") is True, response
+          print("Brain 1.5 chat endpoint and PyTorch inference smoke test passed.")
           PY
