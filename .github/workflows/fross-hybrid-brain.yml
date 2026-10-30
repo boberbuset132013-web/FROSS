@@ -98,7 +98,7 @@ jobs:
           checkpoint = root / "fross-runtime-smoke.pt"
           metrics = brain.train_model(
               corpus, checkpoint, steps=2, batch_size=1, block_size=64,
-              target_vocab_size=300, seed=29,
+              target_vocab_size=512, seed=29,
           )
           data = torch.load(checkpoint, map_location="cpu", weights_only=True)
           actual_vocab = int(metrics["vocab_size"])
