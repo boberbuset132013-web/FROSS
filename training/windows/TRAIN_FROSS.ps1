@@ -11,8 +11,9 @@ $baseCorpus = Join-Path $repoRoot "data\fross_corpus.jsonl"
 $teacherCorpus = Join-Path $repoRoot "data\fross_teacher_corpus.jsonl"
 $prepareCorpus = Join-Path $repoRoot "training\distillation\prepare_corpus.py"
 $corpus = Join-Path $repoRoot ".fross-local-training\training-corpus.jsonl"
-$workDir = Join-Path $repoRoot ".fross-local-training"
-$checkpoint = Join-Path $workDir "fross-transformer.pt"
+$workDir = Join-Path $repoRoot ".fross-brain15-training"
+$checkpoint = Join-Path $workDir "fross-transformer-1.5-training.pt"
+$uploadCheckpoint = Join-Path $workDir "fross-transformer-upload.pt"
 $venvDir = Join-Path $repoRoot ".venv-training"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $logDir = Join-Path $workDir "logs"
@@ -57,6 +58,13 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE -ne 0) { throw "Could not install CPU PyTorch. Check internet access and your Python version." }
 }
 
+& $pythonExe -c "import sentencepiece" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Installing SentencePiece Unigram tokenizer..."
+    & $pythonExe -m pip install "sentencepiece>=0.2.0,<0.3"
+    if ($LASTEXITCODE -ne 0) { throw "Could not install SentencePiece. Check internet access." }
+}
+
 $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
 
@@ -76,9 +84,9 @@ switch ($Stage) {
             "--output", $checkpoint,
             "--steps", "600",
             "--schedule-steps", "3000",
-            "--batch-size", "4",
-            "--block-size", "320",
-            "--vocab-size", "5000",
+            "--batch-size", "2",
+            "--block-size", "500",
+            "--vocab-size", "25000",
             "--seed", "1337"
         )
         $logPath = Join-Path $logDir "stage-600.log"
@@ -132,7 +140,14 @@ if ($Stage -eq "600") {
     Write-Host "Stage 600 complete. Next, run CONTINUE_TO_3000.bat."
 } elseif ($Stage -eq "3000") {
     Write-Host ""
-    Write-Host "Done. Checkpoint trained to 3000 total steps: $checkpoint"
+    Write-Host "Training checkpoint saved: $checkpoint"
+        Write-Host "Creating a compact inference-only model file for FROSS Settings..."
+        & $pythonExe $pythonScript package --output $checkpoint --package-output $uploadCheckpoint
+        if ($LASTEXITCODE -ne 0) { throw "Could not create the compact upload checkpoint." }
+        Write-Host ""
+        Write-Host "UPLOAD THIS FILE IN FROSS SETTINGS:"
+        Write-Host $uploadCheckpoint
+        Write-Host "The full training checkpoint remains available for future resume runs: $checkpoint"
 } else {
     Write-Host ""
     Write-Host "Checkpoint check complete. The generated sample is shown above."
