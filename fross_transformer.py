@@ -420,6 +420,24 @@ class SentencePieceTokenizer:
         return {"model_proto_b64": self.model_proto_b64}
 
 
+def _causal_attention_query_chunk(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    key_positions: torch.Tensor,
+    query_positions: torch.Tensor,
+    head_size: int,
+    dropout_probability: float,
+    training: bool,
+) -> torch.Tensor:
+    """Compute one causal query block; checkpointing prevents retaining its score matrix."""
+    scores = (query @ key.transpose(-2, -1)) / math.sqrt(head_size)
+    causal_mask = key_positions[None, :] > query_positions[:, None]
+    scores = scores.masked_fill(causal_mask[None, None, :, :], torch.finfo(scores.dtype).min)
+    weights = F.dropout(torch.softmax(scores, dim=-1), p=dropout_probability, training=training)
+    return weights @ value
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
         super().__init__()
@@ -428,9 +446,11 @@ class CausalSelfAttention(nn.Module):
             raise ValueError("n_embd must be divisible by n_head")
         self.n_head = n_head
         self.head_size = n_embd // n_head
+        self.dropout_probability = float(config["dropout"])
+        self.gradient_checkpointing = bool(config.get("gradient_checkpointing", False))
         self.qkv = nn.Linear(n_embd, 3 * n_embd, bias=True)
         self.out = nn.Linear(n_embd, n_embd, bias=True)
-        self.dropout = nn.Dropout(float(config["dropout"]))
+        self.dropout = nn.Dropout(self.dropout_probability)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, steps, width = x.shape
@@ -438,18 +458,21 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
         k = k.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
         v = v.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
-        # Query chunking bounds peak memory for a long context instead of allocating
-        # the full [batch, heads, sequence, sequence] attention matrix.
         key_positions = torch.arange(steps, device=x.device)
         chunk_outputs = []
-        for start in range(0, steps, 512):
-            end = min(steps, start + 512)
+        for start in range(0, steps, 128):
+            end = min(steps, start + 128)
             query_positions = torch.arange(start, end, device=x.device)
-            scores = (q[:, :, start:end, :] @ k.transpose(-2, -1)) / math.sqrt(self.head_size)
-            causal_mask = key_positions[None, :] > query_positions[:, None]
-            scores = scores.masked_fill(causal_mask[None, None, :, :], torch.finfo(scores.dtype).min)
-            weights = self.dropout(torch.softmax(scores, dim=-1))
-            chunk_outputs.append(weights @ v)
+            query = q[:, :, start:end, :]
+            args = (query, k, v, key_positions, query_positions, self.head_size,
+                    self.dropout_probability, self.training)
+            if self.training and self.gradient_checkpointing and query.requires_grad:
+                # Each chunk recomputes its attention matrix during backward, so
+                # the 4096-token sequence does not retain all chunk matrices at once.
+                chunk = checkpoint(_causal_attention_query_chunk, *args, use_reentrant=False)
+            else:
+                chunk = _causal_attention_query_chunk(*args)
+            chunk_outputs.append(chunk)
         output = torch.cat(chunk_outputs, dim=2).transpose(1, 2).contiguous().view(batch_size, steps, width)
         return self.dropout(self.out(output))
 
