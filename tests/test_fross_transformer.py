@@ -16,22 +16,22 @@ import fross_transformer as transformer
 
 class TransformerTests(unittest.TestCase):
     def test_default_architecture_and_generation_budget(self) -> None:
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 7)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
         self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 500)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 7)
         self.assertEqual(transformer.VERSION, "FROSS Transformer 1.5")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
 
     def test_default_brain_15_architecture_is_within_target_parameter_range(self) -> None:
-        model = transformer.FrossTransformer(25000)
+        model = transformer.FrossTransformer(30000)
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
-        self.assertEqual(parameter_count, 7_565_568)
-        self.assertGreaterEqual(parameter_count, 5_000_000)
-        self.assertLessEqual(parameter_count, 8_000_000)
+        self.assertEqual(parameter_count, 8_970_432)
+        self.assertGreaterEqual(parameter_count, 8_850_000)
+        self.assertLessEqual(parameter_count, 9_100_000)
 
     def test_brain_14_warm_start_transfers_only_architecture_compatible_weights(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -50,7 +50,7 @@ class TransformerTests(unittest.TestCase):
                 "metrics": {"training_steps": 3000, "vocab_size": 5000},
             }, seed_path)
 
-            target_model = transformer.FrossTransformer(25000)
+            target_model = transformer.FrossTransformer(30000)
             original_embedding = target_model.token_embedding.weight.detach().clone()
             result = transformer.initialize_model_from_checkpoint(target_model, seed_path)
 
@@ -72,7 +72,7 @@ class TransformerTests(unittest.TestCase):
                 target_model.token_embedding.weight,
                 original_embedding,
             ))
-            self.assertEqual(target_model.token_embedding.num_embeddings, 25000)
+            self.assertEqual(target_model.token_embedding.num_embeddings, 30000)
 
     def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
         samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
