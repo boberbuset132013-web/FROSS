@@ -46,7 +46,8 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
       <button class="choice" data-steps="8000" type="button"><strong>8000</strong><span>Продолженное обучение</span></button>
       <button class="choice" data-steps="10000" type="button"><strong>10000</strong><span>Полный график</span></button>
     </div>
-    <button id="start" class="btn primary wide" type="button">▶ Начать обучение</button>
+    <button id="start" class="btn primary wide" type="button">▶ Продолжить / запустить этап</button>
+    <button id="startFresh" class="btn wide" style="margin-top:9px;border-color:#7466bd;color:#d8d0ff" type="button">⟲ Начать новый цикл с текущей моделью</button>
     <button id="cancel" class="btn wide" style="margin-top:9px;border-color:#8a4652;color:#ffc5cc" type="button" disabled>⏹ Отменить обучение</button>
     <button id="downloadModel" class="btn wide" style="margin-top:9px" type="button" disabled>⬇ Скачать модель (.pt)</button>
     <div id="message" class="notice">Ожидание подключения к Python brain…</div>
@@ -60,17 +61,17 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 </main>
 <section class="card" style="margin-top:17px">
   <h2>Параметры модели</h2>
-  <p class="sub">Архитектура Brain 1.5: 25 000 токенов словаря, контекст 500 и около 7,57 млн параметров. Количество шагов влияет на обучение, а не на число параметров.</p>
+  <p class="sub">Новая конфигурация Brain 1.5: 30 000 токенов словаря, контекст 500 и 8,97 млн параметров. Новый цикл обучает токенизатор заново и переносит совместимые слои активной модели. Количество шагов влияет на обучение, а не на число параметров.</p>
   <div class="stats">
-    <div class="stat"><small>Параметры</small><b>≈ 7,57 млн</b></div>
-    <div class="stat"><small>Словарь</small><b>25 000</b></div>
+    <div class="stat"><small>Параметры</small><b>8,97 млн</b></div>
+    <div class="stat"><small>Словарь</small><b>30 000</b></div>
     <div class="stat"><small>Контекст</small><b>500 токенов</b></div>
   </div>
-  <div class="metrics">Transformer: <b>6 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · tied embeddings · optimizer <b>AdamW</b>.<br>
+  <div class="metrics">Transformer: <b>7 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · tied embeddings · optimizer <b>AdamW</b>.<br>
   График оптимизации фиксирован на <b>10000 шагов</b>, поэтому можно продолжать обучение с предыдущего checkpoint. Закрытие вкладки не останавливает задачу; перезапуск или пересборка самого Python-сервера может её прервать.</div>
   <p class="sub" style="margin-top:15px;margin-bottom:0">Больше шагов могут улучшить усвоение корпуса, но не гарантируют более умные ответы: результат зависит от объёма и качества примеров и от validation loss.</p>
 </section>
-<p class="foot">FROSS Transformer 1.5 · Целевой словарь 25 000 токенов · Контекст 500 · CPU/GPU определяется сервером</p>
+<p class="foot">FROSS Transformer 1.5 · Целевой словарь 30 000 токенов · 8,97 млн параметров · Контекст 500 · CPU/GPU определяется сервером</p>
 </div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
@@ -111,7 +112,7 @@ function renderStatus(d){
 }
 async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){canDownloadModel=false;$("downloadModel").disabled=true;showMessage(errorText(e),"error")}}
 async function cancelTraining(){if(!confirm("Остановить обучение? Сервер завершит текущий шаг и попробует сохранить checkpoint."))return;cancelPending=true;$("cancel").disabled=true;try{await api("/api/training/cancel",{method:"POST",body:"{}"});showMessage("Запрос отмены отправлен. Ждём безопасной остановки…")}catch(e){showMessage(errorText(e),"error")}finally{cancelPending=false;await refresh()}}
-async function startTraining(){const btn=$("start");btn.disabled=true;showMessage("Отправляю задачу на Python-сервер…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000})});showMessage("Сервер принял задачу. Закрытие вкладки не остановит обучение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{btn.disabled=["starting","running","cancelling"].some(s=>$("state").classList.contains(s))}}
+async function startTraining(freshRun=false){if(freshRun&&!confirm("Начать новый цикл? Предыдущая обучающая контрольная точка будет сохранена в архиве. Активная модель сайта останется доступной до загрузки новой. Совместимые слои активной модели будут перенесены, словарь 30000 токенов обучится заново."))return;const btn=freshRun?$("startFresh"):$("start");btn.disabled=true;showMessage(freshRun?"Подготавливаю новый цикл обучения…":"Отправляю задачу на продолжение обучения…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000,freshRun})});showMessage(freshRun?"Сервер принял новый цикл.":"Сервер принял задачу на продолжение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{const busy=["starting","running","cancelling"].some(s=>$("state").classList.contains(s));$("start").disabled=busy;$("startFresh").disabled=busy}}
 async function downloadModel(){
  const btn=$("downloadModel");btn.disabled=true;btn.textContent="Подготовка файла…";
  try{
@@ -125,7 +126,7 @@ async function downloadModel(){
  finally{btn.textContent="⬇ Скачать модель (.pt)";btn.disabled=!canDownloadModel}
 }
 document.querySelectorAll("[data-steps]").forEach(button=>button.addEventListener("click",()=>{selectedSteps=Number(button.dataset.steps);document.querySelectorAll("[data-steps]").forEach(b=>b.classList.toggle("selected",b===button))}));
-$("start").addEventListener("click",startTraining);$("cancel").addEventListener("click",cancelTraining);
+$("start").addEventListener("click",()=>startTraining(false));$("startFresh").addEventListener("click",()=>startTraining(true));$("cancel").addEventListener("click",cancelTraining);
 $("downloadModel").addEventListener("click",downloadModel);
 $("google").addEventListener("click",async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){if(e.code==="auth/popup-blocked"){await signInWithRedirect(auth,new GoogleAuthProvider());return}showAuthMessage(errorText(e),true)}});
 $("emailForm").addEventListener("submit",async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showAuthMessage(errorText(err),true)}});
