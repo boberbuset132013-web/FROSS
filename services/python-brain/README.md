@@ -6,7 +6,7 @@
 - Hostless only downloads an already-trained checkpoint, validates it, exports an ONNX graph and smoke-tests native inference.
 - C++ ONNX Runtime executes inference; Python retains prompt formatting, sampling, HTTP and memory/search integration.
 - Basic greetings, thanks and goodbyes are handled deterministically so they cannot turn into gibberish. Questions and tasks still use the trained model.
-- No pretrained LLM or hosted LLM API is used.
+- No third-party pretrained LLM or hosted LLM API is used. Brain 1.5 may warm-start compatible decoder blocks from the project's own Brain 1.4 checkpoint; the new SentencePiece token embeddings are initialized independently.
 
 ## Container build settings
 
