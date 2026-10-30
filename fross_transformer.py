@@ -1103,7 +1103,7 @@ def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer 
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
         if int(checkpoint.get("format_version", 0)) != 3:
             raise ValueError("Checkpoint is not in the FROSS Brain 1.6 SentencePiece format.")
-        if checkpoint.get("version") != VERSION:
+        if checkpoint.get("version") not in {VERSION, "FROSS Transformer 1.5"}:
             raise ValueError("Checkpoint version is incompatible with this FROSS Brain.")
         tokenizer = SentencePieceTokenizer(**checkpoint["tokenizer"])
         config = checkpoint["config"]
