@@ -1371,7 +1371,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "generation-model-unavailable",
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
                 "modelLoadState": MODEL_LOAD_STATE,
                 "modelLoadError": MODEL_LOAD_ERROR,
@@ -1397,7 +1397,7 @@ class Handler(BaseHTTPRequestHandler):
                 "engine": ENGINE_NAME,
                 "kind": "generation-error",
                 "diagnostic": type(exc).__name__,
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -1407,7 +1407,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "empty-generation",
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -1417,7 +1417,7 @@ class Handler(BaseHTTPRequestHandler):
             "reply": reply[:MAX_REPLY_CHARS],
             "engine": ENGINE_NAME,
             "kind": "fross-transformer-v1",
-            "generationModel": transformer.VERSION,
+            "generationModel": TRANSFORMER_STATUS.get("version"),
             "generationModelStatus": TRANSFORMER_STATUS,
             "trace": (
                 [
