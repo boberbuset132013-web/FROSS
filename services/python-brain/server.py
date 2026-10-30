@@ -67,9 +67,15 @@ def _runtime_checkpoint_profile_matches(metrics: dict[str, Any], config: dict[st
         width = int(config.get("n_embd", 0))
         heads = int(config.get("n_head", 0))
         if MODEL_TEST_MODE:
-            return (vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
-                    and reported_context == context and layers == 18 and width == 520 and heads == 8
-                    and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS)
+            expected_layers = int(os.environ.get("FROSS_MODEL_N_LAYER", "18"))
+            expected_width = int(os.environ.get("FROSS_MODEL_N_EMBD", "520"))
+            expected_heads = int(os.environ.get("FROSS_MODEL_N_HEAD", "8"))
+            return (
+                vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
+                and reported_context == context and layers == expected_layers
+                and width == expected_width and heads == expected_heads
+                and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+            )
         if (vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
                 and reported_context == context and layers == 18 and width == 520 and heads == 8):
             return MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
