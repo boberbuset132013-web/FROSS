@@ -1872,9 +1872,31 @@ async function handleFrossTransformerTraining(request, env, action) {
       init.body = JSON.stringify({ steps, scheduleSteps, freshRun });
     }
     const response = await fetch(target, init);
+    const responseText = await response.text();
     let data;
-    try { data = await response.json(); }
-    catch { data = { ok: false, error: "Python brain вернул некорректный JSON." }; }
+    try {
+      data = JSON.parse(responseText);
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new TypeError("Upstream JSON must be an object.");
+      }
+    } catch {
+      const contentType = response.headers.get("content-type") || "не указан";
+      const preview = responseText
+        .replace(/\\s+/g, " ")
+        .replace(/Bearer\\s+[A-Za-z0-9._-]+/gi, "Bearer [скрыто]")
+        .slice(0, 180);
+      const isHtml = contentType.toLowerCase().includes("text/html") || /^\\s*</.test(responseText);
+      const reason = isHtml
+        ? "Python brain вернул HTML вместо JSON"
+        : "Python brain вернул пустой ответ или некорректный JSON";
+      const detail = preview ? " Фрагмент ответа: " + preview : " Тело ответа пустое.";
+      return frossJson({
+        ok: false,
+        error: reason + " (HTTP " + response.status + ", Content-Type: " + contentType + ")." + detail,
+        upstreamStatus: response.status,
+        upstreamContentType: contentType
+      }, 502, request);
+    }
     return frossJson(data, response.status, request);
   } catch (error) {
     return frossJson({
