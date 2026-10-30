@@ -53,11 +53,12 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           import torch
           import fross_transformer as brain
 
-          root = Path("$RUNNER_TEMP")
+          root = Path(os.environ["RUNNER_TEMP"])
           corpus = root / "fross-runtime-smoke.jsonl"
           examples = [
               ("Привет", "Привет! Я на связи."),
@@ -102,8 +103,9 @@ jobs:
         run: |
           python - <<'PY' > "$RUNNER_TEMP/fross-smoke-env"
           import json
+          import os
           import torch
-          data = torch.load("$RUNNER_TEMP/fross-runtime-smoke.pt", map_location="cpu", weights_only=True)
+          data = torch.load(os.path.join(os.environ["RUNNER_TEMP"], "fross-runtime-smoke.pt"), map_location="cpu", weights_only=True)
           metrics = data["metrics"]
           print("FROSS_MODEL_VOCAB_SIZE=" + str(metrics["vocab_size"]))
           PY
