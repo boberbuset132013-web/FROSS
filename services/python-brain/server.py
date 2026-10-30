@@ -503,7 +503,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
         raise ValueError("Checkpoint должен быть объектом FROSS.")
     if checkpoint.get("version") != transformer.VERSION:
         raise ValueError("Нужна совместимая версия FROSS Transformer 1.5.")
-    if int(checkpoint.get("format_version", 0)) not in {1, 2}:
+    if int(checkpoint.get("format_version", 0)) != 3:
         raise ValueError("Неизвестный формат checkpoint.")
     metrics = checkpoint.get("metrics")
     config = checkpoint.get("config")
