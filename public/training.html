@@ -92,7 +92,7 @@ function renderStatus(d){
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
  $("valLoss").textContent=Number.isFinite(Number(d.validationLoss))&&d.validationLoss!==null?Number(d.validationLoss).toFixed(4):"—";
  const busy=["starting","running","cancelling"].includes(state);
- $("start").disabled=busy;$("start").textContent=busy?"Подготовка / обучение…":"▶ Начать обучение";
+ $("start").disabled=busy;$("startFresh").disabled=busy;$("start").textContent=busy?"Подготовка / обучение…":"▶ Продолжить / запустить этап";
  $("cancel").disabled=!["starting","running"].includes(state)||cancelPending;
  $("cancel").textContent=state==="cancelling"||cancelPending?"Останавливаю…":"⏹ Отменить обучение";
  canDownloadModel=d.checkpointAvailable===true && !busy;$("downloadModel").disabled=!canDownloadModel;
@@ -101,7 +101,8 @@ function renderStatus(d){
  if(state==="starting")showMessage("Задание принято. Проверяю checkpoint в фоне; страница должна оставаться отзывчивой.");
  else if(state==="running"&&phase==="checking_checkpoint")showMessage("Проверяю контрольную точку модели на сервере…");
  else if(state==="running"&&phase==="loading_corpus")showMessage("Загружаю обучающие примеры и готовлю данные. Шаги модели начнутся после подготовки.");
- else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка BPE-словаря: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+" объединений. Это предварительный этап; ниже виден его прогресс.");
+ else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 30000 токенов…");
+  else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка SentencePiece Unigram: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+". Это предварительный этап; ниже виден его прогресс.");
  else if(state==="running")showMessage("Обучение модели выполняется на CPU. Шаги и loss обновляются по мере вычислений.");
  else if(state==="cancelling")showMessage("Запрошена остановка. Сервер остановит подготовку или обучение в ближайшей безопасной точке…");
  else if(state==="cancelled")showMessage(d.checkpointAvailable?"Обучение остановлено. Сохранённая контрольная точка оставлена без изменений.":"Подготовка остановлена до создания контрольной точки.","good");
