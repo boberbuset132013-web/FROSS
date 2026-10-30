@@ -866,6 +866,48 @@ def _prepare_website_training_corpus() -> Path:
     return output_path
 
 
+def _best_initialization_checkpoint() -> tuple[str | None, int]:
+    """Prefer the most-trained compatible model, including the previous website run."""
+    import torch
+
+    legacy_training_path = Path(tempfile.gettempdir()) / "fross-training-output.pt"
+    candidates = [Path(TRANSFORMER_MODEL_PATH), legacy_training_path]
+    best_path: str | None = None
+    best_steps = -1
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            saved = torch.load(candidate, map_location="cpu", weights_only=True)
+            if not isinstance(saved, dict):
+                continue
+            version = saved.get("version")
+            format_version = int(saved.get("format_version", 0))
+            supported = (
+                version == "FROSS Transformer 1.4" and format_version in {1, 2}
+            ) or (
+                version == transformer.VERSION and format_version == 3
+            )
+            config = saved.get("config")
+            state_dict = saved.get("state_dict")
+            metrics = saved.get("metrics")
+            if not supported or not isinstance(config, dict) or not isinstance(state_dict, dict):
+                continue
+            if (
+                int(config.get("n_embd", 0)) != 192
+                or int(config.get("n_head", 0)) != 6
+                or not 1 <= int(config.get("n_layer", 0)) <= int(transformer.DEFAULT_CONFIG["n_layer"])
+            ):
+                continue
+            steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
+            if steps > best_steps:
+                best_path, best_steps = str(candidate), steps
+        except Exception as exc:
+            print("FROSS training: skipping incompatible initialization checkpoint "
+                  + candidate.name + " (" + type(exc).__name__ + ").", flush=True)
+    return best_path, max(0, best_steps)
+
+
 def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = False) -> None:
     try:
         corpus = _prepare_website_training_corpus()
@@ -883,7 +925,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
         # endpoint must remain responsive, and log helpers acquire this same lock.
         resume = False
         existing_steps = 0
-        initialize_from = TRANSFORMER_MODEL_PATH if Path(TRANSFORMER_MODEL_PATH).is_file() else None
+        initialize_from, initialization_steps = _best_initialization_checkpoint()
         prior_metrics: dict[str, Any] = {}
         if TRAINING_OUTPUT_PATH.is_file():
             try:
@@ -946,7 +988,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
                 "error": None,
             })
         _training_log(
-            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с переносом совместимых слоёв активной модели" if initialize_from else "обучение с новых весов"))
+            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с переносом слоёв из checkpoint на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
             + ". Цель: 30000 токенов, 8,970,432 параметра, контекст 500."
         )
         result = transformer.train_model(
