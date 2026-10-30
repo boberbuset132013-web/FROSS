@@ -13,7 +13,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 <body>
 <div class="wrap">
 <header class="top">
-  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.4</small></div></div>
+  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.5</small></div></div>
   <div class="top-actions"><button id="chatLink" class="btn" type="button">← Вернуться в чат</button><button id="signOut" class="btn hidden" type="button">Выйти</button></div>
 </header>
 <section class="hero"><div class="eyebrow">Собственная нейросеть · без готовых LLM API</div><h1>Обучение <span class="gradient">FROSS Brain</span></h1><p>Запускай настоящее обучение параметров Transformer на корпусе FROSS. После запуска сервер продолжает работу, даже если закрыть эту страницу. Это не тестовая анимация: прогресс и loss поступают из процесса обучения.</p></section>
@@ -60,17 +60,17 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 </main>
 <section class="card" style="margin-top:17px">
   <h2>Параметры модели</h2>
-  <p class="sub">Количество шагов меняет длительность обучения, но не размер архитектуры.</p>
+  <p class="sub">Архитектура Brain 1.5: 25 000 токенов словаря, контекст 500 и около 7,57 млн параметров. Количество шагов влияет на обучение, а не на число параметров.</p>
   <div class="stats">
-    <div class="stat"><small>Параметры</small><b>≈ 3,69 млн</b></div>
-    <div class="stat"><small>Словарь</small><b>5000</b></div>
-    <div class="stat"><small>Контекст</small><b>320 токенов</b></div>
+    <div class="stat"><small>Параметры</small><b>≈ 7,57 млн</b></div>
+    <div class="stat"><small>Словарь</small><b>25 000</b></div>
+    <div class="stat"><small>Контекст</small><b>500 токенов</b></div>
   </div>
-  <div class="metrics">Transformer: <b>6 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · optimizer <b>AdamW</b>.<br>
+  <div class="metrics">Transformer: <b>6 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · tied embeddings · optimizer <b>AdamW</b>.<br>
   График оптимизации фиксирован на <b>10000 шагов</b>, поэтому можно продолжать обучение с предыдущего checkpoint. Закрытие вкладки не останавливает задачу; перезапуск или пересборка самого Python-сервера может её прервать.</div>
   <p class="sub" style="margin-top:15px;margin-bottom:0">Больше шагов могут улучшить усвоение корпуса, но не гарантируют более умные ответы: результат зависит от объёма и качества примеров и от validation loss.</p>
 </section>
-<p class="foot">FROSS Transformer 1.4 · Целевой словарь 5000 токенов · Контекст 320 · CPU/GPU определяется сервером</p>
+<p class="foot">FROSS Transformer 1.5 · Целевой словарь 25 000 токенов · Контекст 500 · CPU/GPU определяется сервером</p>
 </div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
