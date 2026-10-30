@@ -748,8 +748,11 @@ def _training_progress(progress: dict[str, Any]) -> None:
         )
         TRAINING_STATUS["device"] = str(progress.get("device", "cpu"))
         if phase == "tokenizer_native":
-        _training_log("Подготовка словаря SentencePiece Unigram (нативный CPU-процесс).")
-    elif phase == "tokenizer":
+            TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
+            TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 1))
+            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size") or 0)
+            _training_log("Подготовка словаря SentencePiece Unigram (нативный CPU-процесс).")
+        elif phase == "tokenizer":
             TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
             TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 0))
             TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", 0))
