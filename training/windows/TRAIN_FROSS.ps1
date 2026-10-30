@@ -100,10 +100,10 @@ switch ($Stage) {
             "--output", $checkpoint,
             "--steps", "600",
             "--initialize-from", $seedCheckpoint,
-            "--schedule-steps", "3000",
+            "--schedule-steps", "10000",
             "--batch-size", "2",
             "--block-size", "500",
-            "--vocab-size", "25000",
+            "--vocab-size", "30000",
             "--seed", "1337"
         )
         $logPath = Join-Path $logDir "stage-600.log"
@@ -119,10 +119,10 @@ switch ($Stage) {
             "--corpus", $corpus,
             "--output", $checkpoint,
             "--steps", "3000",
-            "--schedule-steps", "3000",
+            "--schedule-steps", "10000",
             "--batch-size", "2",
             "--block-size", "500",
-            "--vocab-size", "25000",
+            "--vocab-size", "30000",
             "--seed", "1337",
             "--resume"
         )
