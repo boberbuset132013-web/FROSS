@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.5: a small decoder-only language model.
+"""FROSS Transformer Brain 1.6: a 64M decoder-only language model.
 
 No third-party pretrained LLM or hosted LLM API is used. A SentencePiece Unigram tokenizer
 and new token embeddings are learned from the repository corpus. Optionally, compatible
@@ -25,8 +25,9 @@ from typing import Any
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
-VERSION = "FROSS Transformer 1.5"
+VERSION = "FROSS Transformer 1.6"
 
 
 def _preferred_device() -> torch.device:
@@ -73,14 +74,15 @@ DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
 DEFAULT_UPLOAD_CHECKPOINT = Path(__file__).with_name("fross-transformer-upload.pt")
 MAX_GENERATION_TOKENS = 5000
 
-# Brain 1.5 refresh: 30K vocabulary + 500-token positions + seven compact
-# decoder blocks yield exactly 8,970,432 trainable parameters with tied embeddings.
+# Brain 1.6: 8K vocabulary, 4K context and a wider/deeper decoder.
+# With tied embeddings this profile has 64,819,040 trainable parameters.
 DEFAULT_CONFIG = {
-    "block_size": 500,
-    "n_embd": 192,
-    "n_head": 6,
-    "n_layer": 7,
+    "block_size": 4096,
+    "n_embd": 520,
+    "n_head": 8,
+    "n_layer": 18,
     "dropout": 0.08,
+    "gradient_checkpointing": True,
 }
 
 
@@ -332,7 +334,7 @@ class SentencePieceTokenizer:
         return int(self.processor.get_piece_size())
 
     @classmethod
-    def train(cls, texts: list[str], target_vocab_size: int = 30000,
+    def train(cls, texts: list[str], target_vocab_size: int = 8000,
               progress_callback: Any = None, stop_callback: Any = None) -> "SentencePieceTokenizer":
         import base64
         import subprocess
@@ -418,6 +420,24 @@ class SentencePieceTokenizer:
         return {"model_proto_b64": self.model_proto_b64}
 
 
+def _causal_attention_query_chunk(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    key_positions: torch.Tensor,
+    query_positions: torch.Tensor,
+    head_size: int,
+    dropout_probability: float,
+    training: bool,
+) -> torch.Tensor:
+    """Compute one causal query block; checkpointing prevents retaining its score matrix."""
+    scores = (query @ key.transpose(-2, -1)) / math.sqrt(head_size)
+    causal_mask = key_positions[None, :] > query_positions[:, None]
+    scores = scores.masked_fill(causal_mask[None, None, :, :], torch.finfo(scores.dtype).min)
+    weights = F.dropout(torch.softmax(scores, dim=-1), p=dropout_probability, training=training)
+    return weights @ value
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
         super().__init__()
@@ -426,9 +446,11 @@ class CausalSelfAttention(nn.Module):
             raise ValueError("n_embd must be divisible by n_head")
         self.n_head = n_head
         self.head_size = n_embd // n_head
+        self.dropout_probability = float(config["dropout"])
+        self.gradient_checkpointing = bool(config.get("gradient_checkpointing", False))
         self.qkv = nn.Linear(n_embd, 3 * n_embd, bias=True)
         self.out = nn.Linear(n_embd, n_embd, bias=True)
-        self.dropout = nn.Dropout(float(config["dropout"]))
+        self.dropout = nn.Dropout(self.dropout_probability)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, steps, width = x.shape
@@ -436,13 +458,22 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
         k = k.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
         v = v.view(batch_size, steps, self.n_head, self.head_size).transpose(1, 2)
-        causal_mask = torch.triu(
-            torch.ones(steps, steps, device=x.device, dtype=torch.bool), diagonal=1
-        )
-        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_size)
-        scores = scores.masked_fill(causal_mask, torch.finfo(scores.dtype).min)
-        weights = self.dropout(torch.softmax(scores, dim=-1))
-        output = (weights @ v).transpose(1, 2).contiguous().view(batch_size, steps, width)
+        key_positions = torch.arange(steps, device=x.device)
+        chunk_outputs = []
+        for start in range(0, steps, 128):
+            end = min(steps, start + 128)
+            query_positions = torch.arange(start, end, device=x.device)
+            query = q[:, :, start:end, :]
+            args = (query, k, v, key_positions, query_positions, self.head_size,
+                    self.dropout_probability, self.training)
+            if self.training and self.gradient_checkpointing and query.requires_grad:
+                # Each chunk recomputes its attention matrix during backward, so
+                # the 4096-token sequence does not retain all chunk matrices at once.
+                chunk = checkpoint(_causal_attention_query_chunk, *args, use_reentrant=False)
+            else:
+                chunk = _causal_attention_query_chunk(*args)
+            chunk_outputs.append(chunk)
+        output = torch.cat(chunk_outputs, dim=2).transpose(1, 2).contiguous().view(batch_size, steps, width)
         return self.dropout(self.out(output))
 
 
@@ -500,7 +531,13 @@ class FrossTransformer(nn.Module):
             steps = token_ids.shape[1]
         positions = torch.arange(steps, device=token_ids.device)
         x = self.token_embedding(token_ids) + self.position_embedding(positions)[None, :, :]
-        x = self.final_norm(self.blocks(self.dropout(x)))
+        x = self.dropout(x)
+        for block in self.blocks:
+            if self.training and bool(self.config.get("gradient_checkpointing", False)) and x.requires_grad:
+                x = checkpoint(block, x, use_reentrant=False)
+            else:
+                x = block(x)
+        x = self.final_norm(x)
         return self.language_head(x)
 
 
@@ -508,7 +545,7 @@ def initialize_model_from_checkpoint(
     model: FrossTransformer,
     checkpoint_path: str | Path,
 ) -> dict[str, Any]:
-    """Transfer compatible decoder layers from a Brain 1.4 or 1.5 checkpoint.
+    """Transfer compatible decoder layers from a Brain 1.4 or 1.6 checkpoint.
 
     Token embeddings are never copied because the target SentencePiece vocabulary
     has newly trained token IDs. A larger target may add decoder layers; common
@@ -523,7 +560,7 @@ def initialize_model_from_checkpoint(
 
     source_version = checkpoint.get("version")
     if source_version not in {"FROSS Transformer 1.4", VERSION}:
-        raise ValueError("Warm-start source must be FROSS Transformer 1.4 or 1.5; got "
+        raise ValueError("Warm-start source must be FROSS Transformer 1.4 or 1.6; got "
                          + repr(source_version) + ".")
     source_format = int(checkpoint.get("format_version", 0))
     supported_formats = {1, 2} if source_version == "FROSS Transformer 1.4" else {3}
@@ -534,6 +571,8 @@ def initialize_model_from_checkpoint(
     source_state = checkpoint.get("state_dict")
     if not isinstance(source_config, dict) or not isinstance(source_state, dict):
         raise ValueError("Source checkpoint is missing model configuration or weights.")
+    if checkpoint.get("inference_quantization") == "int8-rowwise-v1":
+        source_state = _dequantize_inference_state_dict(source_state)
 
     for field in ("n_embd", "n_head"):
         if int(source_config.get(field, -1)) != int(model.config[field]):
@@ -715,7 +754,7 @@ def _encode_stream(records: list[dict[str, Any]], tokenizer: SentencePieceTokeni
 
 
 @torch.no_grad()
-def _evaluate(model: FrossTransformer, stream: list[int], block_size: int, batches: int = 8) -> float:
+def _evaluate(model: FrossTransformer, stream: list[int], block_size: int, batches: int = 2) -> float:
     if len(stream) <= block_size + 1:
         return float("nan")
     model.eval()
@@ -723,7 +762,7 @@ def _evaluate(model: FrossTransformer, stream: list[int], block_size: int, batch
     device = next(model.parameters()).device
     last_start = len(stream) - block_size - 1
     for _ in range(batches):
-        starts = [random.randint(0, last_start) for _ in range(4)]
+        starts = [random.randint(0, last_start)]
         x = torch.tensor([stream[i:i + block_size] for i in starts], dtype=torch.long, device=device)
         y = torch.tensor([stream[i + 1:i + block_size + 1] for i in starts], dtype=torch.long, device=device)
         logits = model(x)
@@ -736,11 +775,11 @@ def train_model(
     corpus_path: str | Path = DEFAULT_CORPUS,
     output_path: str | Path = DEFAULT_CHECKPOINT,
     *,
-    steps: int = 600,
-    batch_size: int = 4,
-    block_size: int = 500,
+    steps: int = 25000,
+    batch_size: int = 1,
+    block_size: int = 4096,
     merge_count: int | None = None,
-    target_vocab_size: int = 30000,
+    target_vocab_size: int = 8000,
     seed: int = 1337,
     resume: bool = False,
     initialize_from: str | Path | None = None,
@@ -761,7 +800,7 @@ def train_model(
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
     if merge_count is not None:
-        raise ValueError("The Brain 1.5 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
+        raise ValueError("The Brain 1.6 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
 
     target = Path(output_path)
     resume_checkpoint: dict[str, Any] | None = None
@@ -773,7 +812,7 @@ def train_model(
         if int(resume_checkpoint.get("format_version", 0)) != 3:
             raise ValueError(
                 "This checkpoint does not include resumable optimizer state. "
-                "Start a new 600-step run with the current Brain 1.5 code first."
+                "Start a new Brain 1.6 run with the current training code first."
             )
         resume_state = resume_checkpoint.get("resume_state")
         if not isinstance(resume_state, dict):
@@ -843,11 +882,11 @@ def train_model(
                 "checkpoint_preserved": target.is_file(),
             }
 
-    if target_vocab_size >= 10000 and tokenizer.vocab_size != target_vocab_size:
+    if target_vocab_size >= 8000 and tokenizer.vocab_size != target_vocab_size:
         raise ValueError(
             f"SentencePiece built only {tokenizer.vocab_size}/{target_vocab_size} tokens. "
             "The training corpus is too small or repetitive for the requested vocabulary; "
-            "add more diverse text examples before training Brain 1.5."
+            "add more diverse text examples before training Brain 1.6."
         )
 
     train_stream = _encode_stream(train_records, tokenizer)
@@ -1068,10 +1107,10 @@ def train_model(
         },
     }
     target.parent.mkdir(parents=True, exist_ok=True)
-    backup = target.with_name(target.stem + ".brain14-bpe-backup" + target.suffix)
+    backup = target.with_name(target.stem + ".pre-brain16-backup" + target.suffix)
     if target.is_file() and not backup.exists():
         shutil.copy2(target, backup)
-    temporary = target.with_name(target.name + ".brain15.tmp")
+    temporary = target.with_name(target.name + ".brain16.tmp")
     torch.save(checkpoint, temporary)
     temporary.replace(target)
     return {
@@ -1088,13 +1127,16 @@ def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer 
     try:
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
         if int(checkpoint.get("format_version", 0)) != 3:
-            raise ValueError("Checkpoint is not in the FROSS Brain 1.5 SentencePiece format.")
-        if checkpoint.get("version") != VERSION:
+            raise ValueError("Checkpoint is not in the FROSS Brain 1.6 SentencePiece format.")
+        if checkpoint.get("version") not in {VERSION, "FROSS Transformer 1.5"}:
             raise ValueError("Checkpoint version is incompatible with this FROSS Brain.")
         tokenizer = SentencePieceTokenizer(**checkpoint["tokenizer"])
         config = checkpoint["config"]
         model = FrossTransformer(tokenizer.vocab_size, config)
-        model.load_state_dict(checkpoint["state_dict"], strict=True)
+        state_dict = checkpoint["state_dict"]
+        if checkpoint.get("inference_quantization") == "int8-rowwise-v1":
+            state_dict = _dequantize_inference_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=True)
         device = _preferred_device()
         model.to(device)
         model.eval()
@@ -1157,6 +1199,43 @@ def export_onnx_model(
     }
 
 
+def _quantize_inference_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, Any]:
+    """Compress 2-D deployment weights to row-wise int8 and small vectors to fp16."""
+    packed: dict[str, Any] = {}
+    for name, value in state_dict.items():
+        tensor = value.detach().cpu().contiguous()
+        if tensor.is_floating_point() and tensor.ndim == 2:
+            scales = tensor.abs().amax(dim=1).clamp_min(1e-8) / 127.0
+            quantized = torch.round(tensor / scales.unsqueeze(1)).clamp(-127, 127).to(torch.int8)
+            packed[name] = {
+                "__fross_quantized__": "int8-rowwise-v1",
+                "values": quantized,
+                "scales": scales.to(torch.float16),
+            }
+        elif tensor.is_floating_point():
+            packed[name] = tensor.to(torch.float16)
+        else:
+            packed[name] = tensor
+    return packed
+
+
+def _dequantize_inference_state_dict(state_dict: dict[str, Any]) -> dict[str, torch.Tensor]:
+    """Restore compressed deployment weights to float32 before loading the model."""
+    restored: dict[str, torch.Tensor] = {}
+    for name, value in state_dict.items():
+        if isinstance(value, dict) and value.get("__fross_quantized__") == "int8-rowwise-v1":
+            quantized = value.get("values")
+            scales = value.get("scales")
+            if not torch.is_tensor(quantized) or quantized.dtype != torch.int8 or not torch.is_tensor(scales):
+                raise ValueError("Inference checkpoint contains an invalid quantized tensor: " + name)
+            restored[name] = quantized.to(torch.float32) * scales.to(torch.float32).unsqueeze(1)
+        elif torch.is_tensor(value):
+            restored[name] = value.to(torch.float32) if value.is_floating_point() else value
+        else:
+            raise ValueError("Inference checkpoint contains an unsupported tensor entry: " + name)
+    return restored
+
+
 def package_inference_checkpoint(
     checkpoint_path: str | Path = DEFAULT_CHECKPOINT,
     output_path: str | Path = DEFAULT_UPLOAD_CHECKPOINT,
@@ -1175,7 +1254,7 @@ def package_inference_checkpoint(
     if not isinstance(checkpoint, dict):
         raise ValueError("Training checkpoint is not a FROSS checkpoint.")
     if checkpoint.get("version") != VERSION or int(checkpoint.get("format_version", 0)) != 3:
-        raise ValueError("Only a compatible FROSS Brain 1.5 checkpoint can be packaged.")
+        raise ValueError("Only a compatible FROSS Brain 1.6 checkpoint can be packaged.")
     model, tokenizer, status = load_model(source)
     if model is None or tokenizer is None:
         raise ValueError("Cannot package an invalid checkpoint: " + json.dumps(status, ensure_ascii=False))
@@ -1187,7 +1266,8 @@ def package_inference_checkpoint(
         "version": checkpoint["version"],
         "config": checkpoint["config"],
         "tokenizer": checkpoint["tokenizer"],
-        "state_dict": checkpoint["state_dict"],
+        "state_dict": _quantize_inference_state_dict(checkpoint["state_dict"]),
+        "inference_quantization": "int8-rowwise-v1",
         "metrics": checkpoint["metrics"],
         "checkpoint_role": "inference",
     }
@@ -1207,6 +1287,7 @@ def package_inference_checkpoint(
         "context_size": int(model.config["block_size"]),
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "resume_state_included": False,
+        "inference_quantization": "int8-rowwise-v1",
     }
 
 
@@ -1371,16 +1452,16 @@ def main() -> int:
     parser.add_argument("command", choices=("train", "test", "generate", "export", "package"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
-    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; continue the same run up to 10000.")
+    parser.add_argument("--steps", type=int, default=25000, help="Cumulative training-step target; continue the same run up to 100000.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
-    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.5 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
-    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 10000 for the website training cycle.")
+    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.6 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
+    parser.add_argument("--schedule-steps", type=int, default=100000, help="Total learning-rate schedule horizon. Keep this at 100000 for the Brain 1.6 website cycle.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
-    parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--block-size", type=int, default=500)
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--block-size", type=int, default=4096)
     parser.add_argument(
-        "--vocab-size", type=int, default=30000,
-        help="Target SentencePiece Unigram vocabulary size; refreshed Brain 1.5 defaults to 30000 tokens.",
+        "--vocab-size", type=int, default=8000,
+        help="Target SentencePiece Unigram vocabulary size; Brain 1.6 defaults to 8000 tokens.",
     )
     parser.add_argument(
         "--package-output", default=str(DEFAULT_UPLOAD_CHECKPOINT),

@@ -18,11 +18,11 @@ COPY services/python-brain/download_model.py /app/download_model.py
 
 ARG FROSS_BUILD_BUNDLE_MODEL=0
 ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
-ARG FROSS_REQUIRED_MODEL_STEPS=3000
-ARG FROSS_VOCAB_SIZE=30000
-ARG FROSS_CONTEXT_SIZE=500
-ARG FROSS_MIN_PARAMETERS=8850000
-ARG FROSS_MAX_PARAMETERS=9100000
+ARG FROSS_REQUIRED_MODEL_STEPS=100000
+ARG FROSS_VOCAB_SIZE=8000
+ARG FROSS_CONTEXT_SIZE=4096
+ARG FROSS_MIN_PARAMETERS=64800000
+ARG FROSS_MAX_PARAMETERS=65000000
 
 # Normal Hostless builds skip checkpoint download. The running service loads the
 # verified checkpoint from GitHub Releases after the HTTP listener starts.

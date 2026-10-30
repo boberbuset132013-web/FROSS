@@ -1,4 +1,4 @@
-name: FROSS Brain 1.5 runtime tests
+name: FROSS Brain 1.6 runtime tests
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
       - "services/python-brain/**"
       - "tests/**"
       - "data/fross_corpus.jsonl"
+      - "data/fross_teacher_corpus.jsonl"
       - ".github/workflows/fross-hybrid-brain.yml"
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - "services/python-brain/**"
       - "tests/**"
       - "data/fross_corpus.jsonl"
+      - "data/fross_teacher_corpus.jsonl"
       - ".github/workflows/fross-hybrid-brain.yml"
 
 jobs:
@@ -49,7 +51,7 @@ jobs:
         run: python -m py_compile fross_transformer.py services/python-brain/server.py services/python-brain/download_model.py
       - name: Run tokenizer, training, packaging, ONNX and native-runtime tests
         run: python -m unittest discover -s tests -v
-      - name: Verify the hash-matched Brain 1.4 seed and warm-start compatibility
+      - name: Verify legacy Brain 1.4 seed remains separate from Brain 1.6
         run: |
           curl -fL --retry 3 \
             "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-brain-1.5/fross-transformer.pt" \
@@ -68,39 +70,36 @@ jobs:
           checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
           assert checkpoint.get("version") == "FROSS Transformer 1.4", checkpoint.get("version")
           assert int(checkpoint.get("format_version", 0)) in {1, 2}, checkpoint.get("format_version")
-          config = checkpoint.get("config", {})
-          metrics = checkpoint.get("metrics", {})
-          assert int(config.get("n_embd", 0)) == 192, config
-          assert int(config.get("n_head", 0)) == 6, config
-          assert int(config.get("n_layer", 0)) == 6, config
-          assert int(config.get("block_size", 0)) == 320, config
+          legacy_config = checkpoint.get("config", {})
+          assert int(legacy_config.get("n_embd", 0)) == 192, legacy_config
+          assert int(legacy_config.get("n_head", 0)) == 6, legacy_config
+          assert int(legacy_config.get("n_layer", 0)) == 6, legacy_config
+          assert int(legacy_config.get("block_size", 0)) == 320, legacy_config
 
-          model = brain.FrossTransformer(30000, brain.DEFAULT_CONFIG)
-          transfer = brain.initialize_model_from_checkpoint(model, checkpoint_path)
-          parameter_count = sum(parameter.numel() for parameter in model.parameters())
-          assert parameter_count == 8_970_432, parameter_count
-          assert transfer["copied_position_rows"] == 320, transfer
-          assert transfer["transferred_parameters"] > 0, transfer
-          assert transfer["token_embeddings_reinitialized"] is True, transfer
+          target = brain.FrossTransformer(8000, brain.DEFAULT_CONFIG)
+          parameters = sum(parameter.numel() for parameter in target.parameters())
+          assert parameters == 64_819_040, parameters
+          assert target.config["n_embd"] != legacy_config["n_embd"]
+          assert target.config["n_head"] != legacy_config["n_head"]
+          assert target.config["block_size"] > legacy_config["block_size"]
           print(json.dumps({
-              "sourceVersion": checkpoint["version"],
-              "sourceTrainingSteps": metrics.get("training_steps"),
-              "sourceVocabulary": metrics.get("vocab_size"),
-              "sourceContext": config.get("block_size"),
+              "legacyCheckpointVersion": checkpoint["version"],
+              "legacyArchitecture": legacy_config,
               "targetVersion": brain.VERSION,
-              "targetVocabulary": model.vocab_size,
-              "targetContext": model.config["block_size"],
-              "targetParameters": parameter_count,
-              "transfer": transfer,
+              "targetVocabulary": target.vocab_size,
+              "targetConfig": target.config,
+              "targetParameters": parameters,
+              "warmStart": "not attempted: hidden width and attention heads are incompatible",
           }, ensure_ascii=False, indent=2))
           PY
-      - name: Create a small isolated Brain 1.5 service checkpoint
+      - name: Create a small isolated Brain 1.6 service checkpoint
         run: |
           python - <<'PY'
           import json
           import os
           from pathlib import Path
           import torch
+          from unittest.mock import patch
           import fross_transformer as brain
 
           root = Path(os.environ["RUNNER_TEMP"])
@@ -124,10 +123,15 @@ jobs:
               encoding="utf-8",
           )
           checkpoint = root / "fross-runtime-smoke.pt"
-          metrics = brain.train_model(
-              corpus, checkpoint, steps=2, batch_size=1, block_size=64,
-              target_vocab_size=512, seed=29,
-          )
+          tiny_config = {
+              "block_size": 64, "n_embd": 16, "n_head": 4,
+              "n_layer": 2, "dropout": 0.0, "gradient_checkpointing": False,
+          }
+          with patch.dict(brain.DEFAULT_CONFIG, tiny_config, clear=True):
+              metrics = brain.train_model(
+                  corpus, checkpoint, steps=2, batch_size=1, block_size=64,
+                  target_vocab_size=512, seed=29,
+              )
           data = torch.load(checkpoint, map_location="cpu", weights_only=True)
           actual_vocab = int(metrics["vocab_size"])
           data["metrics"]["requested_vocab_size"] = actual_vocab
@@ -144,7 +148,7 @@ jobs:
           PY
       - name: Build the production Docker image without training or remote model downloads
         run: docker build --build-arg FROSS_BUILD_BUNDLE_MODEL=0 -f services/python-brain/Dockerfile -t fross-brain-smoke .
-      - name: Smoke-test Brain 1.5 health, readiness and chat endpoints
+      - name: Smoke-test Brain 1.6 health, readiness and chat endpoints
         run: |
           python - <<'PY' > "$RUNNER_TEMP/fross-smoke-env"
           import json
@@ -165,8 +169,11 @@ jobs:
             -e FROSS_MODEL_VOCAB_SIZE \
             -e FROSS_MODEL_MIN_STEPS=1 \
             -e FROSS_MODEL_CONTEXT_SIZE=64 \
-            -e FROSS_MODEL_MIN_PARAMETERS=1000000 \
+            -e FROSS_MODEL_MIN_PARAMETERS=1 \
             -e FROSS_MODEL_MAX_PARAMETERS=8000000 \
+            -e FROSS_MODEL_N_LAYER=2 \
+            -e FROSS_MODEL_N_EMBD=16 \
+            -e FROSS_MODEL_N_HEAD=4 \
             -v "$RUNNER_TEMP/fross-runtime-smoke.pt:/tmp/fross-transformer.pt:ro" \
             -v "$RUNNER_TEMP/fross-model-source.txt:/app/fross-model-source.txt:ro" \
             fross-brain-smoke
@@ -190,7 +197,7 @@ jobs:
           with open(sys.argv[1], encoding="utf-8") as stream:
               health = json.load(stream)
           assert health.get("ok") is True, health
-          assert health.get("version") == "1.5", health
+          assert health.get("version") == "1.6", health
           assert health.get("inferenceBackend") == "python-torch", health
           assert health.get("cppRuntimeLoaded") is False, health
           assert health.get("generationModelStatus", {}).get("loaded") is True, health
@@ -199,7 +206,7 @@ jobs:
           assert model.get("training_steps") == 2, health
           assert model.get("context_size") == 64, health
           assert model.get("vocab_size", 0) >= 256, health
-          print("Brain 1.5 Docker health check passed with a temporary smoke checkpoint.")
+          print("Brain 1.6 Docker health check passed with a temporary smoke checkpoint.")
           PY
           curl -fsS -X POST http://127.0.0.1:10000/ready -H 'Authorization: Bearer ci-test' > "$RUNNER_TEMP/fross-ready.json"
           python - "$RUNNER_TEMP/fross-ready.json" <<'PY'
@@ -209,7 +216,7 @@ jobs:
           assert ready.get("ok") is True and ready.get("authenticated") is True, ready
           assert ready.get("generationModelLoaded") is True, ready
           assert ready.get("inferenceBackend") == "python-torch", ready
-          print("Authenticated Brain 1.5 readiness endpoint passed.")
+          print("Authenticated Brain 1.6 readiness endpoint passed.")
           PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Привет"}' > "$RUNNER_TEMP/fross-chat.json"
           python - "$RUNNER_TEMP/fross-chat.json" <<'PY'
@@ -218,7 +225,7 @@ jobs:
               response = json.load(stream)
           assert response.get("handled") is True, response
           assert "Привет" in response.get("reply", ""), response
-          assert response.get("generationModel") == "FROSS Transformer 1.5", response
+          assert response.get("generationModel") == "FROSS Transformer 1.6", response
           print("Brain 1.5 greeting endpoint passed.")
           PY
           curl -fsS http://127.0.0.1:10000/chat -H 'Authorization: Bearer ci-test' -H 'Content-Type: application/json' -d '{"message":"Что такое нейросеть?"}' > "$RUNNER_TEMP/fross-question.json"
@@ -226,9 +233,9 @@ jobs:
           import json, sys
           with open(sys.argv[1], encoding="utf-8") as stream:
               response = json.load(stream)
-          assert response.get("engine") == "FROSS Hybrid Transformer Brain 1.5", response
-          assert response.get("generationModel") == "FROSS Transformer 1.5", response
+          assert response.get("engine") == "FROSS Hybrid Transformer Brain 1.6", response
+          assert response.get("generationModel") == "FROSS Transformer 1.6", response
           assert response.get("kind") in {"fross-transformer-v1", "empty-generation"}, response
           assert response.get("generationModelStatus", {}).get("loaded") is True, response
-          print("Brain 1.5 chat endpoint and PyTorch inference smoke test passed.")
+          print("Brain 1.6 chat endpoint and PyTorch inference smoke test passed.")
           PY

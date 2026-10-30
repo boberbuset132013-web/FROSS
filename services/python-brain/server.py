@@ -43,39 +43,51 @@ MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
 MODEL_TEST_MODE = os.environ.get("FROSS_MODEL_TEST_MODE", "0").strip().lower() in {"1", "true", "yes"}
 MODEL_UPLOAD_MIN_STEPS = max(
-    1 if MODEL_TEST_MODE else 3000,
-    int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "3000")),
+    1 if MODEL_TEST_MODE else 100000,
+    int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "100000")),
 )
-MODEL_UPLOAD_VOCAB_SIZE = 30000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "30000"))
-MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
-MODEL_MIN_PARAMETERS = 8850000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "8850000"))
-MODEL_MAX_PARAMETERS = 9100000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "9100000"))
-LEGACY_MODEL_VOCAB_SIZE = 25000
+MODEL_UPLOAD_VOCAB_SIZE = 8000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "8000"))
+MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "4096"))
+MODEL_MIN_PARAMETERS = 64800000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "64800000"))
+MODEL_MAX_PARAMETERS = 65000000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "65000000"))
+LEGACY_25K_MODEL_VOCAB_SIZE = 25000
+LEGACY_30K_MODEL_VOCAB_SIZE = 30000
 LEGACY_MODEL_MIN_PARAMETERS = 5000000
-LEGACY_MODEL_MAX_PARAMETERS = 8000000
+LEGACY_MODEL_MAX_PARAMETERS = 9100000
 
 
 def _runtime_checkpoint_profile_matches(metrics: dict[str, Any], config: dict[str, Any], actual_parameters: int | None = None) -> bool:
-    """Accept the currently deployed 25K model during rollout and the new 30K model."""
+    """Accept Brain 1.6 while retaining compatible Brain 1.5 fallback checkpoints."""
     try:
         vocab = int(metrics.get("vocab_size", 0))
         parameters = int(actual_parameters if actual_parameters is not None else metrics.get("parameters", -1))
         context = int(config.get("block_size", 0))
+        reported_context = int(metrics.get("context_size", 0))
         layers = int(config.get("n_layer", 0))
         width = int(config.get("n_embd", 0))
         heads = int(config.get("n_head", 0))
-        if context != MODEL_UPLOAD_CONTEXT_SIZE or int(metrics.get("context_size", 0)) != context:
-            return False
         if MODEL_TEST_MODE:
-            return vocab == MODEL_UPLOAD_VOCAB_SIZE and layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
-        if vocab == LEGACY_MODEL_VOCAB_SIZE:
-            return layers == 6 and width == 192 and heads == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
-        if vocab == MODEL_UPLOAD_VOCAB_SIZE:
-            return layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+            expected_layers = int(os.environ.get("FROSS_MODEL_N_LAYER", "18"))
+            expected_width = int(os.environ.get("FROSS_MODEL_N_EMBD", "520"))
+            expected_heads = int(os.environ.get("FROSS_MODEL_N_HEAD", "8"))
+            return (
+                vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
+                and reported_context == context and layers == expected_layers
+                and width == expected_width and heads == expected_heads
+                and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+            )
+        if (vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
+                and reported_context == context and layers == 18 and width == 520 and heads == 8):
+            return MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+        if context != 500 or reported_context not in (0, 500) or width != 192 or heads != 6:
+            return False
+        if vocab == LEGACY_25K_MODEL_VOCAB_SIZE:
+            return layers == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= 8000000
+        if vocab == LEGACY_30K_MODEL_VOCAB_SIZE:
+            return layers == 7 and 8850000 <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
         return False
     except (TypeError, ValueError):
         return False
-
 
 def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
     """Download the latest persisted GitHub Release asset on startup, if one exists."""
@@ -89,21 +101,20 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
             compatible = (
                 isinstance(metrics, dict)
                 and isinstance(config, dict)
-                and existing.get("version") == transformer.VERSION
+                and existing.get("version") in {transformer.VERSION, "FROSS Transformer 1.5"}
                 and int(existing.get("format_version", 0)) == 3
-                and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
+                and int(metrics.get("training_steps", 0)) >= (MODEL_UPLOAD_MIN_STEPS if existing.get("version") == transformer.VERSION else 3000)
                 and metrics.get("vocab_target_reached") is True
                 and _runtime_checkpoint_profile_matches(metrics, config)
             )
-            if compatible:
+            if compatible and existing.get("version") == transformer.VERSION:
                 return None
-        except Exception:
-            pass
-        # Never let a stale/incompatible baked-in checkpoint prevent recovery
-        # from the latest known-good GitHub Release asset.
-        target.unlink(missing_ok=True)
-        Path(ONNX_MODEL_PATH).unlink(missing_ok=True)
-        print("FROSS startup: existing checkpoint is incompatible; trying the latest GitHub model.", flush=True)
+            if compatible:
+                print("FROSS startup: compatible Brain 1.5 fallback is preserved while checking for Brain 1.6.", flush=True)
+            else:
+                print("FROSS startup: current checkpoint is not Brain 1.6; preserving it until a replacement is fully verified.", flush=True)
+        except Exception as exc:
+            print("FROSS startup: existing checkpoint could not be validated (" + type(exc).__name__ + "); preserving it during replacement check.", flush=True)
     repository = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         return None
@@ -163,9 +174,9 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         if checkpoint.get("version") != transformer.VERSION or int(checkpoint.get("format_version", 0)) != 3:
             raise ValueError("GitHub model checkpoint version or format is incompatible.")
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
-            raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
+            raise ValueError("GitHub model checkpoint does not meet the 100000-step Brain 1.6 minimum.")
         if metrics.get("vocab_target_reached") is not True or not _runtime_checkpoint_profile_matches(metrics, config):
-            raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.5 model profile (legacy 25K or refreshed 30K).")
+            raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.6 model profile (8K vocabulary, 4K context, 64M parameters).")
 
         os.replace(partial, target)
         # A cached ONNX graph may belong to older weights. Rebuild it only after
@@ -195,7 +206,7 @@ CPP_RUNTIME_STATUS = "pending"
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.5"
+ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.6"
 MAX_REPLY_CHARS = 50000
 try:
     GENERATION_TOKEN_LIMIT = max(
@@ -256,8 +267,10 @@ def _load_startup_model_background() -> None:
         loaded_vocab = int(status.get("vocab_size", tokenizer.vocab_size))
         loaded_context = int(model.config.get("block_size", 0))
         loaded_parameters = sum(parameter.numel() for parameter in model.parameters())
+        loaded_version = str(status.get("version", ""))
+        minimum_steps = MODEL_UPLOAD_MIN_STEPS if loaded_version == transformer.VERSION else 3000
         if (
-            loaded_steps < MODEL_UPLOAD_MIN_STEPS
+            loaded_steps < minimum_steps
             or tokenizer.vocab_size != loaded_vocab
             or not _runtime_checkpoint_profile_matches(
                 {**status, "vocab_size": loaded_vocab, "context_size": loaded_context},
@@ -470,8 +483,8 @@ def _publish_checkpoint_to_github(
     tag = "fross-model-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + sha256[:8]
     release = _github_json("POST", "https://api.github.com/repos/" + repo + "/releases", token, {
         "tag_name": tag,
-        "name": "FROSS Transformer 1.5 model " + tag,
-        "body": "Validated FROSS Transformer 1.5 checkpoint. SHA-256: " + sha256
+        "name": "FROSS Transformer 1.6 model " + tag,
+        "body": "Validated FROSS Transformer 1.6 checkpoint. SHA-256: " + sha256
                 + "; training steps: " + str(training_steps)
                 + "; vocabulary: " + str(vocab_size)
                 + "; context: " + str(context_size)
@@ -489,7 +502,7 @@ def _publish_checkpoint_to_github(
         raise RuntimeError("GitHub did not publish a valid model download URL.")
     manifest = {
         "schema_version": 1,
-        "model": "FROSS Transformer 1.5",
+        "model": "FROSS Transformer 1.6",
         "file": "fross-transformer.pt",
         "tag": tag,
         "release_url": release.get("html_url", ""),
@@ -541,7 +554,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if not isinstance(checkpoint, dict):
         raise ValueError("Checkpoint должен быть объектом FROSS.")
     if checkpoint.get("version") != transformer.VERSION:
-        raise ValueError("Нужна совместимая версия FROSS Transformer 1.5.")
+        raise ValueError("Нужна совместимая версия FROSS Transformer 1.6.")
     if int(checkpoint.get("format_version", 0)) != 3:
         raise ValueError("Неизвестный формат checkpoint.")
     metrics = checkpoint.get("metrics")
@@ -555,7 +568,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if vocab_size != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
         raise ValueError("Нужен словарь из " + str(MODEL_UPLOAD_VOCAB_SIZE) + " токенов с достигнутой целью словаря.")
     if int(config.get("block_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
-        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.5 (" + str(MODEL_UPLOAD_CONTEXT_SIZE) + ").")
+        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.6 (" + str(MODEL_UPLOAD_CONTEXT_SIZE) + ").")
     if int(metrics.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
         raise ValueError("В checkpoint отсутствуют корректные метаданные контекста.")
     model, tokenizer, status = transformer.load_model(path)
@@ -777,12 +790,13 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 # Training runs independently of the browser request. Status is held in the service
 # process so closing the dashboard does not cancel an active run.
 TRAINING_OUTPUT_PATH = Path(os.environ.get(
-    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-30k-9m.pt")
+    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-8k-64m.pt")
 ))
+INFERENCE_PACKAGE_PATH = TRAINING_OUTPUT_PATH.with_name("fross-transformer-1.6-64m-int8.pt")
 TRAINING_LOCK = threading.Lock()
 TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
-    "ok": True, "state": "idle", "phase": "idle", "step": 0, "targetSteps": 600,
+    "ok": True, "state": "idle", "phase": "idle", "step": 0, "targetSteps": 25000,
     "preparationStep": 0, "preparationTotal": 0, "vocabSize": None,
     "trainLoss": None, "validationLoss": None, "logs": [],
     "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
@@ -845,12 +859,12 @@ def _training_progress(progress: dict[str, Any]) -> None:
 
 
 def _prepare_website_training_corpus() -> Path:
-    """Merge the base and curated teacher corpora before building the 30K tokenizer."""
+    """Merge the base and curated teacher corpora for the 8K Brain 1.6 tokenizer."""
     from training.distillation.prepare_corpus import merge_records, read_corpus, write_jsonl_atomic
 
     base_path = ROOT / "data" / "fross_corpus.jsonl"
     teacher_path = ROOT / "data" / "fross_teacher_corpus.jsonl"
-    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-30k-9m.jsonl")
+    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-8k-64m.jsonl")
     base_records = read_corpus(base_path)
     teacher_records = read_corpus(teacher_path, required=False)
     merged, duplicates = merge_records(base_records, teacher_records)
@@ -898,9 +912,10 @@ def _best_initialization_checkpoint() -> tuple[str | None, int]:
             if not supported or not isinstance(config, dict) or not isinstance(state_dict, dict):
                 continue
             if (
-                int(config.get("n_embd", 0)) != 192
-                or int(config.get("n_head", 0)) != 6
+                int(config.get("n_embd", 0)) != 520
+                or int(config.get("n_head", 0)) != 8
                 or not 1 <= int(config.get("n_layer", 0)) <= int(transformer.DEFAULT_CONFIG["n_layer"])
+                or int(config.get("block_size", 0)) != 4096
             ):
                 continue
             steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
@@ -992,14 +1007,14 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
                 "error": None,
             })
         _training_log(
-            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с переносом слоёв из checkpoint на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
-            + ". Цель: 30000 токенов, 8,970,432 параметра, контекст 500."
+            "Запуск Transformer 1.6; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с совместимыми слоями Brain 1.6 на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
+            + ". Цель: 8000 токенов, 64,819,040 параметров, контекст 4096, график 100000 шагов."
         )
         result = transformer.train_model(
             corpus_path=corpus,
             output_path=TRAINING_OUTPUT_PATH,
             steps=target_steps,
-            batch_size=2,
+            batch_size=1,
             block_size=MODEL_UPLOAD_CONTEXT_SIZE,
             target_vocab_size=MODEL_UPLOAD_VOCAB_SIZE,
             seed=1337,
@@ -1008,7 +1023,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
             stop_callback=TRAINING_CANCEL.is_set,
-            force_cpu=True,
+            force_cpu=False,
         )
         cancelled = bool(result.get("cancelled"))
         with TRAINING_LOCK:
@@ -1061,7 +1076,7 @@ def _training_snapshot() -> dict[str, Any]:
         return snapshot
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Hybrid-Transformer/1.5"
+    server_version = "FROSS-Hybrid-Transformer/1.6"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -1090,22 +1105,34 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with TRAINING_LOCK:
                 training_state = str(TRAINING_STATUS.get("state", "idle"))
-            if training_state == "running":
-                respond(self, 409, {"ok": False, "error": "Сначала дождись завершения обучения, затем скачай контрольную точку."})
+            if training_state in ("starting", "running", "cancelling"):
+                respond(self, 409, {"ok": False, "error": "Сначала дождись завершения обучения, затем скачай модель."})
                 return
             if not TRAINING_OUTPUT_PATH.is_file():
                 respond(self, 404, {"ok": False, "error": "Сохранённая модель не найдена. Сначала запусти и заверши обучение."})
                 return
             try:
-                model_file = TRAINING_OUTPUT_PATH.open("rb")
-            except OSError:
-                respond(self, 500, {"ok": False, "error": "Не удалось открыть файл модели."})
+                import torch
+                training_checkpoint = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
+                metrics = training_checkpoint.get("metrics", {}) if isinstance(training_checkpoint, dict) else {}
+                trained_steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
+                if trained_steps < 100000:
+                    respond(self, 409, {"ok": False, "error": "Новая модель доступна для загрузки только после завершения всех 100 000 шагов."})
+                    return
+                if (
+                    not INFERENCE_PACKAGE_PATH.is_file()
+                    or INFERENCE_PACKAGE_PATH.stat().st_mtime < TRAINING_OUTPUT_PATH.stat().st_mtime
+                ):
+                    transformer.package_inference_checkpoint(TRAINING_OUTPUT_PATH, INFERENCE_PACKAGE_PATH)
+                model_file = INFERENCE_PACKAGE_PATH.open("rb")
+            except Exception as exc:
+                respond(self, 500, {"ok": False, "error": "Не удалось подготовить компактную модель: " + type(exc).__name__ + ": " + str(exc)[:180]})
                 return
             with model_file:
                 file_size = os.fstat(model_file.fileno()).st_size
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Content-Disposition", 'attachment; filename="fross-transformer.pt"')
+                self.send_header("Content-Disposition", 'attachment; filename="fross-transformer-1.6-64m-int8.pt"')
                 self.send_header("Content-Length", str(file_size))
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
@@ -1131,12 +1158,12 @@ class Handler(BaseHTTPRequestHandler):
         health_data = {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.5",
+            "version": "1.6",
             "modelSource": MODEL_SOURCE,
             "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
             "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
-            "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
+            "generationModel": TRANSFORMER_STATUS.get("version", transformer.VERSION) if TRANSFORMER_MODEL is not None else None,
             "generationModelStatus": TRANSFORMER_STATUS,
             "device": TRANSFORMER_STATUS.get("device", "cpu"),
             "maxGenerationTokens": GENERATION_TOKEN_LIMIT,
@@ -1201,13 +1228,13 @@ class Handler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("Expected a JSON object.")
-                target_steps = int(payload.get("steps", 600))
-                schedule_steps = int(payload.get("scheduleSteps", 10000))
+                target_steps = int(payload.get("steps", 25000))
+                schedule_steps = int(payload.get("scheduleSteps", 100000))
                 fresh_run = payload.get("freshRun", False) is True
-                if target_steps not in (600, 3000, 5000, 8000, 10000):
-                    raise ValueError("Choose 600, 3000, 5000, 8000 or 10000 training steps.")
-                if schedule_steps != 10000 or schedule_steps < target_steps:
-                    raise ValueError("Schedule must stay fixed at 10000 steps so training can resume consistently.")
+                if target_steps not in (25000, 50000, 75000, 100000):
+                    raise ValueError("Choose 25000, 50000, 75000 or 100000 training steps.")
+                if schedule_steps != 100000 or schedule_steps < target_steps:
+                    raise ValueError("Schedule must stay fixed at 100000 steps so training can resume consistently.")
             except Exception as exc:
                 respond(self, 400, {"ok": False, "error": str(exc)[:240]})
                 return
@@ -1271,13 +1298,13 @@ class Handler(BaseHTTPRequestHandler):
             respond(self, 200, {
                 "ok": True,
                 "engine": ENGINE_NAME,
-                "version": "1.5",
+                "version": "1.6",
                 "modelSource": MODEL_SOURCE,
-            "modelLoadState": MODEL_LOAD_STATE,
+                "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
                 "authenticated": True,
                 "generationModelLoaded": TRANSFORMER_MODEL is not None and TRANSFORMER_TOKENIZER is not None,
-                "generationModel": transformer.VERSION if TRANSFORMER_MODEL is not None else None,
+                "generationModel": TRANSFORMER_STATUS.get("version", transformer.VERSION) if TRANSFORMER_MODEL is not None else None,
                 "generationModelStatus": TRANSFORMER_STATUS,
                 "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
                 "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
@@ -1350,7 +1377,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "generation-model-unavailable",
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
                 "modelLoadState": MODEL_LOAD_STATE,
                 "modelLoadError": MODEL_LOAD_ERROR,
@@ -1376,7 +1403,7 @@ class Handler(BaseHTTPRequestHandler):
                 "engine": ENGINE_NAME,
                 "kind": "generation-error",
                 "diagnostic": type(exc).__name__,
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -1386,7 +1413,7 @@ class Handler(BaseHTTPRequestHandler):
                 "handled": False,
                 "engine": ENGINE_NAME,
                 "kind": "empty-generation",
-                "generationModel": transformer.VERSION,
+                "generationModel": TRANSFORMER_STATUS.get("version"),
                 "generationModelStatus": TRANSFORMER_STATUS,
             })
             return
@@ -1396,7 +1423,7 @@ class Handler(BaseHTTPRequestHandler):
             "reply": reply[:MAX_REPLY_CHARS],
             "engine": ENGINE_NAME,
             "kind": "fross-transformer-v1",
-            "generationModel": transformer.VERSION,
+            "generationModel": TRANSFORMER_STATUS.get("version"),
             "generationModelStatus": TRANSFORMER_STATUS,
             "trace": (
                 [

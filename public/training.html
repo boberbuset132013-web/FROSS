@@ -13,7 +13,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 <body>
 <div class="wrap">
 <header class="top">
-  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.5</small></div></div>
+  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.6</small></div></div>
   <div class="top-actions"><button id="chatLink" class="btn" type="button">← Вернуться в чат</button><button id="signOut" class="btn hidden" type="button">Выйти</button></div>
 </header>
 <section class="hero"><div class="eyebrow">Собственная нейросеть · без готовых LLM API</div><h1>Обучение <span class="gradient">FROSS Brain</span></h1><p>Запускай настоящее обучение параметров Transformer на корпусе FROSS. После запуска сервер продолжает работу, даже если закрыть эту страницу. Это не тестовая анимация: прогресс и loss поступают из процесса обучения.</p></section>
@@ -38,16 +38,15 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
       <div class="stat"><small>Train loss</small><b id="trainLoss">—</b></div>
       <div class="stat"><small>Validation loss</small><b id="valLoss">—</b></div>
     </div>
-    <h2 style="margin-top:23px">Цель обучения</h2><p class="sub">Начни с 600 шагов или выбери более длинный запуск. Можно продолжить с сохранённой контрольной точки.</p>
+    <h2 style="margin-top:23px">Цель обучения</h2><p class="sub">Обучение идёт этапами до 100 000 шагов. После каждого этапа можно продолжить с той же контрольной точки.</p>
     <div class="choices">
-      <button class="choice selected" data-steps="600" type="button"><strong>600</strong><span>Первый этап</span></button>
-      <button class="choice" data-steps="3000" type="button"><strong>3000</strong><span>Минимум для модели</span></button>
-      <button class="choice" data-steps="5000" type="button"><strong>5000</strong><span>Большой этап</span></button>
-      <button class="choice" data-steps="8000" type="button"><strong>8000</strong><span>Продолженное обучение</span></button>
-      <button class="choice" data-steps="10000" type="button"><strong>10000</strong><span>Полный график</span></button>
+      <button class="choice selected" data-steps="25000" type="button"><strong>25 000</strong><span>Этап 1</span></button>
+      <button class="choice" data-steps="50000" type="button"><strong>50 000</strong><span>Этап 2</span></button>
+      <button class="choice" data-steps="75000" type="button"><strong>75 000</strong><span>Этап 3</span></button>
+      <button class="choice" data-steps="100000" type="button"><strong>100 000</strong><span>Полный цикл</span></button>
     </div>
     <button id="start" class="btn primary wide" type="button">▶ Продолжить / запустить этап</button>
-    <button id="startFresh" class="btn wide" style="margin-top:9px;border-color:#7466bd;color:#d8d0ff" type="button">⟲ Начать новый цикл с текущей моделью</button>
+    <button id="startFresh" class="btn wide" style="margin-top:9px;border-color:#7466bd;color:#d8d0ff" type="button">⟲ Начать новый цикл</button>
     <button id="cancel" class="btn wide" style="margin-top:9px;border-color:#8a4652;color:#ffc5cc" type="button" disabled>⏹ Отменить обучение</button>
     <button id="downloadModel" class="btn wide" style="margin-top:9px" type="button" disabled>⬇ Скачать модель (.pt)</button>
     <div id="message" class="notice">Ожидание подключения к Python brain…</div>
@@ -61,24 +60,24 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 </main>
 <section class="card" style="margin-top:17px">
   <h2>Параметры модели</h2>
-  <p class="sub">Новая конфигурация Brain 1.5: 30 000 токенов словаря, контекст 500 и 8,97 млн параметров. Новый цикл обучает токенизатор заново и переносит совместимые слои активной модели. Количество шагов влияет на обучение, а не на число параметров.</p>
+  <p class="sub">Brain 1.6: 8 000 токенов словаря, контекст 4 096 и 64,82 млн параметров. Из-за изменения ширины и числа attention heads старые веса Brain 1.5 остаются резервной моделью; новый Brain 1.6 обучается отдельно.</p>
   <div class="stats">
-    <div class="stat"><small>Параметры</small><b>8,97 млн</b></div>
-    <div class="stat"><small>Словарь</small><b>30 000</b></div>
-    <div class="stat"><small>Контекст</small><b>500 токенов</b></div>
+    <div class="stat"><small>Параметры</small><b>64,82 млн</b></div>
+    <div class="stat"><small>Словарь</small><b>8 000</b></div>
+    <div class="stat"><small>Контекст</small><b>4 096 токенов</b></div>
   </div>
-  <div class="metrics">Transformer: <b>7 слоёв</b> · <b>6 attention heads</b> · embedding <b>192</b> · batch size <b>2</b> · tied embeddings · optimizer <b>AdamW</b>.<br>
-  График оптимизации фиксирован на <b>10000 шагов</b>, поэтому можно продолжать обучение с предыдущего checkpoint. Закрытие вкладки не останавливает задачу; перезапуск или пересборка самого Python-сервера может её прервать.</div>
+  <div class="metrics">Transformer: <b>18 слоёв</b> · <b>8 attention heads</b> · embedding <b>520</b> · batch size <b>1</b> · tied embeddings · gradient checkpointing · optimizer <b>AdamW</b>.<br>
+  График оптимизации фиксирован на <b>100 000 шагов</b>. Загружаемый файл будет упакован в int8, а полная обучающая контрольная точка останется на сервере для продолжения. Закрытие вкладки не останавливает задачу; перезапуск или пересборка самого Python-сервера может её прервать.</div>
   <p class="sub" style="margin-top:15px;margin-bottom:0">Больше шагов могут улучшить усвоение корпуса, но не гарантируют более умные ответы: результат зависит от объёма и качества примеров и от validation loss.</p>
 </section>
-<p class="foot">FROSS Transformer 1.5 · Целевой словарь 30 000 токенов · 8,97 млн параметров · Контекст 500 · CPU/GPU определяется сервером</p>
+<p class="foot">FROSS Transformer 1.6 · Словарь 8 000 · 64,82 млн параметров · Контекст 4 096 · план 100 000 шагов</p>
 </div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
 const $=id=>document.getElementById(id);
-let auth=null,user=null,selectedSteps=600,pollHandle=null,canDownloadModel=false,cancelPending=false; 
+let auth=null,user=null,selectedSteps=25000,pollHandle=null,canDownloadModel=false,cancelPending=false; 
 $("chatLink").addEventListener("click",()=>location.href="./chat.html");
 function showAuthMessage(message,isError=false){$("authMessage").textContent=message;$("authMessage").classList.remove("hidden","error");if(isError)$("authMessage").classList.add("error");}
 function showMessage(message,type=""){const el=$("message");el.textContent=message;el.className="notice"+(type?" "+type:"");}
@@ -86,7 +85,7 @@ function errorText(error){return String(error?.message||error||"Неизвест
 async function token(){if(!user)throw new Error("Войди в аккаунт.");return user.getIdToken();}
 async function api(path,options={}){const idToken=await token();const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json",...(options.headers||{})},cache:"no-store"});let data;try{data=await response.json()}catch{throw new Error(path+" вернул не JSON (HTTP "+response.status+").")};if(!response.ok||data.ok===false)throw new Error(data.error||("HTTP "+response.status));return data}
 function renderStatus(d){
- const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||600),pct=target?Math.min(100,Math.round(step/target*100)):0;
+ const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||25000),pct=target?Math.min(100,Math.round(step/target*100)):0;
  $("state").className="status "+state;$("state").lastElementChild.textContent=({idle:"Готово к запуску",starting:"Подготовка к запуску",running:"Обучение выполняется",cancelling:"Остановка обучения",completed:"Обучение завершено",cancelled:"Обучение отменено",failed:"Ошибка обучения"})[state]||state;
  $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
@@ -95,15 +94,15 @@ function renderStatus(d){
  $("start").disabled=busy;$("startFresh").disabled=busy;$("start").textContent=busy?"Подготовка / обучение…":"▶ Продолжить / запустить этап";
  $("cancel").disabled=!["starting","running"].includes(state)||cancelPending;
  $("cancel").textContent=state==="cancelling"||cancelPending?"Останавливаю…":"⏹ Отменить обучение";
- canDownloadModel=d.checkpointAvailable===true && !busy;$("downloadModel").disabled=!canDownloadModel;
+ canDownloadModel=d.checkpointAvailable===true && Number(d.metrics?.training_steps||d.step||0)>=100000 && !busy;$("downloadModel").disabled=!canDownloadModel;
  const phase=d.phase||"";
  const prepStep=Number(d.preparationStep||0),prepTotal=Number(d.preparationTotal||0);
  if(state==="starting")showMessage("Задание принято. Проверяю checkpoint в фоне; страница должна оставаться отзывчивой.");
  else if(state==="running"&&phase==="checking_checkpoint")showMessage("Проверяю контрольную точку модели на сервере…");
  else if(state==="running"&&phase==="loading_corpus")showMessage("Загружаю обучающие примеры и готовлю данные. Шаги модели начнутся после подготовки.");
- else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 30000 токенов…");
+ else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 8000 токенов…");
   else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка SentencePiece Unigram: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+". Это предварительный этап; ниже виден его прогресс.");
- else if(state==="running")showMessage("Обучение модели выполняется на CPU. Шаги и loss обновляются по мере вычислений.");
+ else if(state==="running")showMessage("Обучение модели выполняется на доступном устройстве (CPU или GPU). Шаги и loss обновляются по мере вычислений.");
  else if(state==="cancelling")showMessage("Запрошена остановка. Сервер остановит подготовку или обучение в ближайшей безопасной точке…");
  else if(state==="cancelled")showMessage(d.checkpointAvailable?"Обучение остановлено. Сохранённая контрольная точка оставлена без изменений.":"Подготовка остановлена до создания контрольной точки.","good");
  else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
@@ -113,7 +112,7 @@ function renderStatus(d){
 }
 async function refresh(){try{const d=await api("/api/training/status",{method:"GET",headers:{"Content-Type":"application/json"}});renderStatus(d)}catch(e){canDownloadModel=false;$("downloadModel").disabled=true;showMessage(errorText(e),"error")}}
 async function cancelTraining(){if(!confirm("Остановить обучение? Сервер завершит текущий шаг и попробует сохранить checkpoint."))return;cancelPending=true;$("cancel").disabled=true;try{await api("/api/training/cancel",{method:"POST",body:"{}"});showMessage("Запрос отмены отправлен. Ждём безопасной остановки…")}catch(e){showMessage(errorText(e),"error")}finally{cancelPending=false;await refresh()}}
-async function startTraining(freshRun=false){if(freshRun&&!confirm("Начать новый цикл? Предыдущая обучающая контрольная точка будет сохранена в архиве. Активная модель сайта останется доступной до загрузки новой. Совместимые слои активной модели будут перенесены, словарь 30000 токенов обучится заново."))return;const btn=freshRun?$("startFresh"):$("start");btn.disabled=true;showMessage(freshRun?"Подготавливаю новый цикл обучения…":"Отправляю задачу на продолжение обучения…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:10000,freshRun})});showMessage(freshRun?"Сервер принял новый цикл.":"Сервер принял задачу на продолжение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{const busy=["starting","running","cancelling"].some(s=>$("state").classList.contains(s));$("start").disabled=busy;$("startFresh").disabled=busy}}
+async function startTraining(freshRun=false){if(freshRun&&!confirm("Начать новый цикл? Предыдущая контрольная точка будет сохранена в архиве. Активная модель сайта останется доступной до загрузки Brain 1.6. Новый словарь 8000 токенов будет подготовлен заново."))return;const btn=freshRun?$("startFresh"):$("start");btn.disabled=true;showMessage(freshRun?"Подготавливаю новый цикл обучения…":"Отправляю задачу на продолжение обучения…");try{await api("/api/training/start",{method:"POST",body:JSON.stringify({steps:selectedSteps,scheduleSteps:100000,freshRun})});showMessage(freshRun?"Сервер принял новый цикл.":"Сервер принял задачу на продолжение.","good");await refresh()}catch(e){showMessage(errorText(e),"error")}finally{const busy=["starting","running","cancelling"].some(s=>$("state").classList.contains(s));$("start").disabled=busy;$("startFresh").disabled=busy}}
 async function downloadModel(){
  const btn=$("downloadModel");btn.disabled=true;btn.textContent="Подготовка файла…";
  try{

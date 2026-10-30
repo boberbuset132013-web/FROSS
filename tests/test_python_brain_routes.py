@@ -68,7 +68,7 @@ class PythonBrainRouteTests(unittest.TestCase):
     def test_query_and_trailing_slash_on_admin_post_are_normalized(self) -> None:
         request = urllib.request.Request(
             self.base_url + "/admin/training/start/?probe=1",
-            data=b'{"steps":600,"scheduleSteps":10000}',
+            data=b'{"steps":25000,"scheduleSteps":100000}',
             headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
             method="POST",
         )
@@ -94,9 +94,9 @@ class PythonBrainRouteTests(unittest.TestCase):
             def fake_train_model(**kwargs):
                 finished.set()
                 return {
-                    "ok": True, "training_steps": 600, "steps_this_run": 600,
+                    "ok": True, "training_steps": 25000, "steps_this_run": 25000,
                     "train_loss": 1.0, "validation_loss": 1.1,
-                    "vocab_size": 5000, "cancelled": False,
+                    "vocab_size": 8000, "context_size": 4096, "parameters": 64819040, "cancelled": False,
                 }
 
             try:
@@ -106,7 +106,7 @@ class PythonBrainRouteTests(unittest.TestCase):
                      patch.object(brain.transformer, "train_model", side_effect=fake_train_model):
                     request = urllib.request.Request(
                         self.base_url + "/admin/training/start",
-                        data=b'{"steps":600,"scheduleSteps":10000}',
+                        data=b'{"steps":25000,"scheduleSteps":100000}',
                         headers={
                             "Content-Type": "application/json",
                             "Authorization": "Bearer route-test-token",

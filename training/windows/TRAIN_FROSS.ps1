@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("600", "3000", "check")]
+    [ValidateSet("25000", "50000", "75000", "100000", "check")]
     [string]$Stage
 )
 
@@ -10,13 +10,10 @@ $pythonScript = Join-Path $repoRoot "fross_transformer.py"
 $baseCorpus = Join-Path $repoRoot "data\fross_corpus.jsonl"
 $teacherCorpus = Join-Path $repoRoot "data\fross_teacher_corpus.jsonl"
 $prepareCorpus = Join-Path $repoRoot "training\distillation\prepare_corpus.py"
-$corpus = Join-Path $repoRoot ".fross-brain15-training\training-corpus.jsonl"
-$workDir = Join-Path $repoRoot ".fross-brain15-training"
-$checkpoint = Join-Path $workDir "fross-transformer-1.5-training.pt"
-$uploadCheckpoint = Join-Path $workDir "fross-transformer-upload.pt"
-$seedCheckpoint = Join-Path $workDir "fross-brain-1.4-compatible-seed.pt"
-$seedUrl = "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-brain-1.5/fross-transformer.pt"
-$seedSha256 = "8fb674c5d5f6fdeda09c3ab0657286057066e73dce8583db2057e8f91fc0b831"
+$workDir = Join-Path $repoRoot ".fross-brain16-training"
+$corpus = Join-Path $workDir "training-corpus.jsonl"
+$checkpoint = Join-Path $workDir "fross-transformer-1.6-64m-training.pt"
+$uploadCheckpoint = Join-Path $workDir "fross-transformer-1.6-64m-int8.pt"
 $venvDir = Join-Path $repoRoot ".venv-training"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $logDir = Join-Path $workDir "logs"
@@ -31,13 +28,13 @@ if (-not (Test-Path $teacherCorpus)) {
     throw "Missing data\fross_teacher_corpus.jsonl. Re-download the current repository ZIP."
 }
 if (-not (Test-Path $prepareCorpus)) {
-    throw "Missing training\distillation\prepare_corpus.py. Re-download the current repository ZIP."
+    throw "Missing training\distillation\prepare_corpus.py."
 }
 
 New-Item -ItemType Directory -Force -Path $workDir, $logDir | Out-Null
 
 if (-not (Test-Path $pythonExe)) {
-    Write-Host "Creating an isolated Python environment for local training..."
+    Write-Host "Creating an isolated Python environment for local Brain 1.6 training..."
     $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pyLauncher) {
         & $pyLauncher.Source -3 -m venv $venvDir
@@ -71,78 +68,70 @@ if ($LASTEXITCODE -ne 0) {
 $env:FROSS_DEVICE = "cpu"
 $env:FROSS_TORCH_THREADS = "2"
 
-Write-Host "Preparing the student training corpus from base and teacher examples..."
-& $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
-if ($LASTEXITCODE -ne 0) { throw "Could not validate and merge the training corpora." }
-
+if (-not (Test-Path $corpus)) {
+    Write-Host "Preparing and validating the combined training corpus..."
+    & $pythonExe $prepareCorpus --base $baseCorpus --teacher $teacherCorpus --output $corpus
+    if ($LASTEXITCODE -ne 0) { throw "Could not validate and merge the training corpora." }
+} else {
+    Write-Host "Using the preserved training corpus so resume checks remain consistent."
+}
 
 switch ($Stage) {
-    "600" {
+    "25000" {
         if (Test-Path $checkpoint) {
-            throw "A checkpoint already exists at $checkpoint. To avoid overwriting work, run CONTINUE_TO_3000.bat or move the checkpoint manually."
+            throw "A Brain 1.6 checkpoint already exists at $checkpoint. Continue with stage 50000 or move the checkpoint to a backup."
         }
-        if (-not (Test-Path $seedCheckpoint)) {
-            Write-Host "Downloading the preserved FROSS Brain 1.4 checkpoint for compatible-layer initialization..."
-            try {
-                Invoke-WebRequest -Uri $seedUrl -OutFile $seedCheckpoint -UseBasicParsing
-            } catch {
-                throw "Could not download the verified Brain 1.4 initialization checkpoint: $($_.Exception.Message)"
-            }
-        }
-        $actualSeedHash = (Get-FileHash -Path $seedCheckpoint -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actualSeedHash -ne $seedSha256) {
-            throw "Brain 1.4 initialization checkpoint SHA-256 mismatch. Keep the file unchanged and download it again."
-        }
-
         $arguments = @(
-            $pythonScript, "train",
-            "--corpus", $corpus,
-            "--output", $checkpoint,
-            "--steps", "600",
-            "--initialize-from", $seedCheckpoint,
-            "--schedule-steps", "10000",
-            "--batch-size", "2",
-            "--block-size", "500",
-            "--vocab-size", "30000",
+            $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
+            "--steps", "25000", "--schedule-steps", "100000",
+            "--batch-size", "1", "--block-size", "4096", "--vocab-size", "8000",
             "--seed", "1337"
         )
-        $logPath = Join-Path $logDir "stage-600.log"
-        Write-Host ""
-        Write-Host "Stage 1/2: initializing compatible Transformer layers from Brain 1.4, then training Brain 1.5 to 600 steps."
+        $logPath = Join-Path $logDir "stage-25000.log"
+        Write-Host "Stage 1/4: train Brain 1.6 from its new initialization to 25,000 cumulative steps."
     }
-    "3000" {
-        if (-not (Test-Path $checkpoint)) {
-            throw "Checkpoint not found. Run START_TRAIN_600.bat successfully first."
-        }
+    "50000" {
+        if (-not (Test-Path $checkpoint)) { throw "Checkpoint not found. Run stage 25000 first." }
         $arguments = @(
-            $pythonScript, "train",
-            "--corpus", $corpus,
-            "--output", $checkpoint,
-            "--steps", "3000",
-            "--schedule-steps", "10000",
-            "--batch-size", "2",
-            "--block-size", "500",
-            "--vocab-size", "30000",
-            "--seed", "1337",
-            "--resume"
+            $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
+            "--steps", "50000", "--schedule-steps", "100000",
+            "--batch-size", "1", "--block-size", "4096", "--vocab-size", "8000",
+            "--seed", "1337", "--resume"
         )
-        $logPath = Join-Path $logDir "stage-3000.log"
-        Write-Host ""
-        Write-Host "Stage 2/2: resuming from 600 to 3000 total steps."
+        $logPath = Join-Path $logDir "stage-50000.log"
+        Write-Host "Stage 2/4: resume Brain 1.6 to 50,000 cumulative steps."
+    }
+    "75000" {
+        if (-not (Test-Path $checkpoint)) { throw "Checkpoint not found. Complete stage 50000 first." }
+        $arguments = @(
+            $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
+            "--steps", "75000", "--schedule-steps", "100000",
+            "--batch-size", "1", "--block-size", "4096", "--vocab-size", "8000",
+            "--seed", "1337", "--resume"
+        )
+        $logPath = Join-Path $logDir "stage-75000.log"
+        Write-Host "Stage 3/4: resume Brain 1.6 to 75,000 cumulative steps."
+    }
+    "100000" {
+        if (-not (Test-Path $checkpoint)) { throw "Checkpoint not found. Complete stage 75000 first." }
+        $arguments = @(
+            $pythonScript, "train", "--corpus", $corpus, "--output", $checkpoint,
+            "--steps", "100000", "--schedule-steps", "100000",
+            "--batch-size", "1", "--block-size", "4096", "--vocab-size", "8000",
+            "--seed", "1337", "--resume"
+        )
+        $logPath = Join-Path $logDir "stage-100000.log"
+        Write-Host "Stage 4/4: complete Brain 1.6 training at 100,000 cumulative steps."
     }
     "check" {
-        if (-not (Test-Path $checkpoint)) {
-            throw "Checkpoint not found. Complete training first."
-        }
+        if (-not (Test-Path $checkpoint)) { throw "Checkpoint not found. Complete training first." }
         $arguments = @(
-            $pythonScript, "generate",
-            "--output", $checkpoint,
-            "--text", "Hello FROSS! Explain what a neural network is in simple terms.",
-            "--max-new-tokens", "64"
+            $pythonScript, "generate", "--output", $checkpoint,
+            "--text", "Объясни простыми словами, как работает нейронная сеть и приведи пример.",
+            "--max-new-tokens", "96"
         )
         $logPath = Join-Path $logDir "checkpoint-check.log"
-        Write-Host ""
-        Write-Host "Checking that the checkpoint loads and the model can generate a reply."
+        Write-Host "Checking that the full training checkpoint loads and generates a sample."
     }
 }
 
@@ -152,20 +141,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "The command failed. Copy the log file at $logPath for diagnosis."
 }
 
-if ($Stage -eq "600") {
-    Write-Host ""
-    Write-Host "Stage 600 complete. Next, run CONTINUE_TO_3000.bat."
-} elseif ($Stage -eq "3000") {
-    Write-Host ""
+if ($Stage -eq "100000") {
     Write-Host "Training checkpoint saved: $checkpoint"
-        Write-Host "Creating a compact inference-only model file for FROSS Settings..."
-        & $pythonExe $pythonScript package --output $checkpoint --package-output $uploadCheckpoint
-        if ($LASTEXITCODE -ne 0) { throw "Could not create the compact upload checkpoint." }
-        Write-Host ""
-        Write-Host "UPLOAD THIS FILE IN FROSS SETTINGS:"
-        Write-Host $uploadCheckpoint
-        Write-Host "The full training checkpoint remains available for future resume runs: $checkpoint"
+    Write-Host "Creating the compact int8 inference package for FROSS Settings..."
+    & $pythonExe $pythonScript package --output $checkpoint --package-output $uploadCheckpoint
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the compact int8 inference package." }
+    Write-Host "Upload this file in FROSS Settings: $uploadCheckpoint"
+    Write-Host "The full training checkpoint remains available for future resume runs: $checkpoint"
+} elseif ($Stage -eq "check") {
+    Write-Host "Checkpoint check complete."
 } else {
-    Write-Host ""
-    Write-Host "Checkpoint check complete. The generated sample is shown above."
+    Write-Host "Stage $Stage complete. Continue with the next cumulative training stage."
 }
