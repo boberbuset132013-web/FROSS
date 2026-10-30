@@ -808,38 +808,68 @@ def _training_log(message: str) -> None:
         logs.append("[" + stamp + "] " + str(message)[:300])
         del logs[:-120]
 def _training_progress(progress: dict[str, Any]) -> None:
+    """Update training status without acquiring the log lock recursively."""
     phase = str(progress.get("phase", "training"))
+    log_message: str | None = None
+    now = datetime.now(timezone.utc).isoformat()
     with TRAINING_LOCK:
+        previous_phase = str(TRAINING_STATUS.get("phase", ""))
         TRAINING_STATUS["phase"] = phase
+        if previous_phase != phase:
+            TRAINING_STATUS["phaseStartedAt"] = now
         TRAINING_STATUS["targetSteps"] = int(
             progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600))
         )
-        TRAINING_STATUS["device"] = str(progress.get("device", "cpu"))
+        TRAINING_STATUS["device"] = str(progress.get("device", TRAINING_STATUS.get("device", "cpu")))
+        step = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
+        target = max(1, int(TRAINING_STATUS["targetSteps"]))
+        preparation_step = int(progress.get("preparation_step", TRAINING_STATUS.get("preparationStep", 0)))
+        preparation_total = max(1, int(progress.get("preparation_total", TRAINING_STATUS.get("preparationTotal", 1))))
+        vocab_size = int(progress.get("vocab_size") or TRAINING_STATUS.get("vocabSize") or 0)
+
         if phase == "tokenizer_native":
-            TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
-            TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 1))
-            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size") or 0)
-            _training_log("Подготовка словаря SentencePiece Unigram (нативный CPU-процесс).")
+            TRAINING_STATUS["preparationStep"] = preparation_step
+            TRAINING_STATUS["preparationTotal"] = preparation_total
+            TRAINING_STATUS["vocabSize"] = vocab_size or None
+            if preparation_step <= 0:
+                log_message = (
+                    "Началась подготовка словаря SentencePiece Unigram (8000 токенов). "
+                    "Библиотека не сообщает промежуточный процент; шаги Transformer начнутся после словаря."
+                )
+            elif preparation_step >= preparation_total:
+                log_message = "Словарь SentencePiece готов; перехожу к инициализации Transformer."
         elif phase == "tokenizer":
-            TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
-            TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 0))
-            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", 0))
-            step = int(TRAINING_STATUS.get("step", 0))
-            target = max(1, int(TRAINING_STATUS["targetSteps"]))
-            preparation_step = int(TRAINING_STATUS["preparationStep"])
-            preparation_total = max(1, int(TRAINING_STATUS["preparationTotal"]))
-            vocab_size = int(TRAINING_STATUS["vocabSize"])
+            TRAINING_STATUS["preparationStep"] = preparation_step
+            TRAINING_STATUS["preparationTotal"] = preparation_total
+            TRAINING_STATUS["vocabSize"] = vocab_size
         else:
-            TRAINING_STATUS["step"] = int(progress.get("step", TRAINING_STATUS.get("step", 0)))
+            TRAINING_STATUS["step"] = step
             TRAINING_STATUS["trainLoss"] = progress.get("train_loss")
             TRAINING_STATUS["validationLoss"] = progress.get("validation_loss")
             TRAINING_STATUS["bestCheckpointStep"] = int(progress.get("best_checkpoint_step", 0))
-            TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", TRAINING_STATUS.get("vocabSize") or 0))
-            step = int(TRAINING_STATUS["step"])
-            target = max(1, int(TRAINING_STATUS["targetSteps"]))
-            preparation_step = 0
-            preparation_total = 0
-            vocab_size = int(TRAINING_STATUS.get("vocabSize") or 0)
+            if vocab_size:
+                TRAINING_STATUS["vocabSize"] = vocab_size
+
+            if phase == "loading_corpus":
+                log_message = "Обучающие примеры загружены; подготавливаю токенизатор и модель."
+            elif phase == "initializing_model":
+                log_message = "Токенизатор готов; создаю модель Transformer и оптимизатор."
+            elif phase == "training" and step == 0:
+                log_message = "Модель и оптимизатор готовы; начинается первый шаг обучения Transformer."
+            elif phase == "training" and (step == 1 or step % 10 == 0 or step == target):
+                log_message = (
+                    "Шаг " + str(step) + "/" + str(target)
+                    + " · train loss " + format(float(progress.get("train_loss") or 0.0), ".4f")
+                    + " · validation loss "
+                    + (format(float(progress["validation_loss"]), ".4f") if progress.get("validation_loss") is not None else "ещё не измерен")
+                )
+
+    # _training_log acquires TRAINING_LOCK itself, so it must only be called
+    # after the status lock above has been released. Calling it inside that
+    # critical section deadlocks the SentencePiece callback before step 1.
+    if log_message:
+        _training_log(log_message)
+
     if phase == "tokenizer":
         interval = max(1, preparation_total // 10)
         if preparation_step == 0 or preparation_step % interval == 0 or preparation_step >= preparation_total:
@@ -847,15 +877,6 @@ def _training_progress(progress: dict[str, Any]) -> None:
                 "Подготовка BPE-словаря (совместимость): " + str(preparation_step) + "/" + str(preparation_total)
                 + " объединений · размер словаря " + str(vocab_size) + "."
             )
-    elif phase == "loading_corpus":
-        _training_log("Обучающие примеры загружены; подготавливаю токенизатор и модель.")
-    elif step > 0 and (step == 1 or step % 10 == 0 or step == target):
-        _training_log(
-            "Шаг " + str(step) + "/" + str(target)
-            + " · train loss " + format(float(progress.get("train_loss") or 0.0), ".4f")
-            + " · validation loss "
-            + (format(float(progress["validation_loss"]), ".4f") if progress.get("validation_loss") is not None else "ещё не измерен")
-        )
 
 
 def _prepare_website_training_corpus() -> Path:
@@ -929,6 +950,13 @@ def _best_initialization_checkpoint() -> tuple[str | None, int]:
 
 def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = False) -> None:
     try:
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({
+                "state": "starting",
+                "phase": "preparing_corpus",
+                "phaseStartedAt": datetime.now(timezone.utc).isoformat(),
+            })
+        _training_log("Объединяю и проверяю обучающий корпус перед запуском токенизатора.")
         corpus = _prepare_website_training_corpus()
         if fresh_run and TRAINING_OUTPUT_PATH.is_file():
             archive_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -938,6 +966,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
             _training_log("Предыдущая контрольная точка нового цикла сохранена отдельно: " + archive_path.name)
         with TRAINING_LOCK:
             TRAINING_STATUS["phase"] = "checking_checkpoint"
+            TRAINING_STATUS["phaseStartedAt"] = datetime.now(timezone.utc).isoformat()
         _training_log("Проверяю сохранённую контрольную точку; проверка выполняется в фоне.")
 
         # Never perform checkpoint disk I/O while holding TRAINING_LOCK. The status
@@ -998,6 +1027,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
         with TRAINING_LOCK:
             TRAINING_STATUS.update({
                 "state": "running", "phase": "loading_corpus",
+                "phaseStartedAt": datetime.now(timezone.utc).isoformat(),
                 "step": existing_steps if resume else 0,
                 "targetSteps": target_steps,
                 "trainLoss": prior_metrics.get("train_loss") if resume else None,
@@ -1073,7 +1103,17 @@ def _training_snapshot() -> dict[str, Any]:
         snapshot = dict(TRAINING_STATUS)
         snapshot["logs"] = list(TRAINING_STATUS.get("logs", []))
         snapshot["checkpointAvailable"] = TRAINING_OUTPUT_PATH.is_file()
-        return snapshot
+    phase_started = snapshot.get("phaseStartedAt")
+    try:
+        started = datetime.fromisoformat(str(phase_started))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        snapshot["phaseElapsedSeconds"] = max(
+            0, int((datetime.now(timezone.utc) - started).total_seconds())
+        )
+    except (TypeError, ValueError):
+        snapshot["phaseElapsedSeconds"] = 0
+    return snapshot
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "FROSS-Hybrid-Transformer/1.6"
@@ -1248,7 +1288,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 TRAINING_CANCEL.clear()
                 TRAINING_STATUS.update({
-                    "state": "starting", "phase": "checking_checkpoint",
+                    "state": "starting", "phase": "preparing_corpus",
+                    "phaseStartedAt": datetime.now(timezone.utc).isoformat(),
                     "step": 0, "targetSteps": target_steps,
                     "preparationStep": 0, "preparationTotal": 0, "vocabSize": None,
                     "trainLoss": None, "validationLoss": None, "metrics": None,
