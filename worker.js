@@ -1862,11 +1862,11 @@ async function handleFrossTransformerTraining(request, env, action) {
       let body;
       try { body = await request.json(); }
       catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
-      const steps = Number(body?.steps ?? 600);
-      const scheduleSteps = Number(body?.scheduleSteps ?? 10000);
+      const steps = Number(body?.steps ?? 25000);
+      const scheduleSteps = Number(body?.scheduleSteps ?? 100000);
       const freshRun = body?.freshRun === true;
-      if (![600,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
-        return frossJson({ ok: false, error: "Выбери 600, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
+      if (![25000,50000,75000,100000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 100000 || scheduleSteps < steps) {
+        return frossJson({ ok: false, error: "Выбери 25 000, 50 000, 75 000 или 100 000 шагов. График обучения фиксирован на 100 000 шагов." }, 400, request);
       }
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify({ steps, scheduleSteps, freshRun });
