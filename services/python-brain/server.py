@@ -171,7 +171,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
             raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
         if metrics.get("vocab_target_reached") is not True or not _runtime_checkpoint_profile_matches(metrics, config):
-            raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.5 model profile (legacy 25K or refreshed 30K).")
+            raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.6 model profile (8K vocabulary, 4K context, 64M parameters).")
 
         os.replace(partial, target)
         # A cached ONNX graph may belong to older weights. Rebuild it only after
@@ -201,7 +201,7 @@ CPP_RUNTIME_STATUS = "pending"
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.5"
+ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.6"
 MAX_REPLY_CHARS = 50000
 try:
     GENERATION_TOKEN_LIMIT = max(
@@ -478,8 +478,8 @@ def _publish_checkpoint_to_github(
     tag = "fross-model-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + sha256[:8]
     release = _github_json("POST", "https://api.github.com/repos/" + repo + "/releases", token, {
         "tag_name": tag,
-        "name": "FROSS Transformer 1.5 model " + tag,
-        "body": "Validated FROSS Transformer 1.5 checkpoint. SHA-256: " + sha256
+        "name": "FROSS Transformer 1.6 model " + tag,
+        "body": "Validated FROSS Transformer 1.6 checkpoint. SHA-256: " + sha256
                 + "; training steps: " + str(training_steps)
                 + "; vocabulary: " + str(vocab_size)
                 + "; context: " + str(context_size)
@@ -497,7 +497,7 @@ def _publish_checkpoint_to_github(
         raise RuntimeError("GitHub did not publish a valid model download URL.")
     manifest = {
         "schema_version": 1,
-        "model": "FROSS Transformer 1.5",
+        "model": "FROSS Transformer 1.6",
         "file": "fross-transformer.pt",
         "tag": tag,
         "release_url": release.get("html_url", ""),
@@ -1071,7 +1071,7 @@ def _training_snapshot() -> dict[str, Any]:
         return snapshot
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Hybrid-Transformer/1.5"
+    server_version = "FROSS-Hybrid-Transformer/1.6"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -1153,7 +1153,7 @@ class Handler(BaseHTTPRequestHandler):
         health_data = {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.5",
+            "version": "1.6",
             "modelSource": MODEL_SOURCE,
             "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
@@ -1293,7 +1293,7 @@ class Handler(BaseHTTPRequestHandler):
             respond(self, 200, {
                 "ok": True,
                 "engine": ENGINE_NAME,
-                "version": "1.5",
+                "version": "1.6",
                 "modelSource": MODEL_SOURCE,
             "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
