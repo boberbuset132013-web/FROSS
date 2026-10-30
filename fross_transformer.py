@@ -571,6 +571,8 @@ def initialize_model_from_checkpoint(
     source_state = checkpoint.get("state_dict")
     if not isinstance(source_config, dict) or not isinstance(source_state, dict):
         raise ValueError("Source checkpoint is missing model configuration or weights.")
+    if checkpoint.get("inference_quantization") == "int8-rowwise-v1":
+        source_state = _dequantize_inference_state_dict(source_state)
 
     for field in ("n_embd", "n_head"):
         if int(source_config.get(field, -1)) != int(model.config[field]):
