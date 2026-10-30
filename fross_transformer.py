@@ -332,7 +332,7 @@ class SentencePieceTokenizer:
         return int(self.processor.get_piece_size())
 
     @classmethod
-    def train(cls, texts: list[str], target_vocab_size: int = 25000,
+    def train(cls, texts: list[str], target_vocab_size: int = 30000,
               progress_callback: Any = None, stop_callback: Any = None) -> "SentencePieceTokenizer":
         import base64
         import subprocess
@@ -740,7 +740,7 @@ def train_model(
     batch_size: int = 4,
     block_size: int = 500,
     merge_count: int | None = None,
-    target_vocab_size: int = 25000,
+    target_vocab_size: int = 30000,
     seed: int = 1337,
     resume: bool = False,
     initialize_from: str | Path | None = None,
