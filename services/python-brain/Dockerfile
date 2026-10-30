@@ -3,12 +3,12 @@ ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 FROSS_TORCH_THREADS=1
 WORKDIR /app
 
 # Temporary troubleshooting build: run inference through PyTorch only.
-# Keep the existing FROSS 1.4 checkpoint unchanged; training is offline.
+# Keep the existing FROSS 1.5 checkpoint unchanged; training is offline.
 RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 --index-url https://download.pytorch.org/whl/cpu torch \
-    && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2"
+    && python -m pip install --no-cache-dir --retries 5 --timeout 120 "onnx>=1.16,<2" "sentencepiece>=0.2.0,<0.3"
 
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/ /app/data/
