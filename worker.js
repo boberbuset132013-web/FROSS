@@ -1883,7 +1883,7 @@ async function handleFrossTransformerTraining(request, env, action) {
       const contentType = response.headers.get("content-type") || "не указан";
       const preview = responseText
         .replace(/\s+/g, " ")
-        .replace(/Bearer\\s+[A-Za-z0-9._-]+/gi, "Bearer [скрыто]")
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [скрыто]")
         .slice(0, 180);
       const isHtml = contentType.toLowerCase().includes("text/html") || /^\s*</.test(responseText);
       const reason = isHtml
