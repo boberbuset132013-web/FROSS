@@ -46,10 +46,35 @@ MODEL_UPLOAD_MIN_STEPS = max(
     1 if MODEL_TEST_MODE else 3000,
     int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "3000")),
 )
-MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "25000"))
+MODEL_UPLOAD_VOCAB_SIZE = 30000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "30000"))
 MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
-MODEL_MIN_PARAMETERS = int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "5000000"))
-MODEL_MAX_PARAMETERS = int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "8000000"))
+MODEL_MIN_PARAMETERS = 8850000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "8850000"))
+MODEL_MAX_PARAMETERS = 9100000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "9100000"))
+LEGACY_MODEL_VOCAB_SIZE = 25000
+LEGACY_MODEL_MIN_PARAMETERS = 5000000
+LEGACY_MODEL_MAX_PARAMETERS = 8000000
+
+
+def _runtime_checkpoint_profile_matches(metrics: dict[str, Any], config: dict[str, Any], actual_parameters: int | None = None) -> bool:
+    """Accept the currently deployed 25K model during rollout and the new 30K model."""
+    try:
+        vocab = int(metrics.get("vocab_size", 0))
+        parameters = int(actual_parameters if actual_parameters is not None else metrics.get("parameters", -1))
+        context = int(config.get("block_size", 0))
+        layers = int(config.get("n_layer", 0))
+        width = int(config.get("n_embd", 0))
+        heads = int(config.get("n_head", 0))
+        if context != MODEL_UPLOAD_CONTEXT_SIZE or int(metrics.get("context_size", 0)) != context:
+            return False
+        if MODEL_TEST_MODE:
+            return vocab == MODEL_UPLOAD_VOCAB_SIZE and layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+        if vocab == LEGACY_MODEL_VOCAB_SIZE:
+            return layers == 6 and width == 192 and heads == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
+        if vocab == MODEL_UPLOAD_VOCAB_SIZE:
+            return layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+        return False
+    except (TypeError, ValueError):
+        return False
 
 
 def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
@@ -67,11 +92,8 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
                 and existing.get("version") == transformer.VERSION
                 and int(existing.get("format_version", 0)) == 3
                 and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
-                and int(metrics.get("vocab_size", 0)) == MODEL_UPLOAD_VOCAB_SIZE
                 and metrics.get("vocab_target_reached") is True
-                and int(config.get("block_size", 0)) == MODEL_UPLOAD_CONTEXT_SIZE
-                and int(metrics.get("context_size", 0)) == MODEL_UPLOAD_CONTEXT_SIZE
-                and MODEL_MIN_PARAMETERS <= int(metrics.get("parameters", 0)) <= MODEL_MAX_PARAMETERS
+                and _runtime_checkpoint_profile_matches(metrics, config)
             )
             if compatible:
                 return None
@@ -142,14 +164,8 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
             raise ValueError("GitHub model checkpoint version or format is incompatible.")
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
             raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
-        if int(metrics.get("vocab_size", 0)) != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
-            raise ValueError("GitHub model checkpoint does not have the required " + str(MODEL_UPLOAD_VOCAB_SIZE) + "-token vocabulary.")
-        if int(config.get("block_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
-            raise ValueError("GitHub model checkpoint context size does not match " + str(MODEL_UPLOAD_CONTEXT_SIZE) + ".")
-        if int(metrics.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
-            raise ValueError("GitHub model checkpoint is missing the expected context-size metadata.")
-        if not MODEL_MIN_PARAMETERS <= int(metrics.get("parameters", 0)) <= MODEL_MAX_PARAMETERS:
-            raise ValueError("GitHub model checkpoint parameter count is outside the configured 5-8 million range.")
+        if metrics.get("vocab_target_reached") is not True or not _runtime_checkpoint_profile_matches(metrics, config):
+            raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.5 model profile (legacy 25K or refreshed 30K).")
 
         os.replace(partial, target)
         # A cached ONNX graph may belong to older weights. Rebuild it only after
@@ -242,11 +258,11 @@ def _load_startup_model_background() -> None:
         loaded_parameters = sum(parameter.numel() for parameter in model.parameters())
         if (
             loaded_steps < MODEL_UPLOAD_MIN_STEPS
-            or loaded_vocab != MODEL_UPLOAD_VOCAB_SIZE
-            or tokenizer.vocab_size != MODEL_UPLOAD_VOCAB_SIZE
-            or loaded_context != MODEL_UPLOAD_CONTEXT_SIZE
-            or int(status.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE
-            or not MODEL_MIN_PARAMETERS <= loaded_parameters <= MODEL_MAX_PARAMETERS
+            or tokenizer.vocab_size != loaded_vocab
+            or not _runtime_checkpoint_profile_matches(
+                {**status, "vocab_size": loaded_vocab, "context_size": loaded_context},
+                model.config, loaded_parameters,
+            )
             or int(status.get("parameters", -1)) != loaded_parameters
         ):
             raise ValueError(
@@ -761,7 +777,7 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 # Training runs independently of the browser request. Status is held in the service
 # process so closing the dashboard does not cancel an active run.
 TRAINING_OUTPUT_PATH = Path(os.environ.get(
-    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output.pt")
+    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-30k-9m.pt")
 ))
 TRAINING_LOCK = threading.Lock()
 TRAINING_CANCEL = threading.Event()
@@ -828,9 +844,83 @@ def _training_progress(progress: dict[str, Any]) -> None:
         )
 
 
-def _run_training(target_steps: int, schedule_steps: int) -> None:
+def _prepare_website_training_corpus() -> Path:
+    """Merge the base and curated teacher corpora before building the 30K tokenizer."""
+    from training.distillation.prepare_corpus import merge_records, read_corpus, write_jsonl_atomic
+
+    base_path = ROOT / "data" / "fross_corpus.jsonl"
+    teacher_path = ROOT / "data" / "fross_teacher_corpus.jsonl"
+    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-30k-9m.jsonl")
+    base_records = read_corpus(base_path)
+    teacher_records = read_corpus(teacher_path, required=False)
+    merged, duplicates = merge_records(base_records, teacher_records)
+    if len(merged) < 8:
+        raise ValueError("Объединённый обучающий корпус содержит слишком мало примеров.")
+    digest = write_jsonl_atomic(output_path, merged)
+    _training_log(
+        "Корпус объединён: базовых примеров " + str(len(base_records))
+        + ", примеров учителя " + str(len(teacher_records))
+        + ", уникальных " + str(len(merged))
+        + ", повторов исключено " + str(duplicates) + "; SHA-256 " + digest[:16] + "."
+    )
+    return output_path
+
+
+def _best_initialization_checkpoint() -> tuple[str | None, int]:
+    """Prefer the most-trained compatible model, including the previous website run."""
+    import torch
+
+    legacy_training_path = Path(tempfile.gettempdir()) / "fross-training-output.pt"
+    archived_training_paths = sorted(
+        TRAINING_OUTPUT_PATH.parent.glob(TRAINING_OUTPUT_PATH.name + ".archive-*"),
+        reverse=True,
+    )
+    candidates = [Path(TRANSFORMER_MODEL_PATH), legacy_training_path, *archived_training_paths]
+    best_path: str | None = None
+    best_steps = -1
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            saved = torch.load(candidate, map_location="cpu", weights_only=True)
+            if not isinstance(saved, dict):
+                continue
+            version = saved.get("version")
+            format_version = int(saved.get("format_version", 0))
+            supported = (
+                version == "FROSS Transformer 1.4" and format_version in {1, 2}
+            ) or (
+                version == transformer.VERSION and format_version == 3
+            )
+            config = saved.get("config")
+            state_dict = saved.get("state_dict")
+            metrics = saved.get("metrics")
+            if not supported or not isinstance(config, dict) or not isinstance(state_dict, dict):
+                continue
+            if (
+                int(config.get("n_embd", 0)) != 192
+                or int(config.get("n_head", 0)) != 6
+                or not 1 <= int(config.get("n_layer", 0)) <= int(transformer.DEFAULT_CONFIG["n_layer"])
+            ):
+                continue
+            steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
+            if steps > best_steps:
+                best_path, best_steps = str(candidate), steps
+        except Exception as exc:
+            print("FROSS training: skipping incompatible initialization checkpoint "
+                  + candidate.name + " (" + type(exc).__name__ + ").", flush=True)
+    return best_path, max(0, best_steps)
+
+
+def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = False) -> None:
     try:
-        corpus = ROOT / "data" / "fross_corpus.jsonl"
+        corpus = _prepare_website_training_corpus()
+        if fresh_run and TRAINING_OUTPUT_PATH.is_file():
+            archive_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            archive_path = TRAINING_OUTPUT_PATH.with_name(TRAINING_OUTPUT_PATH.name + ".archive-" + archive_stamp)
+            shutil.copy2(TRAINING_OUTPUT_PATH, archive_path)
+            TRAINING_OUTPUT_PATH.unlink()
+            _training_log("Предыдущая контрольная точка нового цикла сохранена отдельно: " + archive_path.name)
         with TRAINING_LOCK:
             TRAINING_STATUS["phase"] = "checking_checkpoint"
         _training_log("Проверяю сохранённую контрольную точку; проверка выполняется в фоне.")
@@ -839,6 +929,7 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
         # endpoint must remain responsive, and log helpers acquire this same lock.
         resume = False
         existing_steps = 0
+        initialize_from, initialization_steps = _best_initialization_checkpoint()
         prior_metrics: dict[str, Any] = {}
         if TRAINING_OUTPUT_PATH.is_file():
             try:
@@ -901,8 +992,8 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
                 "error": None,
             })
         _training_log(
-            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else "с нуля")
-            + ". Подготовка словаря может занять время; теперь её прогресс отображается отдельно."
+            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с переносом слоёв из checkpoint на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
+            + ". Цель: 30000 токенов, 8,970,432 параметра, контекст 500."
         )
         result = transformer.train_model(
             corpus_path=corpus,
@@ -913,6 +1004,7 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
             target_vocab_size=MODEL_UPLOAD_VOCAB_SIZE,
             seed=1337,
             resume=resume,
+            initialize_from=None if resume else initialize_from,
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
             stop_callback=TRAINING_CANCEL.is_set,
@@ -1111,6 +1203,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Expected a JSON object.")
                 target_steps = int(payload.get("steps", 600))
                 schedule_steps = int(payload.get("scheduleSteps", 10000))
+                fresh_run = payload.get("freshRun", False) is True
                 if target_steps not in (600, 3000, 5000, 8000, 10000):
                     raise ValueError("Choose 600, 3000, 5000, 8000 or 10000 training steps.")
                 if schedule_steps != 10000 or schedule_steps < target_steps:
@@ -1138,7 +1231,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 worker = threading.Thread(
                     target=_run_training,
-                    args=(target_steps, schedule_steps),
+                    args=(target_steps, schedule_steps, fresh_run),
                     name="fross-transformer-training",
                     daemon=True,
                 )

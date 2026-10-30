@@ -21,10 +21,10 @@ def main() -> int:
     parser.add_argument("--model-source", required=True)
     parser.add_argument("--required-model-steps", type=int, default=3000)
     parser.add_argument("--train-steps", type=int, default=600)
-    parser.add_argument("--vocab-size", type=int, default=25000)
+    parser.add_argument("--vocab-size", type=int, default=30000)
     parser.add_argument("--context-size", type=int, default=500)
-    parser.add_argument("--min-parameters", type=int, default=5000000)
-    parser.add_argument("--max-parameters", type=int, default=8000000)
+    parser.add_argument("--min-parameters", type=int, default=8850000)
+    parser.add_argument("--max-parameters", type=int, default=9100000)
     args = parser.parse_args()
 
     source_path = Path(args.model_source)
