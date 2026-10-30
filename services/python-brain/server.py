@@ -863,7 +863,7 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
                 "error": None,
             })
         _training_log(
-            "Запуск Transformer 1.4; режим: " + ("продолжение с шага " + str(existing_steps) if resume else "с нуля")
+            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else "с нуля")
             + ". Подготовка словаря может занять время; теперь её прогресс отображается отдельно."
         )
         result = transformer.train_model(
@@ -931,7 +931,7 @@ def _training_snapshot() -> dict[str, Any]:
         return snapshot
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FROSS-Hybrid-Transformer/1.4"
+    server_version = "FROSS-Hybrid-Transformer/1.5"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log prompts, history, knowledge notes, credentials, or generated text.
@@ -1001,7 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
         health_data = {
             "ok": True,
             "engine": ENGINE_NAME,
-            "version": "1.4",
+            "version": "1.5",
             "modelSource": MODEL_SOURCE,
             "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
@@ -1140,7 +1140,7 @@ class Handler(BaseHTTPRequestHandler):
             respond(self, 200, {
                 "ok": True,
                 "engine": ENGINE_NAME,
-                "version": "1.4",
+                "version": "1.5",
                 "modelSource": MODEL_SOURCE,
             "modelLoadState": MODEL_LOAD_STATE,
             "modelLoadError": MODEL_LOAD_ERROR,
