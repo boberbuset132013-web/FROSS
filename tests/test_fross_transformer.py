@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Focused tests for the FROSS Transformer implemented and trained from scratch."""
+"""Focused tests for the FROSS Transformer architecture, tokenizer and training."""
 from __future__ import annotations
 
 import unittest
+import tempfile
 import sys
 from pathlib import Path
 
@@ -18,9 +19,83 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
-        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
-        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.4")
+        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 500)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
+        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.5")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
+
+    def test_default_brain_15_architecture_is_within_target_parameter_range(self) -> None:
+        model = transformer.FrossTransformer(25000)
+        parameter_count = sum(parameter.numel() for parameter in model.parameters())
+        self.assertEqual(parameter_count, 7_565_568)
+        self.assertGreaterEqual(parameter_count, 5_000_000)
+        self.assertLessEqual(parameter_count, 8_000_000)
+
+    def test_brain_14_warm_start_transfers_only_architecture_compatible_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy_config = {
+                "block_size": 320, "n_embd": 192, "n_head": 6,
+                "n_layer": 6, "dropout": 0.08,
+            }
+            legacy_model = transformer.FrossTransformer(5000, legacy_config)
+            seed_path = root / "brain14-seed.pt"
+            torch.save({
+                "format_version": 2,
+                "version": "FROSS Transformer 1.4",
+                "config": legacy_config,
+                "state_dict": legacy_model.state_dict(),
+                "metrics": {"training_steps": 3000, "vocab_size": 5000},
+            }, seed_path)
+
+            target_model = transformer.FrossTransformer(25000)
+            original_embedding = target_model.token_embedding.weight.detach().clone()
+            result = transformer.initialize_model_from_checkpoint(target_model, seed_path)
+
+            self.assertEqual(result["source_version"], "FROSS Transformer 1.4")
+            self.assertEqual(result["source_training_steps"], 3000)
+            self.assertEqual(result["source_vocab_size"], 5000)
+            self.assertEqual(result["copied_position_rows"], 320)
+            self.assertTrue(result["token_embeddings_reinitialized"])
+            self.assertGreater(result["transferred_parameters"], 0)
+            self.assertTrue(torch.equal(
+                target_model.blocks[0].attention.qkv.weight,
+                legacy_model.blocks[0].attention.qkv.weight,
+            ))
+            self.assertTrue(torch.equal(
+                target_model.position_embedding.weight[:320],
+                legacy_model.position_embedding.weight[:320],
+            ))
+            self.assertTrue(torch.equal(
+                target_model.token_embedding.weight,
+                original_embedding,
+            ))
+            self.assertEqual(target_model.token_embedding.num_embeddings, 25000)
+
+    def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
+        samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
+        tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=300)
+        self.assertGreaterEqual(tokenizer.vocab_size, 256)
+        self.assertEqual(tokenizer.processor.pad_id(), transformer.PAD_ID)
+        self.assertEqual(tokenizer.processor.unk_id(), transformer.UNK_ID)
+        self.assertEqual(tokenizer.processor.bos_id(), transformer.BOS_ID)
+        self.assertEqual(tokenizer.processor.eos_id(), transformer.EOS_ID)
+        for sample in samples:
+            self.assertTrue(tokenizer.decode(tokenizer.encode(sample)))
+
+    def test_sentencepiece_unigram_can_be_cancelled(self) -> None:
+        calls = {"count": 0}
+        def should_stop():
+            calls["count"] += 1
+            return calls["count"] >= 2
+        with self.assertRaises(transformer.TrainingCancelled):
+            transformer.SentencePieceTokenizer.train(
+                ["слово один два три четыре пять"] * 100,
+                target_vocab_size=300,
+                stop_callback=should_stop,
+            )
 
     def test_bpe_tokenizer_round_trip(self) -> None:
         samples = [
@@ -37,7 +112,7 @@ class TransformerTests(unittest.TestCase):
         progress = []
         tokenizer = transformer.BPETokenizer.train(
             ["один два три four five", "один два снова"],
-            target_vocab_size=512,
+            target_vocab_size=300,
             progress_callback=progress.append,
         )
         self.assertTrue(tokenizer.pretokenized)
@@ -59,7 +134,7 @@ class TransformerTests(unittest.TestCase):
         with self.assertRaises(transformer.TrainingCancelled):
             transformer.BPETokenizer.train(
                 ["слово один два три четыре пять"] * 8,
-                target_vocab_size=512,
+                target_vocab_size=300,
                 progress_callback=report,
                 stop_callback=should_stop,
             )
@@ -204,7 +279,7 @@ class TransformerTests(unittest.TestCase):
                     steps=1,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=256,
+                    target_vocab_size=512,
                     seed=91,
                     schedule_steps=2,
                 )
@@ -217,7 +292,7 @@ class TransformerTests(unittest.TestCase):
                     steps=2,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=256,
+                    target_vocab_size=512,
                     seed=91,
                     resume=True,
                     schedule_steps=3,
@@ -225,6 +300,19 @@ class TransformerTests(unittest.TestCase):
                 self.assertEqual(continued["training_steps"], 2)
                 self.assertEqual(continued["steps_this_run"], 1)
                 self.assertEqual(continued["schedule_steps"], 3)
+
+                compact_path = root / "inference-only.pt"
+                packaged = transformer.package_inference_checkpoint(checkpoint_path, compact_path)
+                compact_data = torch.load(compact_path, map_location="cpu", weights_only=True)
+                training_data = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                self.assertTrue(packaged["ok"])
+                self.assertFalse(packaged["resume_state_included"])
+                self.assertNotIn("resume_state", compact_data)
+                self.assertIn("resume_state", training_data)
+                compact_model, compact_tokenizer, compact_status = transformer.load_model(compact_path)
+                self.assertIsNotNone(compact_model)
+                self.assertIsNotNone(compact_tokenizer)
+                self.assertTrue(compact_status["loaded"])
 
                 model, tokenizer, status = transformer.load_model(checkpoint_path)
                 self.assertIsNotNone(model)

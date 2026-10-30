@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.4: a small decoder-only language model trained from random weights.
+"""FROSS Transformer Brain 1.5: a small decoder-only language model.
 
-No pretrained checkpoint, hosted LLM, or downloaded model is used. A BPE tokenizer
-and a causal Transformer are learned from the repository's own text corpus.
+No third-party pretrained LLM or hosted LLM API is used. A SentencePiece Unigram tokenizer
+and new token embeddings are learned from the repository corpus. Optionally, compatible
+decoder blocks can be initialized from the project's own Brain 1.4 checkpoint.
 This is an educational, deliberately small model; its quality is bounded by its data
 and compute budget. Install PyTorch CPU wheels to train or run it.
 """
 from __future__ import annotations
 
 import argparse
+import shutil
 import hashlib
 from collections import Counter
 import json
@@ -24,7 +26,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-VERSION = "FROSS Transformer 1.4"
+VERSION = "FROSS Transformer 1.5"
 
 
 def _preferred_device() -> torch.device:
@@ -68,12 +70,13 @@ BASE_CHARS = "".join(dict.fromkeys(
 ))
 DEFAULT_CORPUS = Path(__file__).with_name("data") / "fross_corpus.jsonl"
 DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
+DEFAULT_UPLOAD_CHECKPOINT = Path(__file__).with_name("fross-transformer-upload.pt")
 MAX_GENERATION_TOKENS = 5000
 
-# Sized for the 1 GiB / low-CPU Hostless runtime: wider and deeper than Brain 1.3
-# while keeping CPU training/inference practical. Embeddings are weight-tied.
+# Brain 1.5 uses tied embeddings: 25K vocabulary + 500-token positions + six
+# compact decoder blocks yield about 7.57M trainable parameters.
 DEFAULT_CONFIG = {
-    "block_size": 320,
+    "block_size": 500,
     "n_embd": 192,
     "n_head": 6,
     "n_layer": 6,
@@ -308,6 +311,113 @@ class BPETokenizer:
             "max_piece_chars": self.max_piece_chars,
         }
 
+class SentencePieceTokenizer:
+    """SentencePiece Unigram tokenizer; serialized model is embedded in the checkpoint."""
+
+    def __init__(self, model_proto_b64: str):
+        import base64
+        import sentencepiece as spm
+        if not isinstance(model_proto_b64, str) or not model_proto_b64:
+            raise ValueError("SentencePiece checkpoint is missing its serialized model.")
+        self.model_proto_b64 = model_proto_b64
+        self.processor = spm.SentencePieceProcessor()
+        if not self.processor.LoadFromSerializedProto(base64.b64decode(model_proto_b64)):
+            raise ValueError("Could not load the SentencePiece model.")
+        ids = (self.processor.pad_id(), self.processor.unk_id(), self.processor.bos_id(), self.processor.eos_id())
+        if ids != (PAD_ID, UNK_ID, BOS_ID, EOS_ID):
+            raise ValueError("SentencePiece special-token IDs do not match FROSS.")
+
+    @property
+    def vocab_size(self) -> int:
+        return int(self.processor.get_piece_size())
+
+    @classmethod
+    def train(cls, texts: list[str], target_vocab_size: int = 25000,
+              progress_callback: Any = None, stop_callback: Any = None) -> "SentencePieceTokenizer":
+        import base64
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        from pathlib import Path
+        target_vocab_size = int(target_vocab_size)
+        # SentencePiece byte fallback reserves 256 byte pieces plus four
+        # FROSS special tokens. Smaller vocabularies are valid for unit tests.
+        if target_vocab_size < 260:
+            raise ValueError("SentencePiece byte-fallback vocabulary must be at least 260 tokens.")
+        if stop_callback is not None and stop_callback():
+            raise TrainingCancelled("Training cancelled before SentencePiece preparation.")
+        def report(done: int) -> None:
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "tokenizer_native", "preparation_step": done,
+                                       "preparation_total": 1, "vocab_size": None if done == 0 else target_vocab_size})
+                except Exception:
+                    pass
+        report(0)
+        with tempfile.TemporaryDirectory(prefix="fross-spm-") as folder:
+            root = Path(folder)
+            corpus_path, prefix = root / "corpus.txt", root / "fross-unigram"
+            with corpus_path.open("w", encoding="utf-8", newline="\n") as handle:
+                for item in texts:
+                    value = str(item).replace("\x00", " ").strip()
+                    if value:
+                        handle.write(value.replace("\n", " ") + "\n")
+            if corpus_path.stat().st_size == 0:
+                raise ValueError("SentencePiece training corpus is empty.")
+            trainer = (
+                "import sentencepiece as s,sys; "
+                "s.SentencePieceTrainer.train(input=sys.argv[1],model_prefix=sys.argv[2],"
+                "model_type='unigram',vocab_size=int(sys.argv[3]),character_coverage=1.0,"
+                "byte_fallback=True,pad_id=0,unk_id=1,bos_id=2,eos_id=3,hard_vocab_limit=False,"
+                "num_threads=1,shuffle_input_sentence=False,input_sentence_size=0,"
+                "max_sentence_length=8192,minloglevel=2)"
+            )
+            log_path = root / "sentencepiece.log"
+            with log_path.open("w", encoding="utf-8") as log_handle:
+                process = subprocess.Popen(
+                    [sys.executable, "-c", trainer, str(corpus_path), str(prefix), str(target_vocab_size)],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log_handle,
+                )
+                while process.poll() is None:
+                    if stop_callback is not None and stop_callback():
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                        raise TrainingCancelled("Training cancelled during native SentencePiece vocabulary training.")
+                    time.sleep(0.2)
+            if process.returncode != 0:
+                details = log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
+                raise RuntimeError(
+                    "Native SentencePiece Unigram training failed (exit "
+                    + str(process.returncode) + "): " + details.strip()
+                )
+            if stop_callback is not None and stop_callback():
+                raise TrainingCancelled("Training cancelled after SentencePiece vocabulary training.")
+            model_proto = prefix.with_suffix(".model").read_bytes()
+            report(1)
+            return cls(base64.b64encode(model_proto).decode("ascii"))
+
+    def encode(self, text: str) -> list[int]:
+        return [int(value) for value in self.processor.encode(str(text), out_type=int)]
+
+    def decode(self, token_ids: list[int], stop_at_eos: bool = True) -> str:
+        values = []
+        for token_id in token_ids:
+            value = int(token_id)
+            if value == EOS_ID and stop_at_eos:
+                break
+            if 0 <= value < self.vocab_size and value not in (PAD_ID, BOS_ID):
+                values.append(value)
+        return self.processor.decode(values)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"model_proto_b64": self.model_proto_b64}
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
         super().__init__()
@@ -356,7 +466,7 @@ class TransformerBlock(nn.Module):
 
 
 class FrossTransformer(nn.Module):
-    """Decoder-only, autoregressive Transformer. All weights start randomly."""
+    """Decoder-only autoregressive Transformer with a tied token-embedding/output matrix."""
 
     def __init__(self, vocab_size: int, config: dict[str, int | float] | None = None):
         super().__init__()
@@ -392,6 +502,97 @@ class FrossTransformer(nn.Module):
         x = self.token_embedding(token_ids) + self.position_embedding(positions)[None, :, :]
         x = self.final_norm(self.blocks(self.dropout(x)))
         return self.language_head(x)
+
+
+def initialize_model_from_checkpoint(
+    model: FrossTransformer,
+    checkpoint_path: str | Path,
+) -> dict[str, Any]:
+    """Warm-start Brain 1.5 from compatible Brain 1.4 Transformer layers.
+
+    Token embeddings are deliberately not copied: Brain 1.4 BPE token IDs and
+    Brain 1.5 SentencePiece Unigram IDs do not describe the same vocabulary.
+    Decoder blocks, final norm, and the overlapping positional embeddings are
+    architecture-compatible and can be reused safely.
+    """
+    source = Path(checkpoint_path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Initialization checkpoint not found: {source}")
+    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Initialization file is not a FROSS checkpoint.")
+    if checkpoint.get("version") != "FROSS Transformer 1.4":
+        raise ValueError(
+            "Warm-start source must be FROSS Transformer 1.4; got "
+            + repr(checkpoint.get("version")) + "."
+        )
+    if int(checkpoint.get("format_version", 0)) not in {1, 2}:
+        raise ValueError("Unsupported Brain 1.4 checkpoint format.")
+    source_config = checkpoint.get("config")
+    source_state = checkpoint.get("state_dict")
+    if not isinstance(source_config, dict) or not isinstance(source_state, dict):
+        raise ValueError("Brain 1.4 checkpoint is missing model configuration or weights.")
+
+    for field in ("n_embd", "n_head", "n_layer"):
+        if int(source_config.get(field, -1)) != int(model.config[field]):
+            raise ValueError(
+                "Brain 1.4 and Brain 1.5 architecture mismatch for "
+                + field + ": " + str(source_config.get(field))
+                + " vs " + str(model.config[field]) + "."
+            )
+
+    target_state = model.state_dict()
+    transferable = [
+        name for name in target_state
+        if name.startswith("blocks.") or name.startswith("final_norm.")
+    ]
+    if not transferable:
+        raise ValueError("No compatible Transformer block weights were found.")
+    copied_parameters = 0
+    copied_tensors = 0
+    for name in transferable:
+        source_tensor = source_state.get(name)
+        target_tensor = target_state[name]
+        if not torch.is_tensor(source_tensor) or tuple(source_tensor.shape) != tuple(target_tensor.shape):
+            raise ValueError("Brain 1.4 tensor is missing or has an incompatible shape: " + name)
+        target_tensor.copy_(source_tensor.to(device=target_tensor.device, dtype=target_tensor.dtype))
+        copied_parameters += target_tensor.numel()
+        copied_tensors += 1
+
+    source_positions = source_state.get("position_embedding.weight")
+    target_positions = target_state.get("position_embedding.weight")
+    if (
+        not torch.is_tensor(source_positions)
+        or not torch.is_tensor(target_positions)
+        or source_positions.ndim != 2
+        or target_positions.ndim != 2
+        or source_positions.shape[1] != target_positions.shape[1]
+    ):
+        raise ValueError("Brain 1.4 positional embeddings are missing or incompatible.")
+    copied_positions = min(source_positions.shape[0], target_positions.shape[0])
+    target_positions[:copied_positions].copy_(
+        source_positions[:copied_positions].to(device=target_positions.device, dtype=target_positions.dtype)
+    )
+    copied_parameters += copied_positions * target_positions.shape[1]
+    copied_tensors += 1
+    model.load_state_dict(target_state, strict=True)
+
+    source_metrics = checkpoint.get("metrics", {})
+    if not isinstance(source_metrics, dict):
+        source_metrics = {}
+    return {
+        "source_version": checkpoint["version"],
+        "source_checkpoint": str(source),
+        "source_training_steps": int(source_metrics.get("training_steps", 0)),
+        "source_vocab_size": int(source_metrics.get("vocab_size", 0)),
+        "source_context_size": int(source_config.get("block_size", 0)),
+        "transfer_strategy": "transformer_blocks_final_norm_and_overlapping_positions",
+        "transferred_tensors": copied_tensors,
+        "transferred_parameters": copied_parameters,
+        "copied_position_rows": copied_positions,
+        "token_embeddings_reinitialized": True,
+        "target_tokenizer": "sentencepiece-unigram",
+    }
 
 
 def _load_corpus(path: str | Path) -> list[dict[str, Any]]:
@@ -488,7 +689,7 @@ def _format_generation_prefix(message: str) -> str:
     return "Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX
 
 
-def _encode_stream(records: list[dict[str, Any]], tokenizer: BPETokenizer) -> list[int]:
+def _encode_stream(records: list[dict[str, Any]], tokenizer: SentencePieceTokenizer) -> list[int]:
     stream: list[int] = []
     for record in records:
         stream.append(BOS_ID)
@@ -521,11 +722,12 @@ def train_model(
     *,
     steps: int = 600,
     batch_size: int = 4,
-    block_size: int = 320,
+    block_size: int = 500,
     merge_count: int | None = None,
-    target_vocab_size: int = 5000,
+    target_vocab_size: int = 25000,
     seed: int = 1337,
     resume: bool = False,
+    initialize_from: str | Path | None = None,
     schedule_steps: int | None = None,
     progress_callback: Any = None,
     stop_callback: Any = None,
@@ -542,8 +744,8 @@ def train_model(
     schedule_total = int(schedule_steps if schedule_steps is not None else steps)
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
-    if resume and merge_count is not None:
-        raise ValueError("Resuming with the legacy --merges tokenizer option is not supported; use --vocab-size.")
+    if merge_count is not None:
+        raise ValueError("The Brain 1.5 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
 
     target = Path(output_path)
     resume_checkpoint: dict[str, Any] | None = None
@@ -552,10 +754,10 @@ def train_model(
         if not target.is_file():
             raise FileNotFoundError(f"Cannot resume: checkpoint does not exist: {target}")
         resume_checkpoint = torch.load(target, map_location="cpu", weights_only=True)
-        if int(resume_checkpoint.get("format_version", 0)) != 2:
+        if int(resume_checkpoint.get("format_version", 0)) != 3:
             raise ValueError(
                 "This checkpoint does not include resumable optimizer state. "
-                "Start a new 600-step run with the current Brain 1.4 code first."
+                "Start a new 600-step run with the current Brain 1.5 code first."
             )
         resume_state = resume_checkpoint.get("resume_state")
         if not isinstance(resume_state, dict):
@@ -602,14 +804,12 @@ def train_model(
             pass
 
     if resume and resume_checkpoint is not None:
-        tokenizer = BPETokenizer(**resume_checkpoint["tokenizer"])
+        tokenizer = SentencePieceTokenizer(**resume_checkpoint["tokenizer"])
     else:
         try:
-            tokenizer = BPETokenizer.train(
+            tokenizer = SentencePieceTokenizer.train(
                 [_format_record(row) for row in train_records],
-                merge_count=merge_count,
-                target_vocab_size=target_vocab_size if merge_count is None else None,
-                max_piece_chars=24,
+                target_vocab_size=target_vocab_size,
                 progress_callback=progress_callback,
                 stop_callback=stop_callback,
             )
@@ -627,11 +827,27 @@ def train_model(
                 "checkpoint_preserved": target.is_file(),
             }
 
+    if target_vocab_size >= 10000 and tokenizer.vocab_size != target_vocab_size:
+        raise ValueError(
+            f"SentencePiece built only {tokenizer.vocab_size}/{target_vocab_size} tokens. "
+            "The training corpus is too small or repetitive for the requested vocabulary; "
+            "add more diverse text examples before training Brain 1.5."
+        )
+
     train_stream = _encode_stream(train_records, tokenizer)
     validation_stream = _encode_stream(validation_records, tokenizer)
     actual_block = min(block_size, int(DEFAULT_CONFIG["block_size"]))
     if len(train_stream) <= actual_block + 1:
         raise ValueError("Training corpus is too small for the selected context length.")
+
+    if resume and initialize_from is not None:
+        raise ValueError("Use --initialize-from only for a new run, not together with --resume.")
+
+    initialization_metadata: dict[str, Any] | None = None
+    if resume and resume_checkpoint is not None:
+        saved_initialization = resume_checkpoint.get("metrics", {}).get("initialization")
+        if isinstance(saved_initialization, dict):
+            initialization_metadata = dict(saved_initialization)
 
     if resume and resume_checkpoint is not None:
         config = resume_checkpoint.get("config")
@@ -646,6 +862,8 @@ def train_model(
 
     device = torch.device("cpu") if force_cpu else _preferred_device()
     model = FrossTransformer(tokenizer.vocab_size, config).to(device)
+    if initialize_from is not None:
+        initialization_metadata = initialize_model_from_checkpoint(model, initialize_from)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
     start_step = 0
@@ -795,7 +1013,7 @@ def train_model(
         reported_train_loss = last_loss
     model.eval()
     checkpoint = {
-        "format_version": 2,
+        "format_version": 3,
         "version": VERSION,
         "config": config,
         "tokenizer": tokenizer.to_dict(),
@@ -822,33 +1040,42 @@ def train_model(
             "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
+            "context_size": int(config["block_size"]),
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
             "vocab_target_reached": (
                 tokenizer.vocab_size == target_vocab_size if merge_count is None else None
             ),
-            "tokenizer_type": "word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe",
+            "tokenizer_type": "sentencepiece-unigram",
             "parameters": sum(p.numel() for p in model.parameters()),
-            "trained_from_random_weights": True,
+            "initialization": initialization_metadata,
+            "trained_from_random_weights": initialization_metadata is None,
         },
     }
     target.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint, target)
+    backup = target.with_name(target.stem + ".brain14-bpe-backup" + target.suffix)
+    if target.is_file() and not backup.exists():
+        shutil.copy2(target, backup)
+    temporary = target.with_name(target.name + ".brain15.tmp")
+    torch.save(checkpoint, temporary)
+    temporary.replace(target)
     return {
         "ok": True, "version": VERSION, "output": str(target),
         **checkpoint["metrics"]
     }
 
 
-def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, BPETokenizer | None, dict[str, Any]]:
+def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, SentencePieceTokenizer | None, dict[str, Any]]:
     configure_runtime_threads()
     target = Path(path)
     if not target.is_file():
         return None, None, {"loaded": False, "reason": "checkpoint-missing", "path": str(target)}
     try:
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
-        if int(checkpoint.get("format_version", 0)) not in {1, 2}:
-            raise ValueError("Unsupported checkpoint format.")
-        tokenizer = BPETokenizer(**checkpoint["tokenizer"])
+        if int(checkpoint.get("format_version", 0)) != 3:
+            raise ValueError("Checkpoint is not in the FROSS Brain 1.5 SentencePiece format.")
+        if checkpoint.get("version") != VERSION:
+            raise ValueError("Checkpoint version is incompatible with this FROSS Brain.")
+        tokenizer = SentencePieceTokenizer(**checkpoint["tokenizer"])
         config = checkpoint["config"]
         model = FrossTransformer(tokenizer.vocab_size, config)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
@@ -914,6 +1141,59 @@ def export_onnx_model(
     }
 
 
+def package_inference_checkpoint(
+    checkpoint_path: str | Path = DEFAULT_CHECKPOINT,
+    output_path: str | Path = DEFAULT_UPLOAD_CHECKPOINT,
+) -> dict[str, Any]:
+    """Write a small deployment checkpoint without optimizer/RNG resume state.
+
+    The source checkpoint remains untouched and can still be used to resume training.
+    """
+    source = Path(checkpoint_path)
+    target = Path(output_path)
+    if source.resolve() == target.resolve():
+        raise ValueError("The upload package must use a different path so the resumable training checkpoint is preserved.")
+    if not source.is_file():
+        raise FileNotFoundError(f"Training checkpoint not found: {source}")
+    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Training checkpoint is not a FROSS checkpoint.")
+    if checkpoint.get("version") != VERSION or int(checkpoint.get("format_version", 0)) != 3:
+        raise ValueError("Only a compatible FROSS Brain 1.5 checkpoint can be packaged.")
+    model, tokenizer, status = load_model(source)
+    if model is None or tokenizer is None:
+        raise ValueError("Cannot package an invalid checkpoint: " + json.dumps(status, ensure_ascii=False))
+    required = ("config", "tokenizer", "state_dict", "metrics")
+    if any(key not in checkpoint for key in required):
+        raise ValueError("Training checkpoint is missing required inference data.")
+    compact = {
+        "format_version": checkpoint["format_version"],
+        "version": checkpoint["version"],
+        "config": checkpoint["config"],
+        "tokenizer": checkpoint["tokenizer"],
+        "state_dict": checkpoint["state_dict"],
+        "metrics": checkpoint["metrics"],
+        "checkpoint_role": "inference",
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".tmp")
+    torch.save(compact, temporary)
+    temporary.replace(target)
+    return {
+        "ok": True,
+        "version": VERSION,
+        "source": str(source),
+        "output": str(target),
+        "size_bytes": target.stat().st_size,
+        "training_checkpoint_preserved": source.resolve() != target.resolve(),
+        "training_steps": int(status.get("training_steps", 0)),
+        "vocab_size": tokenizer.vocab_size,
+        "context_size": int(model.config["block_size"]),
+        "parameters": sum(parameter.numel() for parameter in model.parameters()),
+        "resume_state_included": False,
+    }
+
+
 
 def _expand_bare_topic(message: str) -> str:
     """Make a one-word topic fit the explanatory question style used in training."""
@@ -976,7 +1256,7 @@ def generate_reply(
 
     # Keep the model input close to the exact sequence format used during training.
     # Long workflow instructions previously displaced useful user text from the
-    # 320-token context window even though the model had never trained on those prompts.
+    # 500-token context window even though the model had never trained on those prompts.
     context_parts: list[str] = []
     for item in (knowledge if isinstance(knowledge, list) else [])[:2]:
         if not isinstance(item, dict):
@@ -1072,18 +1352,23 @@ def _clean_generated_text(text: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=VERSION)
-    parser.add_argument("command", choices=("train", "test", "generate", "export"))
+    parser.add_argument("command", choices=("train", "test", "generate", "export", "package"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
+    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.5 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--block-size", type=int, default=320)
+    parser.add_argument("--block-size", type=int, default=500)
     parser.add_argument(
-        "--vocab-size", type=int, default=5000,
-        help="Target tokenizer vocabulary size; Brain 1.4 defaults to 5000 tokens.",
+        "--vocab-size", type=int, default=25000,
+        help="Target SentencePiece Unigram vocabulary size; Brain 1.5 defaults to 25000 tokens.",
+    )
+    parser.add_argument(
+        "--package-output", default=str(DEFAULT_UPLOAD_CHECKPOINT),
+        help="Output path for a compact inference-only checkpoint (without optimizer state).",
     )
     parser.add_argument(
         "--merges", type=int, default=None,
@@ -1101,6 +1386,14 @@ def main() -> int:
             return 1
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
+    if args.command == "package":
+        try:
+            result = package_inference_checkpoint(args.output, args.package_output)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if args.command in {"train", "test"}:
         metrics = train_model(
             args.corpus,
@@ -1112,6 +1405,7 @@ def main() -> int:
             target_vocab_size=args.vocab_size,
             seed=args.seed,
             resume=args.resume,
+            initialize_from=args.initialize_from,
             schedule_steps=args.schedule_steps,
         )
         model, tokenizer, status = load_model(args.output)
