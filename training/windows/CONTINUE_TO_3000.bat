@@ -6,6 +6,6 @@ if errorlevel 1 (
   echo Continuation failed. Check .fross-brain15-training\logs\stage-3000.log
 ) else (
   echo.
-  echo Training to 3000 total steps completed. Upload fross-brain15-training\fross-transformer-upload.pt in FROSS Settings.
+  echo Training to 3000 total steps completed. Upload .fross-brain15-training\fross-transformer-upload.pt in FROSS Settings.
 )
 pause
