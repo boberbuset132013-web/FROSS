@@ -168,7 +168,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         if checkpoint.get("version") != transformer.VERSION or int(checkpoint.get("format_version", 0)) != 3:
             raise ValueError("GitHub model checkpoint version or format is incompatible.")
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
-            raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
+            raise ValueError("GitHub model checkpoint does not meet the 100000-step Brain 1.6 minimum.")
         if metrics.get("vocab_target_reached") is not True or not _runtime_checkpoint_profile_matches(metrics, config):
             raise ValueError("GitHub model checkpoint does not match a supported FROSS 1.6 model profile (8K vocabulary, 4K context, 64M parameters).")
 
