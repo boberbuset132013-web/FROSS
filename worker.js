@@ -53,7 +53,7 @@ export default {
         ok: true,
         worker: "FROSS",
         version: "1.2",
-        brainVersion: "1.5",
+        brainVersion: "1.6",
         build: "fross-hybrid-cpp-2026-10-26",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
@@ -134,7 +134,7 @@ function sleep(ms) {
 const FROSS_PROFILE = Object.freeze({
   name: "FROSS",
   creator: "@Spamton_BigShot_hahaha",
-  description: "FROSS Hybrid Transformer Brain 1.5 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
+  description: "FROSS Hybrid Transformer Brain 1.6 — собственная модель, обученная с нуля, с пошаговой генерацией токенов и проверками вычислимых задач.",
   traits: ["любознательный", "сообразительный", "дружелюбный", "прямой", "с лёгкой искрой юмора", "настойчивый в поиске ответа", "объясняет найденное", "проверяет ошибки", "честный"],
   style: "Звучит живо и естественно: объясняй сложное простыми словами, задавай уточняющий вопрос, когда он действительно нужен, и предлагай конкретный следующий шаг. Можно использовать лёгкий уместный юмор, но не превращай каждый ответ в шутку. Будь уверенным, но не самоуверенным.",
   rules: [
@@ -683,7 +683,7 @@ async function handleFrossIdentity(request, env) {
   if (request.method !== "POST") return frossJson({ error: "Используй POST /api/identity." }, 405, request);
   const auth = await frossVerifyFirebaseToken(request);
   if (!auth) return frossJson({ error: "Сначала войди в FROSS." }, 401, request);
-  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Hybrid Transformer Brain 1.5", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
+  return frossJson({ ok: true, emailVerified: auth.emailVerified, engine: "FROSS Hybrid Transformer Brain 1.6", brainRoutes: { pythonReady: frossBrainServiceConfigured(env), allModesUsePython: true } }, 200, request);
 }
 
 function frossIsPublicTrainingUrl(value) {
@@ -1567,7 +1567,7 @@ async function handleFrossTrain(request, env) {
 
   return frossJson({
     ok: true,
-    engine: "FROSS Hybrid Transformer Brain 1.5",
+    engine: "FROSS Hybrid Transformer Brain 1.6",
     topic,
     notes,
     count: notes.length,
@@ -2172,7 +2172,7 @@ async function handleFrossApi(request, env) {
           aiUsed: true,
           kind: remote.kind,
           remoteBrain: true,
-          generationModel: "FROSS Transformer 1.5",
+          generationModel: "FROSS Transformer 1.6",
           webSearchUsed: shouldSearch,
           wordLookupUsed: termLookupUsed,
           note: "Ответ генерируется собственной моделью FROSS; при поиске веб-фрагменты объединяются с пользовательским запросом и контекстом чата."
@@ -2208,15 +2208,15 @@ async function handleFrossApi(request, env) {
       resultsFound: results.length,
       providerErrors: [...providerErrors, ...(remote.error ? [remote.error] : [])].slice(0, 8),
       aiUsed: false,
-      engine: "FROSS Hybrid Transformer Brain 1.5",
+      engine: "FROSS Hybrid Transformer Brain 1.6",
       remoteBrainConfigured: remote.configured,
       kind: remote.kind || "generation-unavailable",
-      generationModel: "FROSS Transformer 1.5 trained from scratch",
+      generationModel: "FROSS Transformer 1.6 trained from scratch",
       generationModelStatus: remote.modelStatus || null,
       webSearchUsed: shouldSearch,
       correctedQuery: correctedQuery !== message.toLowerCase().replace(/ё/g, "е") ? correctedQuery : null,
       backend: "python",
-      note: "FROSS Brain 1.5 направляет запрос через 7/14-этапный рабочий план; исходные слова пользователя и найденные веб-фрагменты объединяются в контекст одной собственной модели."
+      note: "FROSS Brain 1.6 направляет запрос через 7/14-этапный рабочий план; исходные слова пользователя и найденные веб-фрагменты объединяются в контекст одной собственной модели."
     }
   }, 200, request);
 }
