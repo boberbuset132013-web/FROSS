@@ -17,16 +17,18 @@ The Docker build context must be the **repository root**.
 - Port: `10000`
 - Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
 
-The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI sets `FROSS_BUILD_BUNDLE_MODEL=1` so the production inference smoke test still exercises a bundled, validated checkpoint.
+The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI builds without a bundled production model and mounts a short-lived synthetic Brain 1.5 checkpoint only for the HTTP smoke test.
 
 ### Authenticated live model upload
 
-Open FROSS chat, sign in, go to **Settings → Upload FROSS model**, and choose the `.pt` checkpoint (up to 90 MiB). No separate upload password is needed. The Worker verifies the Firebase session, then Hostless independently requires the shared `FROSS_BRAIN_SERVICE_TOKEN` before accepting the upload. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret and forwards it only server-to-server; it is never exposed to browser JavaScript. Keep the same `FROSS_BRAIN_SERVICE_TOKEN` configured in Cloudflare and Hostless.
+Open FROSS chat, sign in, go to **Settings → Upload FROSS model**, and choose the compact `fross-transformer-upload.pt` inference checkpoint (up to 90 MiB). Keep the larger training checkpoint on the training PC so it can be resumed later. No separate upload password is needed. The Worker verifies the Firebase session, then Hostless independently requires the shared `FROSS_BRAIN_SERVICE_TOKEN` before accepting the upload. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret and forwards it only server-to-server; it is never exposed to browser JavaScript. Keep the same `FROSS_BRAIN_SERVICE_TOKEN` configured in Cloudflare and Hostless.
 Optional Hostless settings:
 
 - `FROSS_MODEL_GITHUB_REPOSITORY`: defaults to `boberbuset132013-web/FROSS`.
 - `FROSS_MODEL_MIN_STEPS`: minimum accepted training steps; the server enforces at least 3,000.
-- `FROSS_MODEL_VOCAB_SIZE`: required vocabulary size; defaults to 5,000.
+- `FROSS_MODEL_VOCAB_SIZE`: required vocabulary size; defaults to 25,000.
+- `FROSS_MODEL_CONTEXT_SIZE`: required context window; defaults to 500 tokens.
+- `FROSS_MODEL_MIN_PARAMETERS` / `FROSS_MODEL_MAX_PARAMETERS`: accepted parameter range; defaults to 5,000,000–8,000,000.
 
 The standalone `/admin/model-upload` route is informational only; file uploads are accepted exclusively from the authenticated Worker.
 
@@ -46,8 +48,11 @@ If a deployed service still returns `{"error":"Not found"}` for `GET /chat`, it 
 
 Open `/health` on the Python brain service to view model status. The authenticated `POST /ready` endpoint allows the Worker to verify the shared service token as well as model readiness. A successful hybrid deployment should report:
 
-- `version: "1.4"`
-- `generationModel: "FROSS Transformer 1.4"`
+- `version: "1.5"`
+- `generationModel: "FROSS Transformer 1.5"`
+- `generationModelStatus.vocab_size: 25000`
+- `generationModelStatus.context_size: 500`
+- `generationModelStatus.parameters`: 5,000,000–8,000,000
 - `inferenceBackend: "cpp-onnx"`
 - `cppRuntimeLoaded: true`
 - `generationModelStatus.loaded: true`
@@ -58,4 +63,4 @@ If `inferenceBackend` is `python-torch`, inspect `cppRuntimeStatus` and hosting 
 
 Install development/test dependencies with `python -m pip install -r requirements.txt`. Production uses the CPU-specific PyTorch wheel and pinned native runtime in the Dockerfile instead.
 
-Train and export checkpoints outside Hostless builds. The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains a small temporary model for tests, validates the hosted deployment checkpoint, builds the production Docker image without training commands, exercises the HTTP endpoints, exports and executes ONNX, compiles C++, and compares C++ logits with Python logits from identical weights.
+Train and export checkpoints outside Hostless builds. The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains small temporary test models, checks packaging, exports and executes ONNX, compiles C++, compares native logits, then mounts a temporary model in Docker to exercise the Brain 1.5 HTTP endpoints. It does not download or replace the production release asset.
