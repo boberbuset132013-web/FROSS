@@ -1107,10 +1107,10 @@ def train_model(
         },
     }
     target.parent.mkdir(parents=True, exist_ok=True)
-    backup = target.with_name(target.stem + ".brain14-bpe-backup" + target.suffix)
+    backup = target.with_name(target.stem + ".pre-brain16-backup" + target.suffix)
     if target.is_file() and not backup.exists():
         shutil.copy2(target, backup)
-    temporary = target.with_name(target.name + ".brain15.tmp")
+    temporary = target.with_name(target.name + ".brain16.tmp")
     torch.save(checkpoint, temporary)
     temporary.replace(target)
     return {
