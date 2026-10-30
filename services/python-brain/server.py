@@ -41,8 +41,11 @@ TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(Path
 ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(tempfile.gettempdir()) / "fross-transformer.onnx"))
 MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
-MODEL_UPLOAD_MIN_STEPS = max(3000, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
-MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "5000"))
+MODEL_UPLOAD_MIN_STEPS = max(1, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
+MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "25000"))
+MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
+MODEL_MIN_PARAMETERS = int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "5000000"))
+MODEL_MAX_PARAMETERS = int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "8000000"))
 
 
 def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
@@ -62,7 +65,9 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
                 and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
                 and int(metrics.get("vocab_size", 0)) == MODEL_UPLOAD_VOCAB_SIZE
                 and metrics.get("vocab_target_reached") is True
-                and int(config.get("block_size", 0)) == 320
+                and int(config.get("block_size", 0)) == MODEL_UPLOAD_CONTEXT_SIZE
+                and int(metrics.get("context_size", 0)) == MODEL_UPLOAD_CONTEXT_SIZE
+                and MODEL_MIN_PARAMETERS <= int(metrics.get("parameters", 0)) <= MODEL_MAX_PARAMETERS
             )
             if compatible:
                 return None
@@ -134,9 +139,13 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
             raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
         if int(metrics.get("vocab_size", 0)) != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
-            raise ValueError("GitHub model checkpoint does not have the required 5000-token vocabulary.")
-        if int(config.get("block_size", 0)) != 320:
-            raise ValueError("GitHub model checkpoint context size is not 320.")
+            raise ValueError("GitHub model checkpoint does not have the required " + str(MODEL_UPLOAD_VOCAB_SIZE) + "-token vocabulary.")
+        if int(config.get("block_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
+            raise ValueError("GitHub model checkpoint context size does not match " + str(MODEL_UPLOAD_CONTEXT_SIZE) + ".")
+        if int(metrics.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
+            raise ValueError("GitHub model checkpoint is missing the expected context-size metadata.")
+        if not MODEL_MIN_PARAMETERS <= int(metrics.get("parameters", 0)) <= MODEL_MAX_PARAMETERS:
+            raise ValueError("GitHub model checkpoint parameter count is outside the configured 5-8 million range.")
 
         os.replace(partial, target)
         # A cached ONNX graph may belong to older weights. Rebuild it only after
@@ -423,6 +432,8 @@ def _publish_checkpoint_to_github(
     sha256: str,
     training_steps: int,
     vocab_size: int,
+    parameters: int,
+    context_size: int,
     github_token: str = "",
 ) -> tuple[dict[str, Any], str]:
     token = (github_token or os.environ.get("FROSS_GITHUB_TOKEN", "")).strip()
@@ -438,7 +449,9 @@ def _publish_checkpoint_to_github(
         "name": "FROSS Transformer 1.5 model " + tag,
         "body": "Validated FROSS Transformer 1.5 checkpoint. SHA-256: " + sha256
                 + "; training steps: " + str(training_steps)
-                + "; vocabulary: " + str(vocab_size) + ".",
+                + "; vocabulary: " + str(vocab_size)
+                + "; context: " + str(context_size)
+                + "; parameters: " + str(parameters) + ".",
         "draft": False,
         "prerelease": False,
         "make_latest": "true",
@@ -461,6 +474,8 @@ def _publish_checkpoint_to_github(
         "size_bytes": file_path.stat().st_size,
         "training_steps": training_steps,
         "vocab_size": vocab_size,
+        "context_size": context_size,
+        "parameters": parameters,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -515,14 +530,25 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
         raise ValueError("Мало шагов обучения: требуется минимум " + str(MODEL_UPLOAD_MIN_STEPS) + ", получено " + str(steps) + ".")
     if vocab_size != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
         raise ValueError("Нужен словарь из " + str(MODEL_UPLOAD_VOCAB_SIZE) + " токенов с достигнутой целью словаря.")
-    if int(config.get("block_size", 0)) != 320:
-        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.5 (320).")
+    if int(config.get("block_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
+        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.5 (" + str(MODEL_UPLOAD_CONTEXT_SIZE) + ").")
+    if int(metrics.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
+        raise ValueError("В checkpoint отсутствуют корректные метаданные контекста.")
     model, tokenizer, status = transformer.load_model(path)
     if model is None or tokenizer is None:
         raise ValueError("Не удалось загрузить модель: " + json.dumps(status, ensure_ascii=False)[:500])
     if tokenizer.vocab_size != MODEL_UPLOAD_VOCAB_SIZE:
         raise ValueError("Загруженный токенизатор имеет неверный размер словаря.")
-    return {"training_steps": steps, "vocab_size": vocab_size, **metrics}, model, tokenizer
+    actual_parameters = sum(parameter.numel() for parameter in model.parameters())
+    if not MODEL_MIN_PARAMETERS <= actual_parameters <= MODEL_MAX_PARAMETERS:
+        raise ValueError(
+            "Число параметров вне допустимого диапазона: " + str(actual_parameters)
+            + " (ожидается " + str(MODEL_MIN_PARAMETERS) + "-" + str(MODEL_MAX_PARAMETERS) + ")."
+        )
+    if int(metrics.get("parameters", -1)) != actual_parameters:
+        raise ValueError("Метаданные количества параметров не совпадают с фактической архитектурой.")
+    return {"training_steps": steps, "vocab_size": vocab_size, "context_size": MODEL_UPLOAD_CONTEXT_SIZE,
+            "parameters": actual_parameters, **metrics}, model, tokenizer
 
 
 def _activate_uploaded_checkpoint(
@@ -668,6 +694,8 @@ def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
             sha256=sha256,
             training_steps=int(metrics["training_steps"]),
             vocab_size=int(metrics["vocab_size"]),
+            parameters=int(metrics["parameters"]),
+            context_size=int(metrics["context_size"]),
             github_token=github_token,
         )
         _activate_uploaded_checkpoint(
@@ -685,6 +713,8 @@ def handle_model_upload(handler: BaseHTTPRequestHandler) -> None:
             "message": "Модель проверена, сохранена в GitHub Releases и активирована без пересборки Docker.",
             "training_steps": int(metrics["training_steps"]),
             "vocab_size": int(metrics["vocab_size"]),
+            "context_size": int(metrics["context_size"]),
+            "parameters": int(metrics["parameters"]),
             "sha256": sha256,
             "release_url": manifest.get("release_url", ""),
             "download_url": manifest.get("download_url", ""),
@@ -871,8 +901,8 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
             output_path=TRAINING_OUTPUT_PATH,
             steps=target_steps,
             batch_size=2,
-            block_size=320,
-            target_vocab_size=5000,
+            block_size=MODEL_UPLOAD_CONTEXT_SIZE,
+            target_vocab_size=MODEL_UPLOAD_VOCAB_SIZE,
             seed=1337,
             resume=resume,
             schedule_steps=schedule_steps,
