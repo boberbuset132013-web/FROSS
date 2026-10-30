@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.4: a small decoder-only language model trained from random weights.
+"""FROSS Transformer Brain 1.5: a small decoder-only language model trained from random weights.
 
-No pretrained checkpoint, hosted LLM, or downloaded model is used. A BPE tokenizer
+No pretrained checkpoint, hosted LLM, or downloaded model is used. A SentencePiece Unigram tokenizer
 and a causal Transformer are learned from the repository's own text corpus.
 This is an educational, deliberately small model; its quality is bounded by its data
 and compute budget. Install PyTorch CPU wheels to train or run it.
@@ -9,6 +9,7 @@ and compute budget. Install PyTorch CPU wheels to train or run it.
 from __future__ import annotations
 
 import argparse
+import shutil
 import hashlib
 from collections import Counter
 import json
@@ -24,7 +25,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-VERSION = "FROSS Transformer 1.4"
+VERSION = "FROSS Transformer 1.5"
 
 
 def _preferred_device() -> torch.device:
@@ -308,6 +309,103 @@ class BPETokenizer:
             "max_piece_chars": self.max_piece_chars,
         }
 
+class SentencePieceTokenizer:
+    """SentencePiece Unigram tokenizer; serialized model is embedded in the checkpoint."""
+
+    def __init__(self, model_proto_b64: str):
+        import base64
+        import sentencepiece as spm
+        if not isinstance(model_proto_b64, str) or not model_proto_b64:
+            raise ValueError("SentencePiece checkpoint is missing its serialized model.")
+        self.model_proto_b64 = model_proto_b64
+        self.processor = spm.SentencePieceProcessor()
+        if not self.processor.LoadFromSerializedProto(base64.b64decode(model_proto_b64)):
+            raise ValueError("Could not load the SentencePiece model.")
+        ids = (self.processor.pad_id(), self.processor.unk_id(), self.processor.bos_id(), self.processor.eos_id())
+        if ids != (PAD_ID, UNK_ID, BOS_ID, EOS_ID):
+            raise ValueError("SentencePiece special-token IDs do not match FROSS.")
+
+    @property
+    def vocab_size(self) -> int:
+        return int(self.processor.get_piece_size())
+
+    @classmethod
+    def train(cls, texts: list[str], target_vocab_size: int = 5000,
+              progress_callback: Any = None, stop_callback: Any = None) -> "SentencePieceTokenizer":
+        import base64
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        from pathlib import Path
+        target_vocab_size = int(target_vocab_size)
+        if target_vocab_size < 512:
+            raise ValueError("SentencePiece byte-fallback vocabulary must be at least 512 tokens.")
+        if stop_callback is not None and stop_callback():
+            raise TrainingCancelled("Training cancelled before SentencePiece preparation.")
+        def report(done: int) -> None:
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "tokenizer_native", "preparation_step": done,
+                                       "preparation_total": 1, "vocab_size": None if done == 0 else target_vocab_size})
+                except Exception:
+                    pass
+        report(0)
+        with tempfile.TemporaryDirectory(prefix="fross-spm-") as folder:
+            root = Path(folder)
+            corpus_path, prefix = root / "corpus.txt", root / "fross-unigram"
+            with corpus_path.open("w", encoding="utf-8", newline="\n") as handle:
+                for item in texts:
+                    value = str(item).replace("\x00", " ").strip()
+                    if value:
+                        handle.write(value.replace("\n", " ") + "\n")
+            if corpus_path.stat().st_size == 0:
+                raise ValueError("SentencePiece training corpus is empty.")
+            trainer = (
+                "import sentencepiece as s,sys; "
+                "s.SentencePieceTrainer.train(input=sys.argv[1],model_prefix=sys.argv[2],"
+                "model_type='unigram',vocab_size=int(sys.argv[3]),character_coverage=1.0,"
+                "byte_fallback=True,pad_id=0,unk_id=1,bos_id=2,eos_id=3,hard_vocab_limit=False,"
+                "num_threads=1,shuffle_input_sentence=False,input_sentence_size=0,"
+                "max_sentence_length=8192,minloglevel=2)"
+            )
+            process = subprocess.Popen([sys.executable, "-c", trainer, str(corpus_path), str(prefix), str(target_vocab_size)],
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            while process.poll() is None:
+                if stop_callback is not None and stop_callback():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    raise TrainingCancelled("Training cancelled during native SentencePiece vocabulary training.")
+                time.sleep(0.2)
+            if process.returncode != 0:
+                raise RuntimeError("Native SentencePiece Unigram training failed (exit " + str(process.returncode) + ").")
+            if stop_callback is not None and stop_callback():
+                raise TrainingCancelled("Training cancelled after SentencePiece vocabulary training.")
+            model_proto = prefix.with_suffix(".model").read_bytes()
+            report(1)
+            return cls(base64.b64encode(model_proto).decode("ascii"))
+
+    def encode(self, text: str) -> list[int]:
+        return [int(value) for value in self.processor.encode(str(text), out_type=int)]
+
+    def decode(self, token_ids: list[int], stop_at_eos: bool = True) -> str:
+        values = []
+        for token_id in token_ids:
+            value = int(token_id)
+            if value == EOS_ID and stop_at_eos:
+                break
+            if 0 <= value < self.vocab_size and value not in (PAD_ID, BOS_ID):
+                values.append(value)
+        return self.processor.decode(values)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"model_proto_b64": self.model_proto_b64}
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: dict[str, int | float]):
         super().__init__()
@@ -488,7 +586,7 @@ def _format_generation_prefix(message: str) -> str:
     return "Пользователь: " + str(message).strip()[:3000] + "\n" + RESPONSE_PREFIX
 
 
-def _encode_stream(records: list[dict[str, Any]], tokenizer: BPETokenizer) -> list[int]:
+def _encode_stream(records: list[dict[str, Any]], tokenizer: SentencePieceTokenizer) -> list[int]:
     stream: list[int] = []
     for record in records:
         stream.append(BOS_ID)
@@ -552,10 +650,10 @@ def train_model(
         if not target.is_file():
             raise FileNotFoundError(f"Cannot resume: checkpoint does not exist: {target}")
         resume_checkpoint = torch.load(target, map_location="cpu", weights_only=True)
-        if int(resume_checkpoint.get("format_version", 0)) != 2:
+        if int(resume_checkpoint.get("format_version", 0)) != 3:
             raise ValueError(
                 "This checkpoint does not include resumable optimizer state. "
-                "Start a new 600-step run with the current Brain 1.4 code first."
+                "Start a new 600-step run with the current Brain 1.5 code first."
             )
         resume_state = resume_checkpoint.get("resume_state")
         if not isinstance(resume_state, dict):
@@ -602,14 +700,12 @@ def train_model(
             pass
 
     if resume and resume_checkpoint is not None:
-        tokenizer = BPETokenizer(**resume_checkpoint["tokenizer"])
+        tokenizer = SentencePieceTokenizer(**resume_checkpoint["tokenizer"])
     else:
         try:
-            tokenizer = BPETokenizer.train(
+            tokenizer = SentencePieceTokenizer.train(
                 [_format_record(row) for row in train_records],
-                merge_count=merge_count,
-                target_vocab_size=target_vocab_size if merge_count is None else None,
-                max_piece_chars=24,
+                target_vocab_size=target_vocab_size,
                 progress_callback=progress_callback,
                 stop_callback=stop_callback,
             )
@@ -795,7 +891,7 @@ def train_model(
         reported_train_loss = last_loss
     model.eval()
     checkpoint = {
-        "format_version": 2,
+        "format_version": 3,
         "version": VERSION,
         "config": config,
         "tokenizer": tokenizer.to_dict(),
@@ -826,29 +922,36 @@ def train_model(
             "vocab_target_reached": (
                 tokenizer.vocab_size == target_vocab_size if merge_count is None else None
             ),
-            "tokenizer_type": "word-boundary-bpe" if tokenizer.pretokenized else "legacy-bpe",
+            "tokenizer_type": "sentencepiece-unigram",
             "parameters": sum(p.numel() for p in model.parameters()),
             "trained_from_random_weights": True,
         },
     }
     target.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint, target)
+    backup = target.with_name(target.stem + ".brain14-bpe-backup" + target.suffix)
+    if target.is_file() and not backup.exists():
+        shutil.copy2(target, backup)
+    temporary = target.with_name(target.name + ".brain15.tmp")
+    torch.save(checkpoint, temporary)
+    temporary.replace(target)
     return {
         "ok": True, "version": VERSION, "output": str(target),
         **checkpoint["metrics"]
     }
 
 
-def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, BPETokenizer | None, dict[str, Any]]:
+def load_model(path: str | Path = DEFAULT_CHECKPOINT) -> tuple[FrossTransformer | None, SentencePieceTokenizer | None, dict[str, Any]]:
     configure_runtime_threads()
     target = Path(path)
     if not target.is_file():
         return None, None, {"loaded": False, "reason": "checkpoint-missing", "path": str(target)}
     try:
         checkpoint = torch.load(target, map_location="cpu", weights_only=True)
-        if int(checkpoint.get("format_version", 0)) not in {1, 2}:
-            raise ValueError("Unsupported checkpoint format.")
-        tokenizer = BPETokenizer(**checkpoint["tokenizer"])
+        if int(checkpoint.get("format_version", 0)) != 3:
+            raise ValueError("Checkpoint is not in the FROSS Brain 1.5 SentencePiece format.")
+        if checkpoint.get("version") != VERSION:
+            raise ValueError("Checkpoint version is incompatible with this FROSS Brain.")
+        tokenizer = SentencePieceTokenizer(**checkpoint["tokenizer"])
         config = checkpoint["config"]
         model = FrossTransformer(tokenizer.vocab_size, config)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
