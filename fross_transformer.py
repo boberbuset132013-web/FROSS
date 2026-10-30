@@ -555,7 +555,7 @@ def initialize_model_from_checkpoint(
         target_tensor = target_state[name]
         if not torch.is_tensor(source_tensor) or tuple(source_tensor.shape) != tuple(target_tensor.shape):
             raise ValueError("Brain 1.4 tensor is missing or has an incompatible shape: " + name)
-        target_tensor.copy_(source_tensor.to(dtype=target_tensor.dtype))
+        target_tensor.copy_(source_tensor.to(device=target_tensor.device, dtype=target_tensor.dtype))
         copied_parameters += target_tensor.numel()
         copied_tensors += 1
 
@@ -571,7 +571,7 @@ def initialize_model_from_checkpoint(
         raise ValueError("Brain 1.4 positional embeddings are missing or incompatible.")
     copied_positions = min(source_positions.shape[0], target_positions.shape[0])
     target_positions[:copied_positions].copy_(
-        source_positions[:copied_positions].to(dtype=target_positions.dtype)
+        source_positions[:copied_positions].to(device=target_positions.device, dtype=target_positions.dtype)
     )
     copied_parameters += copied_positions * target_positions.shape[1]
     copied_tensors += 1
