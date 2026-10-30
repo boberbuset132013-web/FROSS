@@ -1046,6 +1046,8 @@ def package_inference_checkpoint(
     """
     source = Path(checkpoint_path)
     target = Path(output_path)
+    if source.resolve() == target.resolve():
+        raise ValueError("The upload package must use a different path so the resumable training checkpoint is preserved.")
     if not source.is_file():
         raise FileNotFoundError(f"Training checkpoint not found: {source}")
     checkpoint = torch.load(source, map_location="cpu", weights_only=True)
