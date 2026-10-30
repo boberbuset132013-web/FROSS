@@ -47,7 +47,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install CPU training dependency
-        run: python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
+        run: |
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install "sentencepiece>=0.2.0,<0.3"
       - name: Validate Hostless Docker build paths
         run: |
           python - <<'PY'
@@ -73,7 +75,7 @@ jobs:
       - name: Test original Transformer architecture and tokenizer
         run: python tests/test_fross_transformer.py
       - name: Train a scratch Transformer checkpoint and smoke-test generation
-        run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --merges 32 --text "Объясни attention простыми словами"
+        run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --vocab-size 300 --text "Объясни attention простыми словами"
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -104,14 +106,14 @@ jobs:
           assert "function frossTrainingSeedResources(topic)" in worker
           assert 'const FROSS_GITHUB_BRANCH = "fross-knowledge";' in worker, "Knowledge writes must stay off main so each study topic does not retrain the model"
           transformer = Path("fross_transformer.py").read_text(encoding="utf-8")
-          assert 'brainVersion: "1.4"' in worker
+          assert 'brainVersion: "1.5"' in worker
           assert "class CausalSelfAttention" in transformer and "class FrossTransformer" in transformer
           assert "masked_fill(causal_mask" in transformer
           assert "trained_from_random_weights" in transformer
           assert "FROSS_LLM_API_KEY" not in worker and "openrouter" not in worker.lower()
           assert "function frossGenerateWithModel" not in worker
           assert "frossShouldSearchExplicit(correctedQuery)" in worker
-          assert 'generationModel: "FROSS Transformer 1.4"' in worker
+          assert 'generationModel: "FROSS Transformer 1.5"' in worker
           assert not Path("services/llm_client.py").exists()
           assert "const selectedEndpoint = frossPythonBrainUrl(env);" in worker
           assert 'const FROSS_DEFAULT_PYTHON_BRAIN_URL = "https://fross-python-brain.hostless.app/chat";' in worker
@@ -162,21 +164,21 @@ jobs:
           assert "function frossShouldAutoLookup(query)" in worker and "function frossBuildUserLookupQuery(query)" in worker, "Unknown terms should be searched using the user's original words"
           assert "function frossForbiddenProgrammingTopic(topic)" in worker and "frossForbiddenProgrammingTopic(topic)" in worker, "Custom learning must reject programming languages outside JavaScript, Python, HTML and CSS"
           assert "...(shouldSearch ? results.slice(0, 6) : [])" in worker, "Fresh search results must be prioritized in the model context"
-          assert 'VERSION = "FROSS Transformer 1.4"' in transformer and '"block_size": 320' in transformer and '"n_embd": 192' in transformer and '"n_head": 6' in transformer and '"n_layer": 6' in transformer, "Transformer version, context window and architecture must match Brain 1.4"
-          assert 'def _response_strategy(message: str)' in transformer and "короткая социальная реплика" in transformer and "Тип запроса" in transformer, "Brain 1.4 must retain its task-type guidance templates"
+          assert 'VERSION = "FROSS Transformer 1.5"' in transformer and '"block_size": 500' in transformer and '"n_embd": 192' in transformer and '"n_head": 6' in transformer and '"n_layer": 6' in transformer and 'target_vocab_size: int = 25000' in transformer, "Transformer version, 500-token context and Brain 1.5 architecture must match"
+          assert 'def _response_strategy(message: str)' in transformer and "короткая социальная реплика" in transformer and "Тип запроса" in transformer, "Brain 1.5 must retain its task-type guidance templates"
           server = Path("services/python-brain/server.py").read_text(encoding="utf-8")
-          assert 'FROSS Hybrid Transformer Brain 1.4' in server and 'max_new_tokens=request_token_limit' in server and 'requested_tokens' in server and '512' in server, "Python service must match Brain 1.4 and clamp per-request generation to a safe budget"
+          assert 'FROSS Hybrid Transformer Brain 1.5' in server and 'max_new_tokens=request_token_limit' in server and 'requested_tokens' in server and '512' in server, "Python service must match Brain 1.4 and clamp per-request generation to a safe budget"
           assert "message-copy-btn" in page and "navigator.clipboard.writeText(original)" in page, "Assistant messages need a copy button"
           assert 'id="autoStudyStopBtn"' in page and "function startAutoStudy()" in page and "function stopAutoStudy()" in page, "Automatic learning must expose Start and Stop"
           assert "FROSS_AUTO_STUDY_STORAGE_KEY" in page and "resumeAutoStudySetting()" in page, "Automatic learning state should resume from browser storage"
           assert "FROSS_AUTO_STUDY_TOPICS" in page and "FROSS_AUTO_STUDY_INTERVAL_MS=120000" in page, "Automatic study must rotate topics at a two-minute interval"
           assert "hostCounts" in worker and "boilerplate" in worker and "frossMergeTrainingCandidates(unit.topic, searchResults, 7)" in worker, "Study notes should filter boilerplate and use diverse sources"
           assert "sourceText.trim().length < 45" in worker and 'String(note.snippet || "").trim().length >= 45' in worker, "Study notes must contain readable source text, not just links"
-          assert "def _response_strategy(message: str)" in transformer and "Тип запроса: вопрос или объяснение" in transformer, "Brain 1.4 should retain task-type guidance text"
+          assert "def _response_strategy(message: str)" in transformer and "Тип запроса: вопрос или объяснение" in transformer, "Brain 1.5 should retain task-type guidance text"
           assert "MAX_GENERATION_TOKENS = 5000" in transformer and "min(int(max_tokens), MAX_GENERATION_TOKENS)" in transformer, "Generation must support up to 5000 new tokens"
           assert "max_new_tokens=request_token_limit" in server and "requested_tokens" in server and "GENERATION_TOKEN_LIMIT" in server, "Python service must enforce the configured and per-request generation limits"
           dockerfile = Path("services/python-brain/Dockerfile").read_text(encoding="utf-8")
-          assert "ARG FROSS_MODEL_URL=" in dockerfile and "ARG FROSS_REQUIRED_MODEL_STEPS=3000" in dockerfile and "ARG FROSS_VOCAB_SIZE=5000" in dockerfile and "FROSS_VOCAB_SIZE" in dockerfile and "uploaded-checkpoint" in dockerfile and "fross-model-source.txt" in dockerfile, "Docker build must download and verify a pre-trained checkpoint"
+          assert "ARG FROSS_MODEL_URL=" in dockerfile and "ARG FROSS_REQUIRED_MODEL_STEPS=3000" in dockerfile and "ARG FROSS_VOCAB_SIZE=25000" in dockerfile and "ARG FROSS_CONTEXT_SIZE=500" in dockerfile and "ARG FROSS_MIN_PARAMETERS=5000000" in dockerfile and "ARG FROSS_MAX_PARAMETERS=8000000" in dockerfile and "FROSS_VOCAB_SIZE" in dockerfile and "uploaded-checkpoint" in dockerfile and "fross-model-source.txt" in dockerfile, "Docker build must download and verify a pre-trained checkpoint"
           assert "/app/fross_transformer.py train" not in dockerfile and "FROSS_TRAIN_STEPS" not in dockerfile and "FROSS_SKIP_MODEL_DOWNLOAD" not in dockerfile, "Hostless Docker builds must never train a model or silently fall back"
           knowledge_index = json.loads(Path("memory/knowledge/index.json").read_text(encoding="utf-8"))
           assert len(knowledge_index.get("topics", [])) >= 4, "Shared GitHub knowledge index should be initialized"
@@ -246,6 +248,6 @@ jobs:
           assert.equal(typeof brain.frossQuickResponse, "undefined");
           assert.doesNotMatch(brainSource, /DEFINITIONS|function quickReply|export function frossThink/);
           assert.doesNotMatch(workerSource, /frossQuickResponse|frossThink|quickReply/);
-          assert.match(workerSource, /generationModel: "FROSS Transformer 1.4"/);
+          assert.match(workerSource, /generationModel: "FROSS Transformer 1.5"/);
           console.log("JavaScript brain only normalizes requests; replies must come from the trained Transformer.");
           JS
