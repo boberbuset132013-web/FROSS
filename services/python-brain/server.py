@@ -95,9 +95,9 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
             compatible = (
                 isinstance(metrics, dict)
                 and isinstance(config, dict)
-                and existing.get("version") == transformer.VERSION
+                and existing.get("version") in {transformer.VERSION, "FROSS Transformer 1.5"}
                 and int(existing.get("format_version", 0)) == 3
-                and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
+                and int(metrics.get("training_steps", 0)) >= (MODEL_UPLOAD_MIN_STEPS if existing.get("version") == transformer.VERSION else 3000)
                 and metrics.get("vocab_target_reached") is True
                 and _runtime_checkpoint_profile_matches(metrics, config)
             )
@@ -262,8 +262,10 @@ def _load_startup_model_background() -> None:
         loaded_vocab = int(status.get("vocab_size", tokenizer.vocab_size))
         loaded_context = int(model.config.get("block_size", 0))
         loaded_parameters = sum(parameter.numel() for parameter in model.parameters())
+        loaded_version = str(status.get("version", ""))
+        minimum_steps = MODEL_UPLOAD_MIN_STEPS if loaded_version == transformer.VERSION else 3000
         if (
-            loaded_steps < MODEL_UPLOAD_MIN_STEPS
+            loaded_steps < minimum_steps
             or tokenizer.vocab_size != loaded_vocab
             or not _runtime_checkpoint_profile_matches(
                 {**status, "vocab_size": loaded_vocab, "context_size": loaded_context},
@@ -547,7 +549,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if not isinstance(checkpoint, dict):
         raise ValueError("Checkpoint должен быть объектом FROSS.")
     if checkpoint.get("version") != transformer.VERSION:
-        raise ValueError("Нужна совместимая версия FROSS Transformer 1.5.")
+        raise ValueError("Нужна совместимая версия FROSS Transformer 1.6.")
     if int(checkpoint.get("format_version", 0)) != 3:
         raise ValueError("Неизвестный формат checkpoint.")
     metrics = checkpoint.get("metrics")
@@ -561,7 +563,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if vocab_size != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
         raise ValueError("Нужен словарь из " + str(MODEL_UPLOAD_VOCAB_SIZE) + " токенов с достигнутой целью словаря.")
     if int(config.get("block_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
-        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.5 (" + str(MODEL_UPLOAD_CONTEXT_SIZE) + ").")
+        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.6 (" + str(MODEL_UPLOAD_CONTEXT_SIZE) + ").")
     if int(metrics.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE:
         raise ValueError("В checkpoint отсутствуют корректные метаданные контекста.")
     model, tokenizer, status = transformer.load_model(path)
@@ -783,12 +785,12 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 # Training runs independently of the browser request. Status is held in the service
 # process so closing the dashboard does not cancel an active run.
 TRAINING_OUTPUT_PATH = Path(os.environ.get(
-    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-30k-9m.pt")
+    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-8k-64m.pt")
 ))
 TRAINING_LOCK = threading.Lock()
 TRAINING_CANCEL = threading.Event()
 TRAINING_STATUS: dict[str, Any] = {
-    "ok": True, "state": "idle", "phase": "idle", "step": 0, "targetSteps": 600,
+    "ok": True, "state": "idle", "phase": "idle", "step": 0, "targetSteps": 25000,
     "preparationStep": 0, "preparationTotal": 0, "vocabSize": None,
     "trainLoss": None, "validationLoss": None, "logs": [],
     "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
@@ -851,12 +853,12 @@ def _training_progress(progress: dict[str, Any]) -> None:
 
 
 def _prepare_website_training_corpus() -> Path:
-    """Merge the base and curated teacher corpora before building the 30K tokenizer."""
+    """Merge the base and curated teacher corpora for the 8K Brain 1.6 tokenizer."""
     from training.distillation.prepare_corpus import merge_records, read_corpus, write_jsonl_atomic
 
     base_path = ROOT / "data" / "fross_corpus.jsonl"
     teacher_path = ROOT / "data" / "fross_teacher_corpus.jsonl"
-    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-30k-9m.jsonl")
+    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-8k-64m.jsonl")
     base_records = read_corpus(base_path)
     teacher_records = read_corpus(teacher_path, required=False)
     merged, duplicates = merge_records(base_records, teacher_records)
@@ -904,9 +906,10 @@ def _best_initialization_checkpoint() -> tuple[str | None, int]:
             if not supported or not isinstance(config, dict) or not isinstance(state_dict, dict):
                 continue
             if (
-                int(config.get("n_embd", 0)) != 192
-                or int(config.get("n_head", 0)) != 6
+                int(config.get("n_embd", 0)) != 520
+                or int(config.get("n_head", 0)) != 8
                 or not 1 <= int(config.get("n_layer", 0)) <= int(transformer.DEFAULT_CONFIG["n_layer"])
+                or int(config.get("block_size", 0)) != 4096
             ):
                 continue
             steps = int(metrics.get("training_steps", 0)) if isinstance(metrics, dict) else 0
@@ -998,14 +1001,14 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
                 "error": None,
             })
         _training_log(
-            "Запуск Transformer 1.5; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с переносом слоёв из checkpoint на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
-            + ". Цель: 30000 токенов, 8,970,432 параметра, контекст 500."
+            "Запуск Transformer 1.6; режим: " + ("продолжение с шага " + str(existing_steps) if resume else ("новый цикл с совместимыми слоями Brain 1.6 на " + str(initialization_steps) + " шагов" if initialize_from else "обучение с новых весов"))
+            + ". Цель: 8000 токенов, 64,819,040 параметров, контекст 4096, график 100000 шагов."
         )
         result = transformer.train_model(
             corpus_path=corpus,
             output_path=TRAINING_OUTPUT_PATH,
             steps=target_steps,
-            batch_size=2,
+            batch_size=1,
             block_size=MODEL_UPLOAD_CONTEXT_SIZE,
             target_vocab_size=MODEL_UPLOAD_VOCAB_SIZE,
             seed=1337,
@@ -1014,7 +1017,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
             stop_callback=TRAINING_CANCEL.is_set,
-            force_cpu=True,
+            force_cpu=False,
         )
         cancelled = bool(result.get("cancelled"))
         with TRAINING_LOCK:
@@ -1210,10 +1213,10 @@ class Handler(BaseHTTPRequestHandler):
                 target_steps = int(payload.get("steps", 600))
                 schedule_steps = int(payload.get("scheduleSteps", 10000))
                 fresh_run = payload.get("freshRun", False) is True
-                if target_steps not in (600, 3000, 5000, 8000, 10000):
-                    raise ValueError("Choose 600, 3000, 5000, 8000 or 10000 training steps.")
-                if schedule_steps != 10000 or schedule_steps < target_steps:
-                    raise ValueError("Schedule must stay fixed at 10000 steps so training can resume consistently.")
+                if target_steps not in (25000, 50000, 75000, 100000):
+                    raise ValueError("Choose 25000, 50000, 75000 or 100000 training steps.")
+                if schedule_steps != 100000 or schedule_steps < target_steps:
+                    raise ValueError("Schedule must stay fixed at 100000 steps so training can resume consistently.")
             except Exception as exc:
                 respond(self, 400, {"ok": False, "error": str(exc)[:240]})
                 return
