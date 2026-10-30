@@ -133,6 +133,7 @@ jobs:
             -e FROSS_BRAIN_SERVICE_TOKEN=ci-test \
             -e FROSS_MAX_GENERATION_TOKENS=12 \
             -e FROSS_MODEL_GITHUB_REPOSITORY=disabled \
+            -e FROSS_MODEL_TEST_MODE=1 \
             -e FROSS_MODEL_MIN_STEPS=1 \
             -e FROSS_MODEL_CONTEXT_SIZE=64 \
             -e FROSS_MODEL_MIN_PARAMETERS=1000000 \
