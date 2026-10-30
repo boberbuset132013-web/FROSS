@@ -41,7 +41,11 @@ TRANSFORMER_MODEL_PATH = os.environ.get("FROSS_TRANSFORMER_MODEL_PATH", str(Path
 ONNX_MODEL_PATH = os.environ.get("FROSS_ONNX_MODEL_PATH", str(Path(tempfile.gettempdir()) / "fross-transformer.onnx"))
 MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
-MODEL_UPLOAD_MIN_STEPS = max(1, int(os.environ.get("FROSS_MODEL_MIN_STEPS", "3000")))
+MODEL_TEST_MODE = os.environ.get("FROSS_MODEL_TEST_MODE", "0").strip().lower() in {"1", "true", "yes"}
+MODEL_UPLOAD_MIN_STEPS = max(
+    1 if MODEL_TEST_MODE else 3000,
+    int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "3000")),
+)
 MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "25000"))
 MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
 MODEL_MIN_PARAMETERS = int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "5000000"))
