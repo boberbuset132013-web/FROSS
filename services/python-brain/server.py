@@ -43,39 +43,45 @@ MAX_MODEL_UPLOAD_BYTES = 90 * 1024 * 1024
 MODEL_UPLOAD_REPOSITORY = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
 MODEL_TEST_MODE = os.environ.get("FROSS_MODEL_TEST_MODE", "0").strip().lower() in {"1", "true", "yes"}
 MODEL_UPLOAD_MIN_STEPS = max(
-    1 if MODEL_TEST_MODE else 3000,
-    int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "3000")),
+    1 if MODEL_TEST_MODE else 100000,
+    int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "100000")),
 )
-MODEL_UPLOAD_VOCAB_SIZE = 30000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "30000"))
-MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
-MODEL_MIN_PARAMETERS = 8850000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "8850000"))
-MODEL_MAX_PARAMETERS = 9100000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "9100000"))
-LEGACY_MODEL_VOCAB_SIZE = 25000
+MODEL_UPLOAD_VOCAB_SIZE = 8000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "8000"))
+MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "4096"))
+MODEL_MIN_PARAMETERS = 64800000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "64800000"))
+MODEL_MAX_PARAMETERS = 65000000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "65000000"))
+LEGACY_25K_MODEL_VOCAB_SIZE = 25000
+LEGACY_30K_MODEL_VOCAB_SIZE = 30000
 LEGACY_MODEL_MIN_PARAMETERS = 5000000
-LEGACY_MODEL_MAX_PARAMETERS = 8000000
+LEGACY_MODEL_MAX_PARAMETERS = 9100000
 
 
 def _runtime_checkpoint_profile_matches(metrics: dict[str, Any], config: dict[str, Any], actual_parameters: int | None = None) -> bool:
-    """Accept the currently deployed 25K model during rollout and the new 30K model."""
+    """Accept Brain 1.6 while retaining compatible Brain 1.5 fallback checkpoints."""
     try:
         vocab = int(metrics.get("vocab_size", 0))
         parameters = int(actual_parameters if actual_parameters is not None else metrics.get("parameters", -1))
         context = int(config.get("block_size", 0))
+        reported_context = int(metrics.get("context_size", 0))
         layers = int(config.get("n_layer", 0))
         width = int(config.get("n_embd", 0))
         heads = int(config.get("n_head", 0))
-        if context != MODEL_UPLOAD_CONTEXT_SIZE or int(metrics.get("context_size", 0)) != context:
-            return False
         if MODEL_TEST_MODE:
-            return vocab == MODEL_UPLOAD_VOCAB_SIZE and layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
-        if vocab == LEGACY_MODEL_VOCAB_SIZE:
-            return layers == 6 and width == 192 and heads == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
-        if vocab == MODEL_UPLOAD_VOCAB_SIZE:
-            return layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+            return (vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
+                    and reported_context == context and layers == 18 and width == 520 and heads == 8
+                    and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS)
+        if (vocab == MODEL_UPLOAD_VOCAB_SIZE and context == MODEL_UPLOAD_CONTEXT_SIZE
+                and reported_context == context and layers == 18 and width == 520 and heads == 8):
+            return MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
+        if context != 500 or reported_context not in (0, 500) or width != 192 or heads != 6:
+            return False
+        if vocab == LEGACY_25K_MODEL_VOCAB_SIZE:
+            return layers == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= 8000000
+        if vocab == LEGACY_30K_MODEL_VOCAB_SIZE:
+            return layers == 7 and 8850000 <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
         return False
     except (TypeError, ValueError):
         return False
-
 
 def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
     """Download the latest persisted GitHub Release asset on startup, if one exists."""
