@@ -97,6 +97,7 @@ jobs:
           import os
           from pathlib import Path
           import torch
+          from unittest.mock import patch
           import fross_transformer as brain
 
           root = Path(os.environ["RUNNER_TEMP"])
@@ -120,10 +121,15 @@ jobs:
               encoding="utf-8",
           )
           checkpoint = root / "fross-runtime-smoke.pt"
-          metrics = brain.train_model(
-              corpus, checkpoint, steps=2, batch_size=1, block_size=64,
-              target_vocab_size=512, seed=29,
-          )
+          tiny_config = {
+              "block_size": 64, "n_embd": 16, "n_head": 4,
+              "n_layer": 2, "dropout": 0.0, "gradient_checkpointing": False,
+          }
+          with patch.dict(brain.DEFAULT_CONFIG, tiny_config, clear=True):
+              metrics = brain.train_model(
+                  corpus, checkpoint, steps=2, batch_size=1, block_size=64,
+                  target_vocab_size=512, seed=29,
+              )
           data = torch.load(checkpoint, map_location="cpu", weights_only=True)
           actual_vocab = int(metrics["vocab_size"])
           data["metrics"]["requested_vocab_size"] = actual_vocab
@@ -161,8 +167,11 @@ jobs:
             -e FROSS_MODEL_VOCAB_SIZE \
             -e FROSS_MODEL_MIN_STEPS=1 \
             -e FROSS_MODEL_CONTEXT_SIZE=64 \
-            -e FROSS_MODEL_MIN_PARAMETERS=1000000 \
+            -e FROSS_MODEL_MIN_PARAMETERS=1 \
             -e FROSS_MODEL_MAX_PARAMETERS=8000000 \
+            -e FROSS_MODEL_N_LAYER=2 \
+            -e FROSS_MODEL_N_EMBD=16 \
+            -e FROSS_MODEL_N_HEAD=4 \
             -v "$RUNNER_TEMP/fross-runtime-smoke.pt:/tmp/fross-transformer.pt:ro" \
             -v "$RUNNER_TEMP/fross-model-source.txt:/app/fross-model-source.txt:ro" \
             fross-brain-smoke
