@@ -26,8 +26,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Install ONNX test dependencies
-        run: python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy "sentencepiece>=0.2.0,<0.3"
+      - name: Install tokenizer and ONNX test dependencies
+        run: python -m pip install "onnx>=1.16,<2" "onnxruntime>=1.20,<2" numpy "sentencepiece>=0.2.0,<0.3" "sentencepiece>=0.2.0,<0.3"
       - name: Validate JavaScript and Wrangler configuration
         run: |
           node --input-type=module --check < worker.js
@@ -48,11 +48,11 @@ jobs:
         run: python -m compileall -q fross_transformer.py training/distillation tests
       - name: Validate and merge teacher corpus
         run: python training/distillation/prepare_corpus.py --base data/fross_corpus.jsonl --teacher data/fross_teacher_corpus.jsonl --output "$RUNNER_TEMP/fross-training-corpus.jsonl"
-      - name: Check the real training corpus reaches Brain 1.4 vocabulary target
+      - name: Check the real training corpus reaches Brain 1.5 Unigram vocabulary target
         env:
           FROSS_DEVICE: cpu
         run: |
-          python -c "import os, random; import fross_transformer as t; rows=t._load_corpus(os.path.join(os.environ['RUNNER_TEMP'], 'fross-training-corpus.jsonl')); random.seed(1337); random.shuffle(rows); count=max(2, int(len(rows)*0.1)); texts=[t._format_record(row) for row in rows[count:]]; tok=t.BPETokenizer.train(texts, target_vocab_size=5000, max_piece_chars=24); print('Actual corpus vocabulary:', tok.vocab_size); assert tok.vocab_size == 5000, f'Vocabulary target not reached: {tok.vocab_size}/5000'"
+          python -c "import os, random; import fross_transformer as t; rows=t._load_corpus(os.path.join(os.environ['RUNNER_TEMP'], 'fross-training-corpus.jsonl')); random.seed(1337); random.shuffle(rows); count=max(2, int(len(rows)*0.1)); texts=[t._format_record(row) for row in rows[count:]]; tok=t.SentencePieceTokenizer.train(texts, target_vocab_size=5000); print('Actual Unigram vocabulary:', tok.vocab_size); assert tok.vocab_size == 5000, f'Vocabulary target not reached: {tok.vocab_size}/5000'"
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
