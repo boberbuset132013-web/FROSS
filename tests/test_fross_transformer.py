@@ -104,7 +104,7 @@ class TransformerTests(unittest.TestCase):
         # Enough distinct word forms to test an exact target without a large training run.
         words = [f"слово{a}{b}word" for a, b in itertools.product(string.ascii_lowercase, repeat=2)]
         words.extend(["你好，世界", "谢谢你", "常见"])
-        tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=300)
+        tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=256)
         self.assertEqual(tokenizer.vocab_size, 256)
         self.assertTrue(tokenizer.pretokenized)
         for piece in tokenizer.pieces[4:]:
@@ -237,7 +237,7 @@ class TransformerTests(unittest.TestCase):
                     steps=1,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=300,
+                    target_vocab_size=512,
                     seed=91,
                     schedule_steps=2,
                 )
@@ -250,7 +250,7 @@ class TransformerTests(unittest.TestCase):
                     steps=2,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=300,
+                    target_vocab_size=512,
                     seed=91,
                     resume=True,
                     schedule_steps=3,
