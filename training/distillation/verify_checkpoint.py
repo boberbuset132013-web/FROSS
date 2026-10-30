@@ -21,7 +21,10 @@ def main() -> int:
     parser.add_argument("--model-source", required=True)
     parser.add_argument("--required-model-steps", type=int, default=3000)
     parser.add_argument("--train-steps", type=int, default=600)
-    parser.add_argument("--vocab-size", type=int, default=5000)
+    parser.add_argument("--vocab-size", type=int, default=25000)
+    parser.add_argument("--context-size", type=int, default=500)
+    parser.add_argument("--min-parameters", type=int, default=5000000)
+    parser.add_argument("--max-parameters", type=int, default=8000000)
     args = parser.parse_args()
 
     source_path = Path(args.model_source)
@@ -54,8 +57,13 @@ def main() -> int:
         )
     if metrics.get("vocab_target_reached") is not True:
         raise SystemExit("Checkpoint did not reach its requested vocabulary target.")
-    if int(checkpoint.get("config", {}).get("block_size", 0)) != 320:
-        raise SystemExit("Checkpoint context size does not match Brain 1.4 (320).")
+    if int(checkpoint.get("config", {}).get("block_size", 0)) != args.context_size:
+        raise SystemExit(
+            f"Checkpoint context size mismatch: expected {args.context_size}, "
+            f"got {checkpoint.get('config', {}).get('block_size')}."
+        )
+    if int(metrics.get("context_size", 0)) != args.context_size:
+        raise SystemExit("Checkpoint context-size metadata is missing or incorrect.")
 
     steps = int(metrics.get("training_steps", 0))
     if source == "uploaded-checkpoint":
@@ -79,6 +87,14 @@ def main() -> int:
         raise SystemExit(
             f"Loaded tokenizer has {tokenizer.vocab_size} tokens; expected {args.vocab_size}."
         )
+    actual_parameters = sum(parameter.numel() for parameter in model.parameters())
+    if not args.min_parameters <= actual_parameters <= args.max_parameters:
+        raise SystemExit(
+            f"Model has {actual_parameters} parameters; expected "
+            f"{args.min_parameters}-{args.max_parameters}."
+        )
+    if int(metrics.get("parameters", -1)) != actual_parameters:
+        raise SystemExit("Checkpoint parameter metadata does not match its actual model weights.")
 
     print(json.dumps({
         "ok": True,
@@ -86,7 +102,8 @@ def main() -> int:
         "version": checkpoint.get("version"),
         "training_steps": steps,
         "vocab_size": tokenizer.vocab_size,
-        "parameters": metrics.get("parameters"),
+        "context_size": int(model.config["block_size"]),
+        "parameters": actual_parameters,
         "checkpointLoaded": True,
     }, ensure_ascii=False, indent=2))
     return 0
