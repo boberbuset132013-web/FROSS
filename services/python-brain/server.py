@@ -166,7 +166,7 @@ CPP_RUNTIME_STATUS = "pending"
 
 MAX_BODY = 1024 * 1024
 SERVICE_TOKEN = os.environ.get("FROSS_BRAIN_SERVICE_TOKEN", "")
-ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.4"
+ENGINE_NAME = "FROSS Hybrid Transformer Brain 1.5"
 MAX_REPLY_CHARS = 50000
 try:
     GENERATION_TOKEN_LIMIT = max(
@@ -747,7 +747,9 @@ def _training_progress(progress: dict[str, Any]) -> None:
             progress.get("target_steps", TRAINING_STATUS.get("targetSteps", 600))
         )
         TRAINING_STATUS["device"] = str(progress.get("device", "cpu"))
-        if phase == "tokenizer":
+        if phase == "tokenizer_native":
+        _training_log("Подготовка словаря SentencePiece Unigram (нативный CPU-процесс).")
+    elif phase == "tokenizer":
             TRAINING_STATUS["preparationStep"] = int(progress.get("preparation_step", 0))
             TRAINING_STATUS["preparationTotal"] = int(progress.get("preparation_total", 0))
             TRAINING_STATUS["vocabSize"] = int(progress.get("vocab_size", 0))
@@ -771,7 +773,7 @@ def _training_progress(progress: dict[str, Any]) -> None:
         interval = max(1, preparation_total // 10)
         if preparation_step == 0 or preparation_step % interval == 0 or preparation_step >= preparation_total:
             _training_log(
-                "Подготовка BPE-словаря: " + str(preparation_step) + "/" + str(preparation_total)
+                "Подготовка BPE-словаря (совместимость): " + str(preparation_step) + "/" + str(preparation_total)
                 + " объединений · размер словаря " + str(vocab_size) + "."
             )
     elif phase == "loading_corpus":
