@@ -138,6 +138,56 @@ class PythonBrainRouteTests(unittest.TestCase):
                     brain.TRAINING_STATUS.update(original_status)
                     brain.TRAINING_CANCEL.clear()
 
+    def test_sentencepiece_progress_callback_does_not_deadlock(self) -> None:
+        original_status = dict(brain.TRAINING_STATUS)
+        finished = threading.Event()
+
+        def report_progress() -> None:
+            brain._training_progress({
+                "phase": "tokenizer_native",
+                "step": 0,
+                "target_steps": 25000,
+                "preparation_step": 0,
+                "preparation_total": 1,
+                "vocab_size": 0,
+                "device": "cpu",
+            })
+            brain._training_progress({
+                "phase": "initializing_model",
+                "step": 0,
+                "target_steps": 25000,
+                "vocab_size": 8000,
+                "device": "cpu",
+            })
+            brain._training_progress({
+                "phase": "training",
+                "step": 0,
+                "target_steps": 25000,
+                "vocab_size": 8000,
+                "device": "cpu",
+            })
+            finished.set()
+
+        try:
+            worker = threading.Thread(target=report_progress, daemon=True)
+            worker.start()
+            worker.join(timeout=2)
+            self.assertFalse(
+                worker.is_alive(),
+                "SentencePiece progress callback deadlocked while writing its log entry",
+            )
+            self.assertTrue(finished.is_set())
+            with brain.TRAINING_LOCK:
+                logs = list(brain.TRAINING_STATUS.get("logs", []))
+                self.assertEqual(brain.TRAINING_STATUS.get("phase"), "training")
+                self.assertEqual(brain.TRAINING_STATUS.get("step"), 0)
+            self.assertTrue(any("SentencePiece" in line for line in logs))
+            self.assertTrue(any("первый шаг" in line for line in logs))
+        finally:
+            with brain.TRAINING_LOCK:
+                brain.TRAINING_STATUS.clear()
+                brain.TRAINING_STATUS.update(original_status)
+
     def test_head_health_probe_is_supported(self) -> None:
         request = urllib.request.Request(self.base_url + "/health/", method="HEAD")
         with urllib.request.urlopen(request, timeout=3) as response:

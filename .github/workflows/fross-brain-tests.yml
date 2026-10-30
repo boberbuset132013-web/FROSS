@@ -93,6 +93,10 @@ jobs:
           page = Path("public/chat.html").read_text(encoding="utf-8")
           training_page = Path("public/training.html").read_text(encoding="utf-8")
           assert "Обучение нейросети" in training_page
+          assert 'id="phaseDetail"' in training_page, "Training dashboard must show preparation phases before Transformer step 1"
+          assert 'phase==="preparing_corpus"' in training_page and 'phase==="tokenizer_native"' in training_page, "Training dashboard must distinguish corpus and SentencePiece preparation"
+          assert 'phase==="initializing_model"' in training_page and 'phase==="training"' in training_page, "Training dashboard must show model initialization and actual training steps separately"
+          assert "Шаги Transformer начнутся после подготовки" in training_page, "The dashboard must explain why model steps remain at zero during preparation"
           assert 'data-steps="25000"' in training_page and 'data-steps="50000"' in training_page and 'data-steps="75000"' in training_page and 'data-steps="100000"' in training_page
           assert '"/api/training/start"' in training_page and '"/api/training/status"' in training_page
           rules = Path("firestore.rules").read_text(encoding="utf-8")

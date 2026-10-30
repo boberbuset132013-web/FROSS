@@ -33,6 +33,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
     <h2>Состояние обучения</h2><p class="sub">Процесс выполняется на Python-сервере, а не в браузере.</p>
     <div class="status-row"><span id="state" class="status"><i class="dot"></i><span>Проверка сервера</span></span><span id="percent" class="percent">0%</span></div>
     <div class="progress"><div id="bar" class="bar"></div></div>
+    <div id="phaseDetail" class="notice" aria-live="polite">Шаги Transformer начнутся после подготовки корпуса, словаря и модели.</div>
     <div class="stats">
       <div class="stat"><small>Шаги</small><b id="steps">— / —</b></div>
       <div class="stat"><small>Train loss</small><b id="trainLoss">—</b></div>
@@ -85,7 +86,10 @@ function errorText(error){return String(error?.message||error||"Неизвест
 async function token(){if(!user)throw new Error("Войди в аккаунт.");return user.getIdToken();}
 async function api(path,options={}){const idToken=await token();const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json",...(options.headers||{})},cache:"no-store"});let data;try{data=await response.json()}catch{throw new Error(path+" вернул не JSON (HTTP "+response.status+").")};if(!response.ok||data.ok===false)throw new Error(data.error||("HTTP "+response.status));return data}
 function renderStatus(d){
- const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||25000),pct=target?Math.min(100,Math.round(step/target*100)):0;
+ const state=d.state||"idle",phase=d.phase||"",step=Number(d.step||0),target=Number(d.targetSteps||25000),pct=target?Math.min(100,Math.round(step/target*100)):0;
+ const prepStep=Number(d.preparationStep||0),prepTotal=Number(d.preparationTotal||0);
+ const elapsed=Math.max(0,Number(d.phaseElapsedSeconds||0));
+ const elapsedText=Math.floor(elapsed/60)+" мин "+String(elapsed%60).padStart(2,"0")+" сек";
  $("state").className="status "+state;$("state").lastElementChild.textContent=({idle:"Готово к запуску",starting:"Подготовка к запуску",running:"Обучение выполняется",cancelling:"Остановка обучения",completed:"Обучение завершено",cancelled:"Обучение отменено",failed:"Ошибка обучения"})[state]||state;
  $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
@@ -95,14 +99,43 @@ function renderStatus(d){
  $("cancel").disabled=!["starting","running"].includes(state)||cancelPending;
  $("cancel").textContent=state==="cancelling"||cancelPending?"Останавливаю…":"⏹ Отменить обучение";
  canDownloadModel=d.checkpointAvailable===true && Number(d.metrics?.training_steps||d.step||0)>=100000 && !busy;$("downloadModel").disabled=!canDownloadModel;
- const phase=d.phase||"";
- const prepStep=Number(d.preparationStep||0),prepTotal=Number(d.preparationTotal||0);
- if(state==="starting")showMessage("Задание принято. Проверяю checkpoint в фоне; страница должна оставаться отзывчивой.");
+
+ let phaseText="Ожидание запуска обучения.";
+ if(state==="starting"||phase==="preparing_corpus"){
+  phaseText="Этап 1/4 · Объединение и проверка обучающего корпуса. Шаги Transformer ещё не начались.";
+ }else if(phase==="checking_checkpoint"){
+  phaseText="Этап 2/4 · Проверка сохранённой контрольной точки и совместимости весов. Шаги начнутся после подготовки.";
+ }else if(phase==="loading_corpus"){
+  phaseText="Этап 3/4 · Загрузка примеров и разделение данных на обучение и проверку.";
+ }else if(phase==="tokenizer_native"){
+  phaseText="Этап 3/4 · Создаётся словарь SentencePiece Unigram (до 8 000 токенов). Это обязательная подготовка перед обучением весов. Сейчас "+prepStep+" / "+Math.max(1,prepTotal)+"; библиотека не сообщает промежуточный процент. Шаги Transformer: "+step+" / "+target+". Прошло на этом этапе: "+elapsedText+".";
+ }else if(phase==="tokenizer"){
+  phaseText="Этап 3/4 · Подготовка словаря: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+". Шаги Transformer начнутся после токенизатора.";
+ }else if(phase==="initializing_model"){
+  phaseText="Этап 4/4 · Словарь готов. Создаю модель Transformer и оптимизатор; после этого начинается шаг 1. Шаги: "+step+" / "+target+". Прошло: "+elapsedText+".";
+ }else if(phase==="training"){
+  phaseText=step===0
+   ?"Модель и оптимизатор готовы. Сейчас начинается первый шаг обучения Transformer. Шаги: 0 / "+target+"."
+   :"Обучение весов Transformer уже идёт: "+step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU")+" шагов. Прошло на этапе: "+elapsedText+".";
+ }else if(state==="completed"){
+  phaseText="Этап обучения завершён. Последняя сохранённая контрольная точка доступна на сервере.";
+ }else if(state==="cancelled"){
+  phaseText="Обучение остановлено. Проверь журнал и число сохранённых шагов.";
+ }else if(state==="failed"){
+  phaseText="Обучение завершилось ошибкой: "+(d.error||"подробности смотри в журнале.");
+ }else if(state==="cancelling"){
+  phaseText="Запрошена остановка; сервер завершит текущую безопасную операцию.";
+ }
+ $("phaseDetail").textContent=phaseText;
+
+ if(state==="starting")showMessage("Задание принято. Сначала сервер подготовит корпус и проверит checkpoint; затем создаст словарь и запустит шаги Transformer.");
+ else if(state==="running"&&phase==="preparing_corpus")showMessage("Объединяю и проверяю обучающие примеры…");
  else if(state==="running"&&phase==="checking_checkpoint")showMessage("Проверяю контрольную точку модели на сервере…");
- else if(state==="running"&&phase==="loading_corpus")showMessage("Загружаю обучающие примеры и готовлю данные. Шаги модели начнутся после подготовки.");
- else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 8000 токенов…");
-  else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка SentencePiece Unigram: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+". Это предварительный этап; ниже виден его прогресс.");
- else if(state==="running")showMessage("Обучение модели выполняется на доступном устройстве (CPU или GPU). Шаги и loss обновляются по мере вычислений.");
+ else if(state==="running"&&phase==="loading_corpus")showMessage("Загружаю обучающие примеры и подготавливаю данные.");
+ else if(state==="running"&&phase==="tokenizer_native")showMessage("Подготовка словаря SentencePiece. Это предварительная операция; шаги весов пока не выполняются.");
+ else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка словаря SentencePiece Unigram: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+".");
+ else if(state==="running"&&phase==="initializing_model")showMessage("Словарь готов. Инициализирую 64,8 млн параметров модели и оптимизатор…");
+ else if(state==="running"&&phase==="training")showMessage(step===0?"Все подготовительные этапы завершены. Запускается первый шаг Transformer…":"Transformer обучается: "+step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU")+" шагов.");
  else if(state==="cancelling")showMessage("Запрошена остановка. Сервер остановит подготовку или обучение в ближайшей безопасной точке…");
  else if(state==="cancelled")showMessage(d.checkpointAvailable?"Обучение остановлено. Сохранённая контрольная точка оставлена без изменений.":"Подготовка остановлена до создания контрольной точки.","good");
  else if(state==="completed")showMessage("Этап обучения завершён. Контрольная точка сохранена на сервере.","good");
