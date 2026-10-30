@@ -14,6 +14,9 @@ $corpus = Join-Path $repoRoot ".fross-brain15-training\training-corpus.jsonl"
 $workDir = Join-Path $repoRoot ".fross-brain15-training"
 $checkpoint = Join-Path $workDir "fross-transformer-1.5-training.pt"
 $uploadCheckpoint = Join-Path $workDir "fross-transformer-upload.pt"
+$seedCheckpoint = Join-Path $workDir "fross-brain-1.4-seed.pt"
+$seedUrl = "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-brain-1.4/fross-transformer.pt"
+$seedSha256 = "97f05c6fac3930294aa394e841b9ea4b0d379f7e9e4460675ab5f6f24e626fbf"
 $venvDir = Join-Path $repoRoot ".venv-training"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $logDir = Join-Path $workDir "logs"
@@ -78,11 +81,22 @@ switch ($Stage) {
         if (Test-Path $checkpoint) {
             throw "A checkpoint already exists at $checkpoint. To avoid overwriting work, run CONTINUE_TO_3000.bat or move the checkpoint manually."
         }
+        if (-not (Test-Path $seedCheckpoint)) {
+            Write-Host "Downloading the preserved FROSS Brain 1.4 checkpoint for compatible-layer initialization..."
+            Invoke-WebRequest -Uri $seedUrl -OutFile $seedCheckpoint -UseBasicParsing
+            if ($LASTEXITCODE -ne 0) { throw "Could not download the Brain 1.4 initialization checkpoint." }
+        }
+        $actualSeedHash = (Get-FileHash -Path $seedCheckpoint -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualSeedHash -ne $seedSha256) {
+            throw "Brain 1.4 initialization checkpoint SHA-256 mismatch. Keep the file unchanged and download it again."
+        }
+
         $arguments = @(
             $pythonScript, "train",
             "--corpus", $corpus,
             "--output", $checkpoint,
             "--steps", "600",
+            "--initialize-from", $seedCheckpoint,
             "--schedule-steps", "3000",
             "--batch-size", "2",
             "--block-size", "500",
@@ -91,7 +105,7 @@ switch ($Stage) {
         )
         $logPath = Join-Path $logDir "stage-600.log"
         Write-Host ""
-        Write-Host "Stage 1/2: training from scratch to 600 steps with a 3000-step schedule."
+        Write-Host "Stage 1/2: initializing compatible Transformer layers from Brain 1.4, then training Brain 1.5 to 600 steps."
     }
     "3000" {
         if (-not (Test-Path $checkpoint)) {
