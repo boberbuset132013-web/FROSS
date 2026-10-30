@@ -74,6 +74,42 @@ class TransformerTests(unittest.TestCase):
             ))
             self.assertEqual(target_model.token_embedding.num_embeddings, 30000)
 
+    def test_brain_15_checkpoint_warm_start_adds_a_new_layer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_config = {
+                "block_size": 500, "n_embd": 192, "n_head": 6,
+                "n_layer": 6, "dropout": 0.08,
+            }
+            source_model = transformer.FrossTransformer(25000, source_config)
+            source_path = root / "brain15-source.pt"
+            torch.save({
+                "format_version": 3,
+                "version": "FROSS Transformer 1.5",
+                "config": source_config,
+                "state_dict": source_model.state_dict(),
+                "metrics": {"training_steps": 10000, "vocab_size": 25000},
+            }, source_path)
+
+            target_model = transformer.FrossTransformer(30000)
+            new_layer_before = target_model.blocks[6].attention.qkv.weight.detach().clone()
+            result = transformer.initialize_model_from_checkpoint(target_model, source_path)
+
+            self.assertEqual(result["source_version"], "FROSS Transformer 1.5")
+            self.assertEqual(result["source_training_steps"], 10000)
+            self.assertEqual(result["source_layers"], 6)
+            self.assertEqual(result["target_layers"], 7)
+            self.assertEqual(result["new_decoder_layers"], 1)
+            self.assertTrue(torch.equal(
+                target_model.blocks[0].attention.qkv.weight,
+                source_model.blocks[0].attention.qkv.weight,
+            ))
+            self.assertTrue(torch.equal(
+                target_model.blocks[6].attention.qkv.weight,
+                new_layer_before,
+            ))
+            self.assertTrue(result["token_embeddings_reinitialized"])
+
     def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
         samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
         tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=300)
