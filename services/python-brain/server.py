@@ -235,11 +235,15 @@ def _load_startup_model_background() -> None:
         loaded_steps = int(status.get("training_steps", 0))
         loaded_vocab = int(status.get("vocab_size", tokenizer.vocab_size))
         loaded_context = int(model.config.get("block_size", 0))
+        loaded_parameters = sum(parameter.numel() for parameter in model.parameters())
         if (
             loaded_steps < MODEL_UPLOAD_MIN_STEPS
             or loaded_vocab != MODEL_UPLOAD_VOCAB_SIZE
             or tokenizer.vocab_size != MODEL_UPLOAD_VOCAB_SIZE
-            or loaded_context != 320
+            or loaded_context != MODEL_UPLOAD_CONTEXT_SIZE
+            or int(status.get("context_size", 0)) != MODEL_UPLOAD_CONTEXT_SIZE
+            or not MODEL_MIN_PARAMETERS <= loaded_parameters <= MODEL_MAX_PARAMETERS
+            or int(status.get("parameters", -1)) != loaded_parameters
         ):
             raise ValueError(
                 "Checkpoint requirements mismatch: training_steps="
