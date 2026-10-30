@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""FROSS Transformer Brain 1.5: a small decoder-only language model trained from random weights.
+"""FROSS Transformer Brain 1.5: a small decoder-only language model.
 
-No pretrained checkpoint, hosted LLM, or downloaded model is used. A SentencePiece Unigram tokenizer
-and a causal Transformer are learned from the repository's own text corpus.
+No third-party pretrained LLM or hosted LLM API is used. A SentencePiece Unigram tokenizer
+and new token embeddings are learned from the repository corpus. Optionally, compatible
+decoder blocks can be initialized from the project's own Brain 1.4 checkpoint.
 This is an educational, deliberately small model; its quality is bounded by its data
 and compute budget. Install PyTorch CPU wheels to train or run it.
 """
@@ -465,7 +466,7 @@ class TransformerBlock(nn.Module):
 
 
 class FrossTransformer(nn.Module):
-    """Decoder-only, autoregressive Transformer. All weights start randomly."""
+    """Decoder-only autoregressive Transformer with a tied token-embedding/output matrix."""
 
     def __init__(self, vocab_size: int, config: dict[str, int | float] | None = None):
         super().__init__()
