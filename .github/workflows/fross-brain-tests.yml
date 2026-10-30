@@ -75,7 +75,7 @@ jobs:
       - name: Test original Transformer architecture and tokenizer
         run: python tests/test_fross_transformer.py
       - name: Train a scratch Transformer checkpoint and smoke-test generation
-        run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --vocab-size 300 --text "Объясни attention простыми словами"
+        run: python fross_transformer.py test --output /tmp/fross-transformer-test.pt --steps 12 --batch-size 2 --block-size 64 --vocab-size 512 --text "Объясни attention простыми словами"
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
