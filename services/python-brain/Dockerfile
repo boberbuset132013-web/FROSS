@@ -12,9 +12,15 @@ RUN python -m pip install --no-cache-dir --retries 5 --timeout 120 --index-url h
 
 COPY fross_transformer.py /app/fross_transformer.py
 COPY data/ /app/data/
-COPY training/distillation/verify_checkpoint.py /app/training/distillation/verify_checkpoint.py
+# The website training route imports training.distillation.prepare_corpus.
+# Copy the complete package, not only verify_checkpoint.py, so runtime training
+# has the same corpus preparation code that CI validates.
+COPY training/distillation/ /app/training/distillation/
 COPY services/python-brain/server.py /app/server.py
 COPY services/python-brain/download_model.py /app/download_model.py
+
+# Fail the image build immediately if the training module is missing or broken.
+RUN python -c "from training.distillation.prepare_corpus import merge_records, read_corpus, write_jsonl_atomic; print('FROSS distillation package import OK')"
 
 ARG FROSS_BUILD_BUNDLE_MODEL=0
 ARG FROSS_MODEL_URL=https://disk.yandex.ru/d/Ybh-XEUk7Xwt9w
