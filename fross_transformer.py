@@ -640,8 +640,8 @@ def train_model(
     schedule_total = int(schedule_steps if schedule_steps is not None else steps)
     if schedule_total < steps:
         raise ValueError("schedule_steps must be greater than or equal to the cumulative --steps target")
-    if resume and merge_count is not None:
-        raise ValueError("Resuming with the legacy --merges tokenizer option is not supported; use --vocab-size.")
+    if merge_count is not None:
+        raise ValueError("The Brain 1.5 tokenizer is SentencePiece Unigram; the legacy --merges option is not supported. Use --vocab-size.")
 
     target = Path(output_path)
     resume_checkpoint: dict[str, Any] | None = None
