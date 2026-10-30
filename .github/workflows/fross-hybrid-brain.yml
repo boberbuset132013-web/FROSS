@@ -1,4 +1,4 @@
-name: FROSS Brain 1.5 runtime tests
+name: FROSS Brain 1.6 runtime tests
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
       - "services/python-brain/**"
       - "tests/**"
       - "data/fross_corpus.jsonl"
+      - "data/fross_teacher_corpus.jsonl"
       - ".github/workflows/fross-hybrid-brain.yml"
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - "services/python-brain/**"
       - "tests/**"
       - "data/fross_corpus.jsonl"
+      - "data/fross_teacher_corpus.jsonl"
       - ".github/workflows/fross-hybrid-brain.yml"
 
 jobs:
