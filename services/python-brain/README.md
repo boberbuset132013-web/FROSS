@@ -19,6 +19,10 @@ The Docker build context must be the **repository root**.
 
 The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI builds without a bundled production model and mounts a short-lived synthetic Brain 1.5 checkpoint only for the HTTP smoke test.
 
+### Checkpoint version note
+
+The asset currently found under the GitHub tag `fross-brain-1.5` has the supplied SHA-256 but its internal checkpoint metadata identifies it as **FROSS Transformer 1.4**. It is used only as a verified warm-start source for compatible Transformer layers. It is **not** a deployable Brain 1.5 model. A Brain 1.5 upload must pass the 25,000-token, 500-context and 5–8-million-parameter checks below.
+
 ### Authenticated live model upload
 
 Open FROSS chat, sign in, go to **Settings → Upload FROSS model**, and choose the compact `fross-transformer-upload.pt` inference checkpoint (up to 90 MiB). Keep the larger training checkpoint on the training PC so it can be resumed later. No separate upload password is needed. The Worker verifies the Firebase session, then Hostless independently requires the shared `FROSS_BRAIN_SERVICE_TOKEN` before accepting the upload. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret and forwards it only server-to-server; it is never exposed to browser JavaScript. Keep the same `FROSS_BRAIN_SERVICE_TOKEN` configured in Cloudflare and Hostless.
