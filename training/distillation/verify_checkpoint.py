@@ -46,7 +46,7 @@ def main() -> int:
         raise SystemExit(
             f"Checkpoint version {checkpoint.get('version')!r} does not match {transformer.VERSION!r}."
         )
-    if int(checkpoint.get("format_version", 0)) not in {1, 2}:
+    if int(checkpoint.get("format_version", 0)) != 3:
         raise SystemExit("Unsupported FROSS checkpoint format.")
     if int(metrics.get("vocab_size", 0)) != args.vocab_size:
         raise SystemExit(
