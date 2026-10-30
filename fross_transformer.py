@@ -503,6 +503,97 @@ class FrossTransformer(nn.Module):
         return self.language_head(x)
 
 
+def initialize_model_from_checkpoint(
+    model: FrossTransformer,
+    checkpoint_path: str | Path,
+) -> dict[str, Any]:
+    """Warm-start Brain 1.5 from compatible Brain 1.4 Transformer layers.
+
+    Token embeddings are deliberately not copied: Brain 1.4 BPE token IDs and
+    Brain 1.5 SentencePiece Unigram IDs do not describe the same vocabulary.
+    Decoder blocks, final norm, and the overlapping positional embeddings are
+    architecture-compatible and can be reused safely.
+    """
+    source = Path(checkpoint_path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Initialization checkpoint not found: {source}")
+    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Initialization file is not a FROSS checkpoint.")
+    if checkpoint.get("version") != "FROSS Transformer 1.4":
+        raise ValueError(
+            "Warm-start source must be FROSS Transformer 1.4; got "
+            + repr(checkpoint.get("version")) + "."
+        )
+    if int(checkpoint.get("format_version", 0)) not in {1, 2}:
+        raise ValueError("Unsupported Brain 1.4 checkpoint format.")
+    source_config = checkpoint.get("config")
+    source_state = checkpoint.get("state_dict")
+    if not isinstance(source_config, dict) or not isinstance(source_state, dict):
+        raise ValueError("Brain 1.4 checkpoint is missing model configuration or weights.")
+
+    for field in ("n_embd", "n_head", "n_layer"):
+        if int(source_config.get(field, -1)) != int(model.config[field]):
+            raise ValueError(
+                "Brain 1.4 and Brain 1.5 architecture mismatch for "
+                + field + ": " + str(source_config.get(field))
+                + " vs " + str(model.config[field]) + "."
+            )
+
+    target_state = model.state_dict()
+    transferable = [
+        name for name in target_state
+        if name.startswith("blocks.") or name.startswith("final_norm.")
+    ]
+    if not transferable:
+        raise ValueError("No compatible Transformer block weights were found.")
+    copied_parameters = 0
+    copied_tensors = 0
+    for name in transferable:
+        source_tensor = source_state.get(name)
+        target_tensor = target_state[name]
+        if not torch.is_tensor(source_tensor) or tuple(source_tensor.shape) != tuple(target_tensor.shape):
+            raise ValueError("Brain 1.4 tensor is missing or has an incompatible shape: " + name)
+        target_tensor.copy_(source_tensor.to(dtype=target_tensor.dtype))
+        copied_parameters += target_tensor.numel()
+        copied_tensors += 1
+
+    source_positions = source_state.get("position_embedding.weight")
+    target_positions = target_state.get("position_embedding.weight")
+    if (
+        not torch.is_tensor(source_positions)
+        or not torch.is_tensor(target_positions)
+        or source_positions.ndim != 2
+        or target_positions.ndim != 2
+        or source_positions.shape[1] != target_positions.shape[1]
+    ):
+        raise ValueError("Brain 1.4 positional embeddings are missing or incompatible.")
+    copied_positions = min(source_positions.shape[0], target_positions.shape[0])
+    target_positions[:copied_positions].copy_(
+        source_positions[:copied_positions].to(dtype=target_positions.dtype)
+    )
+    copied_parameters += copied_positions * target_positions.shape[1]
+    copied_tensors += 1
+    model.load_state_dict(target_state, strict=True)
+
+    source_metrics = checkpoint.get("metrics", {})
+    if not isinstance(source_metrics, dict):
+        source_metrics = {}
+    return {
+        "source_version": checkpoint["version"],
+        "source_checkpoint": str(source),
+        "source_training_steps": int(source_metrics.get("training_steps", 0)),
+        "source_vocab_size": int(source_metrics.get("vocab_size", 0)),
+        "source_context_size": int(source_config.get("block_size", 0)),
+        "transfer_strategy": "transformer_blocks_final_norm_and_overlapping_positions",
+        "transferred_tensors": copied_tensors,
+        "transferred_parameters": copied_parameters,
+        "copied_position_rows": copied_positions,
+        "token_embeddings_reinitialized": True,
+        "target_tokenizer": "sentencepiece-unigram",
+    }
+
+
 def _load_corpus(path: str | Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     corpus_path = Path(path)
@@ -635,6 +726,7 @@ def train_model(
     target_vocab_size: int = 25000,
     seed: int = 1337,
     resume: bool = False,
+    initialize_from: str | Path | None = None,
     schedule_steps: int | None = None,
     progress_callback: Any = None,
     stop_callback: Any = None,
@@ -747,6 +839,15 @@ def train_model(
     if len(train_stream) <= actual_block + 1:
         raise ValueError("Training corpus is too small for the selected context length.")
 
+    if resume and initialize_from is not None:
+        raise ValueError("Use --initialize-from only for a new run, not together with --resume.")
+
+    initialization_metadata: dict[str, Any] | None = None
+    if resume and resume_checkpoint is not None:
+        saved_initialization = resume_checkpoint.get("metrics", {}).get("initialization")
+        if isinstance(saved_initialization, dict):
+            initialization_metadata = dict(saved_initialization)
+
     if resume and resume_checkpoint is not None:
         config = resume_checkpoint.get("config")
         if not isinstance(config, dict) or int(config.get("block_size", 0)) != actual_block:
@@ -760,6 +861,8 @@ def train_model(
 
     device = torch.device("cpu") if force_cpu else _preferred_device()
     model = FrossTransformer(tokenizer.vocab_size, config).to(device)
+    if initialize_from is not None:
+        initialization_metadata = initialize_model_from_checkpoint(model, initialize_from)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.08)
     start_step = 0
@@ -943,7 +1046,8 @@ def train_model(
             ),
             "tokenizer_type": "sentencepiece-unigram",
             "parameters": sum(p.numel() for p in model.parameters()),
-            "trained_from_random_weights": True,
+            "initialization": initialization_metadata,
+            "trained_from_random_weights": initialization_metadata is None,
         },
     }
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1252,6 +1356,7 @@ def main() -> int:
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
+    parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.5 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
@@ -1299,6 +1404,7 @@ def main() -> int:
             target_vocab_size=args.vocab_size,
             seed=args.seed,
             resume=args.resume,
+            initialize_from=args.initialize_from,
             schedule_steps=args.schedule_steps,
         )
         model, tokenizer, status = load_model(args.output)
