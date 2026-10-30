@@ -13,7 +13,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 <body>
 <div class="wrap">
 <header class="top">
-  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.5</small></div></div>
+  <div class="brand"><div class="mark">F</div><div><b>FROSS</b><small>Лаборатория обучения · Transformer 1.6</small></div></div>
   <div class="top-actions"><button id="chatLink" class="btn" type="button">← Вернуться в чат</button><button id="signOut" class="btn hidden" type="button">Выйти</button></div>
 </header>
 <section class="hero"><div class="eyebrow">Собственная нейросеть · без готовых LLM API</div><h1>Обучение <span class="gradient">FROSS Brain</span></h1><p>Запускай настоящее обучение параметров Transformer на корпусе FROSS. После запуска сервер продолжает работу, даже если закрыть эту страницу. Это не тестовая анимация: прогресс и loss поступают из процесса обучения.</p></section>
@@ -85,7 +85,7 @@ function errorText(error){return String(error?.message||error||"Неизвест
 async function token(){if(!user)throw new Error("Войди в аккаунт.");return user.getIdToken();}
 async function api(path,options={}){const idToken=await token();const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+idToken,"Content-Type":"application/json",...(options.headers||{})},cache:"no-store"});let data;try{data=await response.json()}catch{throw new Error(path+" вернул не JSON (HTTP "+response.status+").")};if(!response.ok||data.ok===false)throw new Error(data.error||("HTTP "+response.status));return data}
 function renderStatus(d){
- const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||600),pct=target?Math.min(100,Math.round(step/target*100)):0;
+ const state=d.state||"idle",step=Number(d.step||0),target=Number(d.targetSteps||25000),pct=target?Math.min(100,Math.round(step/target*100)):0;
  $("state").className="status "+state;$("state").lastElementChild.textContent=({idle:"Готово к запуску",starting:"Подготовка к запуску",running:"Обучение выполняется",cancelling:"Остановка обучения",completed:"Обучение завершено",cancelled:"Обучение отменено",failed:"Ошибка обучения"})[state]||state;
  $("percent").textContent=pct+"%";$("bar").style.width=pct+"%";$("steps").textContent=step.toLocaleString("ru-RU")+" / "+target.toLocaleString("ru-RU");
  $("trainLoss").textContent=Number.isFinite(Number(d.trainLoss))&&d.trainLoss!==null?Number(d.trainLoss).toFixed(4):"—";
@@ -100,7 +100,7 @@ function renderStatus(d){
  if(state==="starting")showMessage("Задание принято. Проверяю checkpoint в фоне; страница должна оставаться отзывчивой.");
  else if(state==="running"&&phase==="checking_checkpoint")showMessage("Проверяю контрольную точку модели на сервере…");
  else if(state==="running"&&phase==="loading_corpus")showMessage("Загружаю обучающие примеры и готовлю данные. Шаги модели начнутся после подготовки.");
- else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 30000 токенов…");
+ else if(state==="running"&&phase==="tokenizer_native")showMessage("Обучаю словарь SentencePiece Unigram из 8000 токенов…");
   else if(state==="running"&&phase==="tokenizer")showMessage("Подготовка SentencePiece Unigram: "+prepStep.toLocaleString("ru-RU")+" / "+prepTotal.toLocaleString("ru-RU")+". Это предварительный этап; ниже виден его прогресс.");
  else if(state==="running")showMessage("Обучение модели выполняется на доступном устройстве (CPU или GPU). Шаги и loss обновляются по мере вычислений.");
  else if(state==="cancelling")showMessage("Запрошена остановка. Сервер остановит подготовку или обучение в ближайшей безопасной точке…");
