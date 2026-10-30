@@ -46,10 +46,10 @@ MODEL_UPLOAD_MIN_STEPS = max(
     1 if MODEL_TEST_MODE else 3000,
     int(os.environ.get("FROSS_MODEL_MIN_STEPS", "1" if MODEL_TEST_MODE else "3000")),
 )
-MODEL_UPLOAD_VOCAB_SIZE = int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "30000"))
+MODEL_UPLOAD_VOCAB_SIZE = 30000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_VOCAB_SIZE", "30000"))
 MODEL_UPLOAD_CONTEXT_SIZE = int(os.environ.get("FROSS_MODEL_CONTEXT_SIZE", "500"))
-MODEL_MIN_PARAMETERS = int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "8850000"))
-MODEL_MAX_PARAMETERS = int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "9100000"))
+MODEL_MIN_PARAMETERS = 8850000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MIN_PARAMETERS", "8850000"))
+MODEL_MAX_PARAMETERS = 9100000 if not MODEL_TEST_MODE else int(os.environ.get("FROSS_MODEL_MAX_PARAMETERS", "9100000"))
 LEGACY_MODEL_VOCAB_SIZE = 25000
 LEGACY_MODEL_MIN_PARAMETERS = 5000000
 LEGACY_MODEL_MAX_PARAMETERS = 8000000
@@ -66,6 +66,8 @@ def _runtime_checkpoint_profile_matches(metrics: dict[str, Any], config: dict[st
         heads = int(config.get("n_head", 0))
         if context != MODEL_UPLOAD_CONTEXT_SIZE or int(metrics.get("context_size", 0)) != context:
             return False
+        if MODEL_TEST_MODE:
+            return vocab == MODEL_UPLOAD_VOCAB_SIZE and layers == 7 and width == 192 and heads == 6 and MODEL_MIN_PARAMETERS <= parameters <= MODEL_MAX_PARAMETERS
         if vocab == LEGACY_MODEL_VOCAB_SIZE:
             return layers == 6 and width == 192 and heads == 6 and LEGACY_MODEL_MIN_PARAMETERS <= parameters <= LEGACY_MODEL_MAX_PARAMETERS
         if vocab == MODEL_UPLOAD_VOCAB_SIZE:
@@ -842,9 +844,31 @@ def _training_progress(progress: dict[str, Any]) -> None:
         )
 
 
+def _prepare_website_training_corpus() -> Path:
+    """Merge the base and curated teacher corpora before building the 30K tokenizer."""
+    from training.distillation.prepare_corpus import merge_records, read_corpus, write_jsonl_atomic
+
+    base_path = ROOT / "data" / "fross_corpus.jsonl"
+    teacher_path = ROOT / "data" / "fross_teacher_corpus.jsonl"
+    output_path = TRAINING_OUTPUT_PATH.with_name("fross-training-corpus-30k-9m.jsonl")
+    base_records = read_corpus(base_path)
+    teacher_records = read_corpus(teacher_path, required=False)
+    merged, duplicates = merge_records(base_records, teacher_records)
+    if len(merged) < 8:
+        raise ValueError("Объединённый обучающий корпус содержит слишком мало примеров.")
+    digest = write_jsonl_atomic(output_path, merged)
+    _training_log(
+        "Корпус объединён: базовых примеров " + str(len(base_records))
+        + ", примеров учителя " + str(len(teacher_records))
+        + ", уникальных " + str(len(merged))
+        + ", повторов исключено " + str(duplicates) + "; SHA-256 " + digest[:16] + "."
+    )
+    return output_path
+
+
 def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = False) -> None:
     try:
-        corpus = ROOT / "data" / "fross_corpus.jsonl"
+        corpus = _prepare_website_training_corpus()
         if fresh_run and TRAINING_OUTPUT_PATH.is_file():
             archive_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             archive_path = TRAINING_OUTPUT_PATH.with_name(TRAINING_OUTPUT_PATH.name + ".archive-" + archive_stamp)
