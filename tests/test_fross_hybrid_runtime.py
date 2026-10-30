@@ -41,7 +41,7 @@ class HybridRuntimeTests(unittest.TestCase):
         cls.checkpoint = cls.directory / "model.pt"
         cls.metrics = brain.train_model(
             cls.corpus, cls.checkpoint, steps=2, batch_size=1,
-            block_size=32, target_vocab_size=300, seed=7,
+            block_size=32, target_vocab_size=512, seed=7,
         )
         cls.model, cls.tokenizer, cls.status = brain.load_model(cls.checkpoint)
         if cls.model is None or cls.tokenizer is None:
