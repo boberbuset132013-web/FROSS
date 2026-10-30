@@ -19,8 +19,31 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
         self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
-        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.4")
+        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.5")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
+
+    def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
+        samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
+        tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=512)
+        self.assertGreaterEqual(tokenizer.vocab_size, 256)
+        self.assertEqual(tokenizer.processor.pad_id(), transformer.PAD_ID)
+        self.assertEqual(tokenizer.processor.unk_id(), transformer.UNK_ID)
+        self.assertEqual(tokenizer.processor.bos_id(), transformer.BOS_ID)
+        self.assertEqual(tokenizer.processor.eos_id(), transformer.EOS_ID)
+        for sample in samples:
+            self.assertTrue(tokenizer.decode(tokenizer.encode(sample)))
+
+    def test_sentencepiece_unigram_can_be_cancelled(self) -> None:
+        calls = {"count": 0}
+        def should_stop():
+            calls["count"] += 1
+            return calls["count"] >= 2
+        with self.assertRaises(transformer.TrainingCancelled):
+            transformer.SentencePieceTokenizer.train(
+                ["слово один два три четыре пять"] * 100,
+                target_vocab_size=512,
+                stop_callback=should_stop,
+            )
 
     def test_bpe_tokenizer_round_trip(self) -> None:
         samples = [
