@@ -5,7 +5,7 @@
   "slug": "javascript-osnovy-i-tipy-dannykh",
   "topic": "JavaScript: основы и типы данных",
   "createdAt": "2026-10-25T14:40:07.787Z",
-  "updatedAt": "2026-10-29T03:00:18.956Z",
+  "updatedAt": "2026-10-30T03:00:20.034Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. Tutorials References Exercises Certificates Menu Search field &times; See More NEW W3Schools app iOS & Android Start the adventure Sign In Sign Up --> user-anonymous --> --> --> ★ +1 --> My W3Schools --> user-authenticated --> Spaces Upgrade Paid Courses Academy Practice --> user-anonymous - action- W3SCHOOLS TUTORIALS: &times; &larr; All Topics &times; References W3SCHOOLS REFERENCES: &times; HTML Tag reference CSS Reference JavaScript Reference SQL Keyword reference Python Reference Java Reference C Reference C++ Reference Colors Color names PHP Reference HTML DOM Reference MySQL Reference W3 &times; Get Certified W3SCHOOLS CERTIFICATES: &times; HTML CSS JavaScript SQL Python Java C C++ C# PHP React MySQL Excel DSA W3.CSS Bootstrap 3 Bootstrap 4 Bootstrap 5 Node.js TypeScript Django PostgreSQL jQuery Vue NumPy Pandas XML Cyber Security Accessibility AngularJS Git MongoDB R Go Kotlin SA Our easy to follow JavaScript tutorials for beginners will have you coding the basics in no time.",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "sign",
     "css"
   ],
-  "sourceCount": 16,
+  "sourceCount": 17,
   "items": [
     {
       "schemaVersion": 2,
@@ -739,6 +739,50 @@
       ],
       "source": "article text",
       "score": 0.125
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Expressions and operators - JavaScript | MDN - devdoc.net",
+      "url": "https://www.devdoc.net/web/developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Expressions_and_Operators.html",
+      "snippet": "« Previous Next » This chapter describes JavaScript's expressions and operators, including assignment, comparison, arithmetic, bitwise, logical, string, ternary and more. A complete and detailed list of operators and expressions is also available in the reference . Operators JavaScript has the following types of operators. This section describes the operators and contains information about operator precedence. Assignment operators Comparison operators Arithmetic operators Bitwise operators Logical operators String operators Conditional (ternary) operator Comma operator Unary operators Relational operator JavaScript has both binary and unary operators, and one special ternary operator, the conditional operator. A binary operator requires two operands, one before the operator and one after the operator: operand1 operator operand2 For example, 3+4 or x*y . A unary operator requires a single operand, either before or after the operator: operator operand or operand operator For example, x++ or ++x . Assignment operators An assignment operator assigns a value to its left operand based on the value of its right operand. The simple assignment operator is equal ( = ), which assigns the value of its right operand to its left operand. That is, x = y assigns the value of y to x . There are also compound assignment operators that are shorthand for the operations listed in the following table: Compound assignment operators Name Shorthand operator Meaning Assignment x = y x = y Addition assignment x += y x = x + y Subtraction assignment x -= y x = x - y Multiplication assignment x *= y x = x * y Division assignment x /= y x = x / y Remainder assignment x %= y x = x % y Exponentiation assignment x **= y x = x ** y Left shift assignment x >= y x = x >> y Unsigned right shift assignment x >>>= y x = x >>> y Bitwise AND assignment x &= y x = x & y Bitwise XOR assignment x ^= y x = x ^ y Bitwise OR assignment x |= y x = x | y Destructuring For more complex assignments, the destructuring assignment syntax is a JavaScript expression that makes it possible to extract data from arrays or objects using a syntax that mirrors the construction of array and object literals. var foo = ['one', 'two', 'three']; // without destructuring var one = foo[0]; var two = foo[1]; var three = foo[2]; // with destructuring var [one, two, three] = foo; Comparison operators A comparison operator compares its operands and returns a logical value based on whether the comparison is true. The operands can be numerical, string, logical, or object values. Strings are compared based on standard lexicographical ordering, using Unicode values. In most cases, if the two operands are not of the same type, JavaScript attempts to convert them to an appropriate type for the comparison. This behavior generally results in comparing the operands numerically. The sole exceptions to type conversion within comparisons involve the === and !== operators, which perform strict equality and inequality comparisons. These operators do not attempt to convert the operands to compatible types before checking equality. The following table describes the comparison operators in terms of this sample code: var var1 = 3;",
+      "summary": "« Previous Next » This chapter describes JavaScript's expressions and operators, including assignment, comparison, arithmetic, bitwise, logical, string, ternary and more. Assignment operators Comparison operators Arithmetic operators Bitwise operators Logical operators String operators Conditional (ternary) operator Comma operator Unary operators Relational operator JavaScript has both binary and unary operators, and one special ternary operator, the conditional oper There are also compound assignment operators that are shorthand for the operations listed in the following table: Compound assignment operators Name Shorthand operator Meaning Assignment x = y x = y Addition assignment x += y x = x + y Subtraction assignment x -= y x = x - y Multiplication assignmen",
+      "keyPoints": [
+        "« Previous Next » This chapter describes JavaScript's expressions and operators, including assignment, comparison, arithmetic, bitwise, logical, string, ternary and more.",
+        "A complete and detailed list of operators and expressions is also available in the reference .",
+        "Operators JavaScript has the following types of operators.",
+        "Assignment operators Comparison operators Arithmetic operators Bitwise operators Logical operators String operators Conditional (ternary) operator Comma operator Unary operators Relational operator JavaScript has both binary and unary operators, and one special ternary operator, the conditional oper",
+        "There are also compound assignment operators that are shorthand for the operations listed in the following table: Compound assignment operators Name Shorthand operator Meaning Assignment x = y x = y Addition assignment x += y x = x + y Subtraction assignment x -= y x = x - y Multiplication assignmen"
+      ],
+      "keywords": [
+        "operators",
+        "assignment",
+        "operator",
+        "javascript",
+        "to",
+        "of",
+        "comparison",
+        "or",
+        "operand",
+        "one",
+        "operands",
+        "var",
+        "типы",
+        "данных",
+        "expressions",
+        "bitwise",
+        "is",
+        "in",
+        "two",
+        "value",
+        "its",
+        "foo",
+        "this",
+        "logical"
+      ],
+      "source": "article text",
+      "score": 0.5
     }
   ]
 }
