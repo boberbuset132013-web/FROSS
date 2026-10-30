@@ -108,6 +108,9 @@ jobs:
           assert "return collected.filter(note =>" in worker
           assert "Promise.all((Array.isArray(candidates) ? candidates : []).map(async item => {)).filter" not in worker
           assert "function frossTrainingSeedResources(topic)" in worker
+          assert "const responseText = await response.text();" in worker, "Python training proxy must inspect non-JSON upstream responses"
+          assert "upstreamStatus: response.status" in worker and "upstreamContentType: contentType" in worker, "Python training proxy must expose upstream HTTP diagnostics"
+          assert "Python brain вернул HTML вместо JSON" in worker and "Python brain вернул пустой ответ или некорректный JSON" in worker, "Python training proxy must distinguish HTML and malformed JSON responses"
           assert 'const FROSS_GITHUB_BRANCH = "fross-knowledge";' in worker, "Knowledge writes must stay off main so each study topic does not retrain the model"
           transformer = Path("fross_transformer.py").read_text(encoding="utf-8")
           assert 'brainVersion: "1.6"' in worker
