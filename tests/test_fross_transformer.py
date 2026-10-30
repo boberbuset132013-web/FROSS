@@ -264,6 +264,26 @@ class TransformerTests(unittest.TestCase):
             logits_b = model(changed_future)
         self.assertTrue(torch.allclose(logits_a[:, :5], logits_b[:, :5], atol=1e-6, rtol=1e-6))
 
+    def test_gradient_checkpointed_attention_has_finite_gradients(self) -> None:
+        model = transformer.FrossTransformer(
+            vocab_size=48,
+            config={
+                "block_size": 256,
+                "n_embd": 16,
+                "n_head": 4,
+                "n_layer": 2,
+                "dropout": 0.0,
+                "gradient_checkpointing": True,
+            },
+        )
+        model.train()
+        token_ids = torch.randint(4, 48, (1, 256), dtype=torch.long)
+        loss = model(token_ids).float().square().mean()
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertIsNotNone(model.blocks[0].attention.qkv.weight.grad)
+        self.assertTrue(torch.isfinite(model.blocks[0].attention.qkv.weight.grad).all())
+
     def test_model_uses_randomly_initialized_parameters(self) -> None:
         torch.manual_seed(19)
         model = transformer.FrossTransformer(
