@@ -1864,11 +1864,12 @@ async function handleFrossTransformerTraining(request, env, action) {
       catch { return frossJson({ ok: false, error: "Тело запроса должно быть JSON." }, 400, request); }
       const steps = Number(body?.steps ?? 600);
       const scheduleSteps = Number(body?.scheduleSteps ?? 10000);
+      const freshRun = body?.freshRun === true;
       if (![600,3000,5000,8000,10000].includes(steps) || !Number.isInteger(scheduleSteps) || scheduleSteps !== 10000 || scheduleSteps < steps) {
         return frossJson({ ok: false, error: "Выбери 600, 3000, 5000, 8000 или 10000 шагов. График продолжения фиксирован на 10000 шагов." }, 400, request);
       }
       headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify({ steps, scheduleSteps });
+      init.body = JSON.stringify({ steps, scheduleSteps, freshRun });
     }
     const response = await fetch(target, init);
     let data;
