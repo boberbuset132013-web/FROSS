@@ -49,6 +49,23 @@ jobs:
         run: python -m py_compile fross_transformer.py services/python-brain/server.py services/python-brain/download_model.py
       - name: Run tokenizer, training, packaging, ONNX and native-runtime tests
         run: python -m unittest discover -s tests -v
+      - name: Verify the uploaded Brain 1.5 release asset
+        run: |
+          curl -fL --retry 3 \
+            "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-brain-1.5/fross-transformer.pt" \
+            -o "$RUNNER_TEMP/fross-published-brain15.pt"
+          printf '%s  %s\\n' \
+            "8fb674c5d5f6fdeda09c3ab0657286057066e73dce8583db2057e8f91fc0b831" \
+            "$RUNNER_TEMP/fross-published-brain15.pt" | sha256sum --check
+          printf 'uploaded-checkpoint\\n' > "$RUNNER_TEMP/fross-published-source.txt"
+          python training/distillation/verify_checkpoint.py \
+            --checkpoint "$RUNNER_TEMP/fross-published-brain15.pt" \
+            --model-source "$RUNNER_TEMP/fross-published-source.txt" \
+            --required-model-steps 3000 \
+            --vocab-size 25000 \
+            --context-size 500 \
+            --min-parameters 5000000 \
+            --max-parameters 8000000
       - name: Create a small isolated Brain 1.5 service checkpoint
         run: |
           python - <<'PY'
