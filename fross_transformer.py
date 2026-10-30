@@ -69,12 +69,13 @@ BASE_CHARS = "".join(dict.fromkeys(
 ))
 DEFAULT_CORPUS = Path(__file__).with_name("data") / "fross_corpus.jsonl"
 DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
+DEFAULT_UPLOAD_CHECKPOINT = Path(__file__).with_name("fross-transformer-upload.pt")
 MAX_GENERATION_TOKENS = 5000
 
 # Sized for the 1 GiB / low-CPU Hostless runtime: wider and deeper than Brain 1.3
 # while keeping CPU training/inference practical. Embeddings are weight-tied.
 DEFAULT_CONFIG = {
-    "block_size": 320,
+    "block_size": 500,
     "n_embd": 192,
     "n_head": 6,
     "n_layer": 6,
@@ -629,9 +630,9 @@ def train_model(
     *,
     steps: int = 600,
     batch_size: int = 4,
-    block_size: int = 320,
+    block_size: int = 500,
     merge_count: int | None = None,
-    target_vocab_size: int = 5000,
+    target_vocab_size: int = 25000,
     seed: int = 1337,
     resume: bool = False,
     schedule_steps: int | None = None,
@@ -732,6 +733,13 @@ def train_model(
                 "steps_this_run": 0,
                 "checkpoint_preserved": target.is_file(),
             }
+
+    if target_vocab_size >= 10000 and tokenizer.vocab_size != target_vocab_size:
+        raise ValueError(
+            f"SentencePiece built only {tokenizer.vocab_size}/{target_vocab_size} tokens. "
+            "The training corpus is too small or repetitive for the requested vocabulary; "
+            "add more diverse text examples before training Brain 1.5."
+        )
 
     train_stream = _encode_stream(train_records, tokenizer)
     validation_stream = _encode_stream(validation_records, tokenizer)
@@ -928,6 +936,7 @@ def train_model(
             "schedule_steps": schedule_total,
             "best_checkpoint_step": best_checkpoint_step or steps,
             "vocab_size": tokenizer.vocab_size,
+            "context_size": int(config["block_size"]),
             "requested_vocab_size": target_vocab_size if merge_count is None else None,
             "vocab_target_reached": (
                 tokenizer.vocab_size == target_vocab_size if merge_count is None else None
@@ -1027,6 +1036,57 @@ def export_onnx_model(
     }
 
 
+def package_inference_checkpoint(
+    checkpoint_path: str | Path = DEFAULT_CHECKPOINT,
+    output_path: str | Path = DEFAULT_UPLOAD_CHECKPOINT,
+) -> dict[str, Any]:
+    """Write a small deployment checkpoint without optimizer/RNG resume state.
+
+    The source checkpoint remains untouched and can still be used to resume training.
+    """
+    source = Path(checkpoint_path)
+    target = Path(output_path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Training checkpoint not found: {source}")
+    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Training checkpoint is not a FROSS checkpoint.")
+    if checkpoint.get("version") != VERSION or int(checkpoint.get("format_version", 0)) != 3:
+        raise ValueError("Only a compatible FROSS Brain 1.5 checkpoint can be packaged.")
+    model, tokenizer, status = load_model(source)
+    if model is None or tokenizer is None:
+        raise ValueError("Cannot package an invalid checkpoint: " + json.dumps(status, ensure_ascii=False))
+    required = ("config", "tokenizer", "state_dict", "metrics")
+    if any(key not in checkpoint for key in required):
+        raise ValueError("Training checkpoint is missing required inference data.")
+    compact = {
+        "format_version": checkpoint["format_version"],
+        "version": checkpoint["version"],
+        "config": checkpoint["config"],
+        "tokenizer": checkpoint["tokenizer"],
+        "state_dict": checkpoint["state_dict"],
+        "metrics": checkpoint["metrics"],
+        "checkpoint_role": "inference",
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".tmp")
+    torch.save(compact, temporary)
+    temporary.replace(target)
+    return {
+        "ok": True,
+        "version": VERSION,
+        "source": str(source),
+        "output": str(target),
+        "size_bytes": target.stat().st_size,
+        "training_checkpoint_preserved": source.resolve() != target.resolve(),
+        "training_steps": int(status.get("training_steps", 0)),
+        "vocab_size": tokenizer.vocab_size,
+        "context_size": int(model.config["block_size"]),
+        "parameters": sum(parameter.numel() for parameter in model.parameters()),
+        "resume_state_included": False,
+    }
+
+
 
 def _expand_bare_topic(message: str) -> str:
     """Make a one-word topic fit the explanatory question style used in training."""
@@ -1089,7 +1149,7 @@ def generate_reply(
 
     # Keep the model input close to the exact sequence format used during training.
     # Long workflow instructions previously displaced useful user text from the
-    # 320-token context window even though the model had never trained on those prompts.
+    # 500-token context window even though the model had never trained on those prompts.
     context_parts: list[str] = []
     for item in (knowledge if isinstance(knowledge, list) else [])[:2]:
         if not isinstance(item, dict):
@@ -1185,7 +1245,7 @@ def _clean_generated_text(text: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=VERSION)
-    parser.add_argument("command", choices=("train", "test", "generate", "export"))
+    parser.add_argument("command", choices=("train", "test", "generate", "export", "package"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
@@ -1193,10 +1253,14 @@ def main() -> int:
     parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--block-size", type=int, default=320)
+    parser.add_argument("--block-size", type=int, default=500)
     parser.add_argument(
-        "--vocab-size", type=int, default=5000,
-        help="Target tokenizer vocabulary size; Brain 1.4 defaults to 5000 tokens.",
+        "--vocab-size", type=int, default=25000,
+        help="Target SentencePiece Unigram vocabulary size; Brain 1.5 defaults to 25000 tokens.",
+    )
+    parser.add_argument(
+        "--package-output", default=str(DEFAULT_UPLOAD_CHECKPOINT),
+        help="Output path for a compact inference-only checkpoint (without optimizer state).",
     )
     parser.add_argument(
         "--merges", type=int, default=None,
@@ -1209,6 +1273,14 @@ def main() -> int:
     if args.command == "export":
         try:
             result = export_onnx_model(args.output, args.onnx_output)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "package":
+        try:
+            result = package_inference_checkpoint(args.output, args.package_output)
         except Exception as exc:
             print(json.dumps({"ok": False, "error": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
             return 1
