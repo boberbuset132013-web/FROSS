@@ -54,7 +54,7 @@ jobs:
           curl -fL --retry 3 \
             "https://github.com/boberbuset132013-web/FROSS/releases/download/fross-brain-1.5/fross-transformer.pt" \
             -o "$RUNNER_TEMP/fross-published-brain15.pt"
-          printf '%s  %s\\n' \
+          printf '%s  %s\n' \
             "8fb674c5d5f6fdeda09c3ab0657286057066e73dce8583db2057e8f91fc0b831" \
             "$RUNNER_TEMP/fross-published-brain15.pt" | sha256sum --check
           printf 'uploaded-checkpoint\\n' > "$RUNNER_TEMP/fross-published-source.txt"
