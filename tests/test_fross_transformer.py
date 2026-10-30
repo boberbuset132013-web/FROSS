@@ -21,8 +21,8 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 520)
         self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 4096)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 520)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 7)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 8)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 18)
         self.assertEqual(transformer.VERSION, "FROSS Transformer 1.6")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
 
@@ -85,7 +85,7 @@ class TransformerTests(unittest.TestCase):
                 "n_layer": 6, "dropout": 0.08,
             }
             source_model = transformer.FrossTransformer(48, source_config)
-            source_path = root / "brain15-source.pt"
+            source_path = root / "brain16-source.pt"
             torch.save({
                 "format_version": 3,
                 "version": "FROSS Transformer 1.6",
@@ -101,7 +101,7 @@ class TransformerTests(unittest.TestCase):
             new_layer_before = target_model.blocks[6].attention.qkv.weight.detach().clone()
             result = transformer.initialize_model_from_checkpoint(target_model, source_path)
 
-            self.assertEqual(result["source_version"], "FROSS Transformer 1.5")
+            self.assertEqual(result["source_version"], "FROSS Transformer 1.6")
             self.assertEqual(result["source_training_steps"], 10000)
             self.assertEqual(result["source_layers"], 6)
             self.assertEqual(result["target_layers"], 7)
@@ -349,6 +349,10 @@ class TransformerTests(unittest.TestCase):
                 training_data = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
                 self.assertTrue(packaged["ok"])
                 self.assertFalse(packaged["resume_state_included"])
+                self.assertEqual(packaged["inference_quantization"], "int8-rowwise-v1")
+                self.assertEqual(compact_data["inference_quantization"], "int8-rowwise-v1")
+                quantized_embedding = compact_data["state_dict"]["token_embedding.weight"]
+                self.assertEqual(quantized_embedding["values"].dtype, torch.int8)
                 self.assertNotIn("resume_state", compact_data)
                 self.assertIn("resume_state", training_data)
                 compact_model, compact_tokenizer, compact_status = transformer.load_model(compact_path)
