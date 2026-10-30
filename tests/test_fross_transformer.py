@@ -61,8 +61,8 @@ class TransformerTests(unittest.TestCase):
             self.assertTrue(result["token_embeddings_reinitialized"])
             self.assertGreater(result["transferred_parameters"], 0)
             self.assertTrue(torch.equal(
-                target_model.blocks[0].attention.query.weight,
-                legacy_model.blocks[0].attention.query.weight,
+                target_model.blocks[0].attention.qkv.weight,
+                legacy_model.blocks[0].attention.qkv.weight,
             ))
             self.assertTrue(torch.equal(
                 target_model.position_embedding.weight[:320],
