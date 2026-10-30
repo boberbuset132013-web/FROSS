@@ -1,70 +1,69 @@
-# FROSS hybrid Python/C++ brain
+# FROSS Python Brain 1.6
 
-## Architecture
+## Brain 1.6 architecture
 
-- The Transformer is trained offline, outside Hostless deployment builds.
-- Hostless only downloads an already-trained checkpoint, validates it, exports an ONNX graph and smoke-tests native inference.
-- C++ ONNX Runtime executes inference; Python retains prompt formatting, sampling, HTTP and memory/search integration.
-- Basic greetings, thanks and goodbyes are handled deterministically so they cannot turn into gibberish. Questions and tasks still use the trained model.
-- No third-party pretrained LLM or hosted LLM API is used. Brain 1.5 may warm-start compatible decoder blocks from the project's own Brain 1.4 checkpoint; the new SentencePiece token embeddings are initialized independently.
+- Decoder-only Transformer, implemented in this repository; no hosted LLM API or third-party pretrained LLM is used.
+- Target profile: **64,819,040 parameters**, **8,000-token SentencePiece Unigram vocabulary**, **4,096-token context**.
+- Architecture: 18 decoder layers, 8 attention heads, embedding width 520, tied token embeddings.
+- Training target: **100,000 cumulative optimizer steps**, exposed as 25k → 50k → 75k → 100k stages. A checkpoint cannot be downloaded for website activation until it reaches 100,000 steps.
+- Brain 1.5 remains a supported fallback profile (30K vocabulary, 500-token context, approximately 8.97M parameters). Its hidden width and attention heads are incompatible with Brain 1.6, so those weights are not copied into the new model.
 
-## Container build settings
+## Long-context and memory handling
 
-The Docker build context must be the **repository root**.
+The attention implementation processes query positions in small blocks and uses PyTorch activation/gradient checkpointing during training. This reduces peak attention/activation memory at the cost of additional computation. Training uses batch size 1. These optimizations do not eliminate the memory needed for model weights, gradients, optimizer state, temporary checkpoint files or the Python runtime. A low-memory 1-GB container is not a suitable training host for this profile.
 
-- Dockerfile path: `services/python-brain/Dockerfile`
+The normal Docker image installs the CPU PyTorch wheel. CUDA is used only if the installed PyTorch build and host actually expose a compatible GPU; setting device selection to automatic does not turn a CPU-only container into a GPU build. Plan training capacity and persistent disk storage before starting the 100K cycle.
+
+## Training and checkpoint lifecycle
+
+- Website training combines `data/fross_corpus.jsonl` and `data/fross_teacher_corpus.jsonl`, then builds a fresh 8K Unigram tokenizer.
+- First stage starts from a new initialization unless a compatible Brain 1.6 checkpoint already exists. The previous Brain 1.5 checkpoint is preserved for rollback.
+- Continuation stages resume the saved model, AdamW state and random-number-generator state. The corpus digest and schedule are checked so different data is not silently mixed into the same run.
+- The full training checkpoint is retained separately for continuing training.
+- At 100K, the server creates a row-wise INT8 inference package with FP16 small vectors. The service upload path accepts that compact package, dequantizes it for loading and validates its actual parameter count and metadata.
+- The website upload limit is 90 MiB. The full optimizer checkpoint is not the upload file.
+
+## Container build
+
+The Docker build context must be the repository root.
+
+- Dockerfile: `services/python-brain/Dockerfile`
 - Build context: repository root (`.`)
 - Port: `10000`
-- Keep `FROSS_BRAIN_SERVICE_TOKEN` configured as a secret in the hosting platform. Never put the value in this repository.
+- Required secret: `FROSS_BRAIN_SERVICE_TOKEN`
+- Model release repository: `FROSS_MODEL_GITHUB_REPOSITORY` (defaults to `boberbuset132013-web/FROSS`)
 
-The Dockerfile has no training command. Normal Hostless deployments use the default `FROSS_BUILD_BUNDLE_MODEL=0`, so the Docker build does **not** download the checkpoint from Yandex Disk or export ONNX. The service starts with the upload endpoint available even before a model has been uploaded. On startup it looks for the latest published Release Asset `fross-transformer.pt` in `FROSS_MODEL_GITHUB_REPOSITORY` (default: `boberbuset132013-web/FROSS`); if no compatible release exists yet, it stays online with `generationModelLoaded: false` until the model is uploaded from Settings. Once a valid Release Asset exists, future service restarts retrieve and validate it, then export ONNX. CI builds without a bundled production model and mounts a short-lived synthetic Brain 1.5 checkpoint only for the HTTP smoke test.
+Normal builds use `FROSS_BUILD_BUNDLE_MODEL=0`; they do not train a model or bundle the checkpoint. At startup the service checks the latest GitHub Release asset `fross-transformer.pt`. It keeps the existing Brain 1.5 checkpoint until a Brain 1.6 checkpoint has been downloaded, checksum-verified and validated. If no new release is available, the older compatible model remains available as a fallback.
 
-### Checkpoint version note
+For controlled CI smoke tests only, `FROSS_MODEL_TEST_MODE=1` allows test vocabulary/context/architecture values to be supplied by environment variables. Do not enable test mode in production.
 
-The asset currently found under the GitHub tag `fross-brain-1.5` has the supplied SHA-256 but its internal checkpoint metadata identifies it as **FROSS Transformer 1.4**. It is used only as a verified warm-start source for compatible Transformer layers. It is **not** a deployable Brain 1.5 model. A Brain 1.5 upload must pass the 25,000-token, 500-context and 5–8-million-parameter checks below.
+## Authenticated model upload
 
-### Authenticated live model upload
+Open FROSS → Settings → Upload FROSS model and select the compact Brain 1.6 INT8 file only after all 100,000 training steps have completed. The Worker verifies the Firebase session and forwards the request server-to-server; Hostless independently checks `FROSS_BRAIN_SERVICE_TOKEN`. Keep both the Firebase signing configuration and service token out of client code and repository files.
 
-Open FROSS chat, sign in, go to **Settings → Upload FROSS model**, and choose the compact `fross-transformer-upload.pt` inference checkpoint (up to 90 MiB). Keep the larger training checkpoint on the training PC so it can be resumed later. No separate upload password is needed. The Worker verifies the Firebase session, then Hostless independently requires the shared `FROSS_BRAIN_SERVICE_TOKEN` before accepting the upload. The Worker uses the existing `FROSS_GITHUB_TOKEN` secret and forwards it only server-to-server; it is never exposed to browser JavaScript. Keep the same `FROSS_BRAIN_SERVICE_TOKEN` configured in Cloudflare and Hostless.
-Optional Hostless settings:
+The server validates:
 
-- `FROSS_MODEL_GITHUB_REPOSITORY`: defaults to `boberbuset132013-web/FROSS`.
-- `FROSS_MODEL_MIN_STEPS`: minimum accepted training steps; the server enforces at least 3,000.
-- `FROSS_MODEL_VOCAB_SIZE`: required vocabulary size; defaults to 25,000.
-- `FROSS_MODEL_CONTEXT_SIZE`: required context window; defaults to 500 tokens.
-- `FROSS_MODEL_MIN_PARAMETERS` / `FROSS_MODEL_MAX_PARAMETERS`: accepted parameter range; defaults to 5,000,000–8,000,000.
+- Model version and format version.
+- At least 100,000 training steps.
+- Exactly 8,000 tokenizer entries.
+- Exactly 4,096 context positions.
+- Architecture: 18 layers, 8 heads, width 520.
+- Actual parameter count between 64,800,000 and 65,000,000.
+- INT8 package integrity and state-dict compatibility.
 
-The standalone `/admin/model-upload` route is informational only; file uploads are accepted exclusively from the authenticated Worker.
+After validation, the checkpoint can be published as a GitHub Release Asset named `fross-transformer.pt`; the next service restart downloads the latest verified asset. The active service does not switch to an unverified upload.
 
-The endpoint checks checkpoint format/version, training steps, vocabulary and context size, exports an ONNX candidate, and smoke-tests the C++ runtime before publishing it. The binary is uploaded as a GitHub Release Asset named `fross-transformer.pt`; `model-storage/current.json` stores its release URL, SHA-256, size and model metadata. This keeps the repository directory small rather than adding a 63-MB binary to every Git commit. Once published, the service atomically switches its in-memory model without rebuilding Docker. The same Release Asset is selected on subsequent deployments, so it does not have to be uploaded again.
+## HTTP routes
 
-**Security note:** keep `FROSS_BRAIN_SERVICE_TOKEN` and `FROSS_GITHUB_TOKEN` in server-side secrets only. Never put them into website JavaScript or GitHub source code. If the repository is public, the Release Asset itself is public too; never upload a checkpoint that must remain private to a public repository.
+- `GET /health`: runtime model/version/engine diagnostics.
+- `POST /ready`: authenticated Worker-to-Hostless readiness check.
+- `POST /chat`: inference.
+- `GET /admin/training/status`: training progress (authenticated).
+- `POST /admin/training/start`: start or continue a staged 100K training cycle (authenticated).
+- `POST /admin/training/cancel`: cancel at a safe training boundary (authenticated).
+- `GET /admin/training/model`: download the compact model only after 100K steps (authenticated).
+- `POST /admin/model-upload`: authenticated model activation from the Worker.
 
-The selected source is reported as `modelSource` in `/health` and `/api/health`.
+## Automated checks
 
-## HTTP routes and browser checks
-
-The service base URL configured in FROSS may end in `/chat`. Opening that exact URL in a browser sends **GET /chat**; it now returns JSON health/route diagnostics (HTTP 200) instead of a confusing 404. Actual inference still uses **POST /chat** with a JSON body and the shared `Authorization: Bearer FROSS_BRAIN_SERVICE_TOKEN` header. `GET /health`, `GET /`, and `HEAD /health` are health probes. Query strings and a trailing slash are normalized for route matching, so `/chat/?probe=1` does not produce a false 404.
-
-If a deployed service still returns `{"error":"Not found"}` for `GET /chat`, it is likely running an older image; trigger a Hostless rebuild/redeploy from the latest repository commit with Dockerfile `services/python-brain/Dockerfile` and the repository root as build context.
-
-## Verify deployment
-
-Open `/health` on the Python brain service to view model status. The authenticated `POST /ready` endpoint allows the Worker to verify the shared service token as well as model readiness. A successful hybrid deployment should report:
-
-- `version: "1.5"`
-- `generationModel: "FROSS Transformer 1.5"`
-- `generationModelStatus.vocab_size: 25000`
-- `generationModelStatus.context_size: 500`
-- `generationModelStatus.parameters`: 5,000,000–8,000,000
-- `inferenceBackend: "cpp-onnx"`
-- `cppRuntimeLoaded: true`
-- `generationModelStatus.loaded: true`
-
-If `inferenceBackend` is `python-torch`, inspect `cppRuntimeStatus` and hosting build logs. The service falls back to Python if the native library cannot be loaded so the health route remains available.
-
-## Local development and automated checks
-
-Install development/test dependencies with `python -m pip install -r requirements.txt`. Production uses the CPU-specific PyTorch wheel and pinned native runtime in the Dockerfile instead.
-
-Train and export checkpoints outside Hostless builds. The GitHub Actions workflow `.github/workflows/fross-hybrid-brain.yml` trains small temporary test models, checks packaging, exports and executes ONNX, compiles C++, compares native logits, then mounts a temporary model in Docker to exercise the Brain 1.5 HTTP endpoints. It does not download or replace the production release asset.
+GitHub Actions tests tokenizer preparation, the exact Brain 1.6 architecture/parameter count, checkpoint resume, quantized package round-trip, long-context attention gradients, Python service startup and HTTP smoke behavior. The older Brain 1.4 seed is checked as a separate legacy artifact, not used to initialize Brain 1.6.
