@@ -73,13 +73,13 @@ DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
 DEFAULT_UPLOAD_CHECKPOINT = Path(__file__).with_name("fross-transformer-upload.pt")
 MAX_GENERATION_TOKENS = 5000
 
-# Brain 1.5 uses tied embeddings: 25K vocabulary + 500-token positions + six
-# compact decoder blocks yield about 7.57M trainable parameters.
+# Brain 1.5 refresh: 30K vocabulary + 500-token positions + seven compact
+# decoder blocks yield exactly 8,970,432 trainable parameters with tied embeddings.
 DEFAULT_CONFIG = {
     "block_size": 500,
     "n_embd": 192,
     "n_head": 6,
-    "n_layer": 6,
+    "n_layer": 7,
     "dropout": 0.08,
 }
 
@@ -508,12 +508,11 @@ def initialize_model_from_checkpoint(
     model: FrossTransformer,
     checkpoint_path: str | Path,
 ) -> dict[str, Any]:
-    """Warm-start Brain 1.5 from compatible Brain 1.4 Transformer layers.
+    """Transfer compatible decoder layers from a Brain 1.4 or 1.5 checkpoint.
 
-    Token embeddings are deliberately not copied: Brain 1.4 BPE token IDs and
-    Brain 1.5 SentencePiece Unigram IDs do not describe the same vocabulary.
-    Decoder blocks, final norm, and the overlapping positional embeddings are
-    architecture-compatible and can be reused safely.
+    Token embeddings are never copied because the target SentencePiece vocabulary
+    has newly trained token IDs. A larger target may add decoder layers; common
+    layers, final normalization and overlapping positional embeddings are reused.
     """
     source = Path(checkpoint_path)
     if not source.is_file():
@@ -521,40 +520,52 @@ def initialize_model_from_checkpoint(
     checkpoint = torch.load(source, map_location="cpu", weights_only=True)
     if not isinstance(checkpoint, dict):
         raise ValueError("Initialization file is not a FROSS checkpoint.")
-    if checkpoint.get("version") != "FROSS Transformer 1.4":
-        raise ValueError(
-            "Warm-start source must be FROSS Transformer 1.4; got "
-            + repr(checkpoint.get("version")) + "."
-        )
-    if int(checkpoint.get("format_version", 0)) not in {1, 2}:
-        raise ValueError("Unsupported Brain 1.4 checkpoint format.")
+
+    source_version = checkpoint.get("version")
+    if source_version not in {"FROSS Transformer 1.4", VERSION}:
+        raise ValueError("Warm-start source must be FROSS Transformer 1.4 or 1.5; got "
+                         + repr(source_version) + ".")
+    source_format = int(checkpoint.get("format_version", 0))
+    supported_formats = {1, 2} if source_version == "FROSS Transformer 1.4" else {3}
+    if source_format not in supported_formats:
+        raise ValueError("Unsupported source checkpoint format for " + str(source_version) + ".")
+
     source_config = checkpoint.get("config")
     source_state = checkpoint.get("state_dict")
     if not isinstance(source_config, dict) or not isinstance(source_state, dict):
-        raise ValueError("Brain 1.4 checkpoint is missing model configuration or weights.")
+        raise ValueError("Source checkpoint is missing model configuration or weights.")
 
-    for field in ("n_embd", "n_head", "n_layer"):
+    for field in ("n_embd", "n_head"):
         if int(source_config.get(field, -1)) != int(model.config[field]):
-            raise ValueError(
-                "Brain 1.4 and Brain 1.5 architecture mismatch for "
-                + field + ": " + str(source_config.get(field))
-                + " vs " + str(model.config[field]) + "."
-            )
+            raise ValueError("Source and target architecture mismatch for " + field + ": "
+                             + str(source_config.get(field)) + " vs " + str(model.config[field]) + ".")
+    source_layers = int(source_config.get("n_layer", 0))
+    target_layers = int(model.config["n_layer"])
+    if source_layers < 1 or source_layers > target_layers:
+        raise ValueError("Target model must have at least as many decoder layers as the source.")
 
     target_state = model.state_dict()
-    transferable = [
-        name for name in target_state
-        if name.startswith("blocks.") or name.startswith("final_norm.")
-    ]
+    transferable = []
+    for name in target_state:
+        if name.startswith("final_norm."):
+            transferable.append(name)
+        elif name.startswith("blocks."):
+            try:
+                layer_index = int(name.split(".", 2)[1])
+            except (IndexError, ValueError):
+                continue
+            if layer_index < source_layers:
+                transferable.append(name)
     if not transferable:
         raise ValueError("No compatible Transformer block weights were found.")
+
     copied_parameters = 0
     copied_tensors = 0
     for name in transferable:
         source_tensor = source_state.get(name)
         target_tensor = target_state[name]
         if not torch.is_tensor(source_tensor) or tuple(source_tensor.shape) != tuple(target_tensor.shape):
-            raise ValueError("Brain 1.4 tensor is missing or has an incompatible shape: " + name)
+            raise ValueError("Source tensor is missing or has an incompatible shape: " + name)
         target_tensor.copy_(source_tensor.to(device=target_tensor.device, dtype=target_tensor.dtype))
         copied_parameters += target_tensor.numel()
         copied_tensors += 1
@@ -568,7 +579,7 @@ def initialize_model_from_checkpoint(
         or target_positions.ndim != 2
         or source_positions.shape[1] != target_positions.shape[1]
     ):
-        raise ValueError("Brain 1.4 positional embeddings are missing or incompatible.")
+        raise ValueError("Source positional embeddings are missing or incompatible.")
     copied_positions = min(source_positions.shape[0], target_positions.shape[0])
     target_positions[:copied_positions].copy_(
         source_positions[:copied_positions].to(device=target_positions.device, dtype=target_positions.dtype)
@@ -581,18 +592,23 @@ def initialize_model_from_checkpoint(
     if not isinstance(source_metrics, dict):
         source_metrics = {}
     return {
-        "source_version": checkpoint["version"],
+        "source_version": source_version,
         "source_checkpoint": str(source),
         "source_training_steps": int(source_metrics.get("training_steps", 0)),
         "source_vocab_size": int(source_metrics.get("vocab_size", 0)),
         "source_context_size": int(source_config.get("block_size", 0)),
-        "transfer_strategy": "transformer_blocks_final_norm_and_overlapping_positions",
+        "source_layers": source_layers,
+        "target_layers": target_layers,
+        "new_decoder_layers": target_layers - source_layers,
+        "transfer_strategy": "compatible_decoder_blocks_final_norm_and_overlapping_positions",
         "transferred_tensors": copied_tensors,
         "transferred_parameters": copied_parameters,
         "copied_position_rows": copied_positions,
         "token_embeddings_reinitialized": True,
         "target_tokenizer": "sentencepiece-unigram",
     }
+
+
 
 
 def _load_corpus(path: str | Path) -> list[dict[str, Any]]:
@@ -1355,16 +1371,16 @@ def main() -> int:
     parser.add_argument("command", choices=("train", "test", "generate", "export", "package"))
     parser.add_argument("--corpus", default=str(DEFAULT_CORPUS))
     parser.add_argument("--output", default=str(DEFAULT_CHECKPOINT))
-    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; use 3000 to continue a 600-step checkpoint.")
+    parser.add_argument("--steps", type=int, default=600, help="Cumulative training-step target; continue the same run up to 10000.")
     parser.add_argument("--resume", action="store_true", help="Continue from the last saved training state, including AdamW and RNG states.")
     parser.add_argument("--initialize-from", default=None, help="Warm-start compatible Brain 1.5 Transformer layers from a Brain 1.4 checkpoint; token embeddings remain newly initialized.")
-    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 3000 for both training stages.")
+    parser.add_argument("--schedule-steps", type=int, default=None, help="Total learning-rate schedule horizon. Keep this at 10000 for the website training cycle.")
     parser.add_argument("--seed", type=int, default=1337, help="Training seed; it must match when resuming.")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=500)
     parser.add_argument(
-        "--vocab-size", type=int, default=25000,
-        help="Target SentencePiece Unigram vocabulary size; Brain 1.5 defaults to 25000 tokens.",
+        "--vocab-size", type=int, default=30000,
+        help="Target SentencePiece Unigram vocabulary size; refreshed Brain 1.5 defaults to 30000 tokens.",
     )
     parser.add_argument(
         "--package-output", default=str(DEFAULT_UPLOAD_CHECKPOINT),
