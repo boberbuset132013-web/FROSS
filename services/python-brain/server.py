@@ -58,7 +58,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
                 isinstance(metrics, dict)
                 and isinstance(config, dict)
                 and existing.get("version") == transformer.VERSION
-                and int(existing.get("format_version", 0)) in {1, 2}
+                and int(existing.get("format_version", 0)) == 3
                 and int(metrics.get("training_steps", 0)) >= MODEL_UPLOAD_MIN_STEPS
                 and int(metrics.get("vocab_size", 0)) == MODEL_UPLOAD_VOCAB_SIZE
                 and metrics.get("vocab_target_reached") is True
@@ -129,7 +129,7 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         config = checkpoint.get("config") if isinstance(checkpoint, dict) else None
         if not isinstance(metrics, dict) or not isinstance(config, dict):
             raise ValueError("GitHub model checkpoint has no valid metadata.")
-        if checkpoint.get("version") != transformer.VERSION or int(checkpoint.get("format_version", 0)) not in {1, 2}:
+        if checkpoint.get("version") != transformer.VERSION or int(checkpoint.get("format_version", 0)) != 3:
             raise ValueError("GitHub model checkpoint version or format is incompatible.")
         if int(metrics.get("training_steps", 0)) < MODEL_UPLOAD_MIN_STEPS:
             raise ValueError("GitHub model checkpoint does not meet the 3000-step minimum.")
@@ -435,8 +435,8 @@ def _publish_checkpoint_to_github(
     tag = "fross-model-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + sha256[:8]
     release = _github_json("POST", "https://api.github.com/repos/" + repo + "/releases", token, {
         "tag_name": tag,
-        "name": "FROSS Transformer 1.4 model " + tag,
-        "body": "Validated FROSS Transformer 1.4 checkpoint. SHA-256: " + sha256
+        "name": "FROSS Transformer 1.5 model " + tag,
+        "body": "Validated FROSS Transformer 1.5 checkpoint. SHA-256: " + sha256
                 + "; training steps: " + str(training_steps)
                 + "; vocabulary: " + str(vocab_size) + ".",
         "draft": False,
@@ -452,7 +452,7 @@ def _publish_checkpoint_to_github(
         raise RuntimeError("GitHub did not publish a valid model download URL.")
     manifest = {
         "schema_version": 1,
-        "model": "FROSS Transformer 1.4",
+        "model": "FROSS Transformer 1.5",
         "file": "fross-transformer.pt",
         "tag": tag,
         "release_url": release.get("html_url", ""),
@@ -502,7 +502,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if not isinstance(checkpoint, dict):
         raise ValueError("Checkpoint должен быть объектом FROSS.")
     if checkpoint.get("version") != transformer.VERSION:
-        raise ValueError("Нужна совместимая версия FROSS Transformer 1.4.")
+        raise ValueError("Нужна совместимая версия FROSS Transformer 1.5.")
     if int(checkpoint.get("format_version", 0)) not in {1, 2}:
         raise ValueError("Неизвестный формат checkpoint.")
     metrics = checkpoint.get("metrics")
@@ -516,7 +516,7 @@ def _check_model_checkpoint(path: Path) -> tuple[dict[str, Any], Any, Any]:
     if vocab_size != MODEL_UPLOAD_VOCAB_SIZE or metrics.get("vocab_target_reached") is not True:
         raise ValueError("Нужен словарь из " + str(MODEL_UPLOAD_VOCAB_SIZE) + " токенов с достигнутой целью словаря.")
     if int(config.get("block_size", 0)) != 320:
-        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.4 (320).")
+        raise ValueError("Размер контекста checkpoint не соответствует FROSS Brain 1.5 (320).")
     model, tokenizer, status = transformer.load_model(path)
     if model is None or tokenizer is None:
         raise ValueError("Не удалось загрузить модель: " + json.dumps(status, ensure_ascii=False)[:500])
@@ -803,7 +803,7 @@ def _run_training(target_steps: int, schedule_steps: int) -> None:
                 saved = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
                 resume = (
                     isinstance(saved, dict)
-                    and int(saved.get("format_version", 0)) == 2
+                    and int(saved.get("format_version", 0)) == 3
                     and isinstance(saved.get("resume_state"), dict)
                 )
                 if resume:
