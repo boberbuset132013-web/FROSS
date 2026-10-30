@@ -18,9 +18,19 @@ class TransformerTests(unittest.TestCase):
         self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
-        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 320)
+        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 500)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 6)
         self.assertEqual(transformer.VERSION, "FROSS Transformer 1.5")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
+
+    def test_default_brain_15_architecture_is_within_target_parameter_range(self) -> None:
+        model = transformer.FrossTransformer(25000)
+        parameter_count = sum(parameter.numel() for parameter in model.parameters())
+        self.assertEqual(parameter_count, 7_565_568)
+        self.assertGreaterEqual(parameter_count, 5_000_000)
+        self.assertLessEqual(parameter_count, 8_000_000)
 
     def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
         samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
@@ -248,6 +258,19 @@ class TransformerTests(unittest.TestCase):
                 self.assertEqual(continued["training_steps"], 2)
                 self.assertEqual(continued["steps_this_run"], 1)
                 self.assertEqual(continued["schedule_steps"], 3)
+
+                compact_path = root / "inference-only.pt"
+                packaged = transformer.package_inference_checkpoint(checkpoint_path, compact_path)
+                compact_data = torch.load(compact_path, map_location="cpu", weights_only=True)
+                training_data = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                self.assertTrue(packaged["ok"])
+                self.assertFalse(packaged["resume_state_included"])
+                self.assertNotIn("resume_state", compact_data)
+                self.assertIn("resume_state", training_data)
+                compact_model, compact_tokenizer, compact_status = transformer.load_model(compact_path)
+                self.assertIsNotNone(compact_model)
+                self.assertIsNotNone(compact_tokenizer)
+                self.assertTrue(compact_status["loaded"])
 
                 model, tokenizer, status = transformer.load_model(checkpoint_path)
                 self.assertIsNotNone(model)
