@@ -101,15 +101,14 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
                 and metrics.get("vocab_target_reached") is True
                 and _runtime_checkpoint_profile_matches(metrics, config)
             )
-            if compatible:
+            if compatible and existing.get("version") == transformer.VERSION:
                 return None
-        except Exception:
-            pass
-        # Never let a stale/incompatible baked-in checkpoint prevent recovery
-        # from the latest known-good GitHub Release asset.
-        target.unlink(missing_ok=True)
-        Path(ONNX_MODEL_PATH).unlink(missing_ok=True)
-        print("FROSS startup: existing checkpoint is incompatible; trying the latest GitHub model.", flush=True)
+            if compatible:
+                print("FROSS startup: compatible Brain 1.5 fallback is preserved while checking for Brain 1.6.", flush=True)
+            else:
+                print("FROSS startup: current checkpoint is not Brain 1.6; preserving it until a replacement is fully verified.", flush=True)
+        except Exception as exc:
+            print("FROSS startup: existing checkpoint could not be validated (" + type(exc).__name__ + "); preserving it during replacement check.", flush=True)
     repository = os.environ.get("FROSS_MODEL_GITHUB_REPOSITORY", "boberbuset132013-web/FROSS").strip()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         return None
