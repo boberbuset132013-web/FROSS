@@ -103,9 +103,9 @@ switch ($Stage) {
             "--output", $checkpoint,
             "--steps", "3000",
             "--schedule-steps", "3000",
-            "--batch-size", "4",
-            "--block-size", "320",
-            "--vocab-size", "5000",
+            "--batch-size", "2",
+            "--block-size", "500",
+            "--vocab-size", "25000",
             "--seed", "1337",
             "--resume"
         )
