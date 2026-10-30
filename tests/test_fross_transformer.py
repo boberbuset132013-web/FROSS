@@ -24,7 +24,7 @@ class TransformerTests(unittest.TestCase):
 
     def test_sentencepiece_unigram_round_trip_and_special_ids(self) -> None:
         samples = ["Привет, FROSS!", "Attention и трансформеры", "你好，世界"]
-        tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=512)
+        tokenizer = transformer.SentencePieceTokenizer.train(samples * 20, target_vocab_size=300)
         self.assertGreaterEqual(tokenizer.vocab_size, 256)
         self.assertEqual(tokenizer.processor.pad_id(), transformer.PAD_ID)
         self.assertEqual(tokenizer.processor.unk_id(), transformer.UNK_ID)
@@ -41,7 +41,7 @@ class TransformerTests(unittest.TestCase):
         with self.assertRaises(transformer.TrainingCancelled):
             transformer.SentencePieceTokenizer.train(
                 ["слово один два три четыре пять"] * 100,
-                target_vocab_size=512,
+                target_vocab_size=300,
                 stop_callback=should_stop,
             )
 
@@ -60,7 +60,7 @@ class TransformerTests(unittest.TestCase):
         progress = []
         tokenizer = transformer.BPETokenizer.train(
             ["один два три four five", "один два снова"],
-            target_vocab_size=512,
+            target_vocab_size=300,
             progress_callback=progress.append,
         )
         self.assertTrue(tokenizer.pretokenized)
@@ -82,7 +82,7 @@ class TransformerTests(unittest.TestCase):
         with self.assertRaises(transformer.TrainingCancelled):
             transformer.BPETokenizer.train(
                 ["слово один два три четыре пять"] * 8,
-                target_vocab_size=512,
+                target_vocab_size=300,
                 progress_callback=report,
                 stop_callback=should_stop,
             )
@@ -94,7 +94,7 @@ class TransformerTests(unittest.TestCase):
         # Enough distinct word forms to test an exact target without a large training run.
         words = [f"слово{a}{b}word" for a, b in itertools.product(string.ascii_lowercase, repeat=2)]
         words.extend(["你好，世界", "谢谢你", "常见"])
-        tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=256)
+        tokenizer = transformer.BPETokenizer.train(words, target_vocab_size=300)
         self.assertEqual(tokenizer.vocab_size, 256)
         self.assertTrue(tokenizer.pretokenized)
         for piece in tokenizer.pieces[4:]:
@@ -227,7 +227,7 @@ class TransformerTests(unittest.TestCase):
                     steps=1,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=256,
+                    target_vocab_size=300,
                     seed=91,
                     schedule_steps=2,
                 )
@@ -240,7 +240,7 @@ class TransformerTests(unittest.TestCase):
                     steps=2,
                     batch_size=1,
                     block_size=32,
-                    target_vocab_size=256,
+                    target_vocab_size=300,
                     seed=91,
                     resume=True,
                     schedule_steps=3,

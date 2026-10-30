@@ -339,8 +339,10 @@ class SentencePieceTokenizer:
         import time
         from pathlib import Path
         target_vocab_size = int(target_vocab_size)
-        if target_vocab_size < 512:
-            raise ValueError("SentencePiece byte-fallback vocabulary must be at least 512 tokens.")
+        # SentencePiece byte fallback reserves 256 byte pieces plus four
+        # FROSS special tokens. Smaller vocabularies are valid for unit tests.
+        if target_vocab_size < 260:
+            raise ValueError("SentencePiece byte-fallback vocabulary must be at least 260 tokens.")
         if stop_callback is not None and stop_callback():
             raise TrainingCancelled("Training cancelled before SentencePiece preparation.")
         def report(done: int) -> None:
@@ -369,20 +371,28 @@ class SentencePieceTokenizer:
                 "num_threads=1,shuffle_input_sentence=False,input_sentence_size=0,"
                 "max_sentence_length=8192,minloglevel=2)"
             )
-            process = subprocess.Popen([sys.executable, "-c", trainer, str(corpus_path), str(prefix), str(target_vocab_size)],
-                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            while process.poll() is None:
-                if stop_callback is not None and stop_callback():
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-                    raise TrainingCancelled("Training cancelled during native SentencePiece vocabulary training.")
-                time.sleep(0.2)
+            log_path = root / "sentencepiece.log"
+            with log_path.open("w", encoding="utf-8") as log_handle:
+                process = subprocess.Popen(
+                    [sys.executable, "-c", trainer, str(corpus_path), str(prefix), str(target_vocab_size)],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log_handle,
+                )
+                while process.poll() is None:
+                    if stop_callback is not None and stop_callback():
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                        raise TrainingCancelled("Training cancelled during native SentencePiece vocabulary training.")
+                    time.sleep(0.2)
             if process.returncode != 0:
-                raise RuntimeError("Native SentencePiece Unigram training failed (exit " + str(process.returncode) + ").")
+                details = log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
+                raise RuntimeError(
+                    "Native SentencePiece Unigram training failed (exit "
+                    + str(process.returncode) + "): " + details.strip()
+                )
             if stop_callback is not None and stop_callback():
                 raise TrainingCancelled("Training cancelled after SentencePiece vocabulary training.")
             model_proto = prefix.with_suffix(".model").read_bytes()
