@@ -72,8 +72,8 @@ DEFAULT_CHECKPOINT = Path(__file__).with_name("fross-transformer.pt")
 DEFAULT_UPLOAD_CHECKPOINT = Path(__file__).with_name("fross-transformer-upload.pt")
 MAX_GENERATION_TOKENS = 5000
 
-# Sized for the 1 GiB / low-CPU Hostless runtime: wider and deeper than Brain 1.3
-# while keeping CPU training/inference practical. Embeddings are weight-tied.
+# Brain 1.5 uses tied embeddings: 25K vocabulary + 500-token positions + six
+# compact decoder blocks yield about 7.57M trainable parameters.
 DEFAULT_CONFIG = {
     "block_size": 500,
     "n_embd": 192,
@@ -331,7 +331,7 @@ class SentencePieceTokenizer:
         return int(self.processor.get_piece_size())
 
     @classmethod
-    def train(cls, texts: list[str], target_vocab_size: int = 5000,
+    def train(cls, texts: list[str], target_vocab_size: int = 25000,
               progress_callback: Any = None, stop_callback: Any = None) -> "SentencePieceTokenizer":
         import base64
         import subprocess
