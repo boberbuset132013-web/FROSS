@@ -1,6 +1,7 @@
 # Local Windows training artifacts
 /.venv-training/
 /.fross-local-training/
+/.fross-brain15-training/
 
 # Python temporary files
 __pycache__/
