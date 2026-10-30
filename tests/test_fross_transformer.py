@@ -16,22 +16,22 @@ import fross_transformer as transformer
 
 class TransformerTests(unittest.TestCase):
     def test_default_architecture_and_generation_budget(self) -> None:
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 7)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 18)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 8)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 520)
+        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 4096)
+        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 520)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
-        self.assertEqual(transformer.DEFAULT_CONFIG["block_size"], 500)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_embd"], 192)
-        self.assertEqual(transformer.DEFAULT_CONFIG["n_head"], 6)
         self.assertEqual(transformer.DEFAULT_CONFIG["n_layer"], 7)
-        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.5")
+        self.assertEqual(transformer.VERSION, "FROSS Transformer 1.6")
         self.assertEqual(transformer.MAX_GENERATION_TOKENS, 5000)
 
-    def test_default_brain_15_architecture_is_within_target_parameter_range(self) -> None:
-        model = transformer.FrossTransformer(30000)
+    def test_default_brain_16_architecture_is_within_target_parameter_range(self) -> None:
+        model = transformer.FrossTransformer(8000)
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
-        self.assertEqual(parameter_count, 8_970_432)
-        self.assertGreaterEqual(parameter_count, 8_850_000)
-        self.assertLessEqual(parameter_count, 9_100_000)
+        self.assertEqual(parameter_count, 64_819_040)
+        self.assertGreaterEqual(parameter_count, 64_800_000)
+        self.assertLessEqual(parameter_count, 65_000_000)
 
     def test_brain_14_warm_start_transfers_only_architecture_compatible_weights(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -50,7 +50,10 @@ class TransformerTests(unittest.TestCase):
                 "metrics": {"training_steps": 3000, "vocab_size": 5000},
             }, seed_path)
 
-            target_model = transformer.FrossTransformer(30000)
+            target_model = transformer.FrossTransformer(30000, {
+                "block_size": 320, "n_embd": 192, "n_head": 6,
+                "n_layer": 7, "dropout": 0.08,
+            })
             original_embedding = target_model.token_embedding.weight.detach().clone()
             result = transformer.initialize_model_from_checkpoint(target_model, seed_path)
 
@@ -74,24 +77,27 @@ class TransformerTests(unittest.TestCase):
             ))
             self.assertEqual(target_model.token_embedding.num_embeddings, 30000)
 
-    def test_brain_15_checkpoint_warm_start_adds_a_new_layer(self) -> None:
+    def test_brain_16_checkpoint_warm_start_adds_a_new_layer(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source_config = {
-                "block_size": 500, "n_embd": 192, "n_head": 6,
+                "block_size": 64, "n_embd": 16, "n_head": 4,
                 "n_layer": 6, "dropout": 0.08,
             }
-            source_model = transformer.FrossTransformer(25000, source_config)
+            source_model = transformer.FrossTransformer(48, source_config)
             source_path = root / "brain15-source.pt"
             torch.save({
                 "format_version": 3,
-                "version": "FROSS Transformer 1.5",
+                "version": "FROSS Transformer 1.6",
                 "config": source_config,
                 "state_dict": source_model.state_dict(),
                 "metrics": {"training_steps": 10000, "vocab_size": 25000},
             }, source_path)
 
-            target_model = transformer.FrossTransformer(30000)
+            target_model = transformer.FrossTransformer(64, {
+                "block_size": 64, "n_embd": 16, "n_head": 4,
+                "n_layer": 7, "dropout": 0.08,
+            })
             new_layer_before = target_model.blocks[6].attention.qkv.weight.detach().clone()
             result = transformer.initialize_model_from_checkpoint(target_model, source_path)
 
