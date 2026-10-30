@@ -1070,7 +1070,7 @@ function frossBuildKnowledgeSummary(topic, title, text) {
 
 function frossForbiddenProgrammingTopic(topic) {
   const q = frossClean(topic).toLowerCase().replace(/ё/g, "е");
-  // Brain 1.5's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
+  // Brain 1.6's programming curriculum is intentionally limited to JavaScript, Python, HTML, and CSS.
   const unsupported = /(^|[^a-zа-яё0-9_])(c\+\+|cpp|c#|csharp|java(?!script)|typescript|php|ruby|rust|golang|swift|kotlin|sql|bash|lua|perl|scala|dart|matlab|fortran|assembly)(?=$|[^a-zа-яё0-9_])/i;
   return unsupported.test(q);
 }
@@ -2087,7 +2087,7 @@ async function handleFrossApi(request, env) {
   const sharedGithubKnowledge = await frossLoadGithubKnowledge(correctedQuery);
   const allKnowledge = [...sharedGithubKnowledge, ...knowledge].slice(0, 100);
 
-  // Brain 1.5: keep the user's original words, retrieve web context when the request
+  // Brain 1.6: keep the user's original words, retrieve web context when the request
   // appears to contain an unfamiliar term, a concrete question, or a time-sensitive fact,
   // then let the local Transformer synthesize the context into its own answer.
   const conversationalCandidate = frossLikelyConversationIntent(correctedQuery);
