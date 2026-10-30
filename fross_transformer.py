@@ -916,6 +916,21 @@ def train_model(
         config = {**DEFAULT_CONFIG, "block_size": actual_block}
 
     device = torch.device("cpu") if force_cpu else _preferred_device()
+    if progress_callback is not None:
+        try:
+            resume_metrics = (
+                resume_checkpoint.get("metrics", {})
+                if isinstance(resume_checkpoint, dict) else {}
+            )
+            progress_callback({
+                "phase": "initializing_model",
+                "step": int(resume_metrics.get("training_steps", 0)),
+                "target_steps": steps,
+                "device": str(device),
+                "vocab_size": tokenizer.vocab_size,
+            })
+        except Exception:
+            pass
     model = FrossTransformer(tokenizer.vocab_size, config).to(device)
     if initialize_from is not None:
         initialization_metadata = initialize_model_from_checkpoint(model, initialize_from)
