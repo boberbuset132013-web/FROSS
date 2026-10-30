@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Focused tests for the FROSS Transformer implemented and trained from scratch."""
+"""Focused tests for the FROSS Transformer architecture, tokenizer and training."""
 from __future__ import annotations
 
 import unittest
+import tempfile
 import sys
 from pathlib import Path
 
