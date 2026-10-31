@@ -335,18 +335,31 @@ class TransformerTests(unittest.TestCase):
                 "dropout": 0.0,
             }
             with patch.dict(transformer.DEFAULT_CONFIG, tiny_config, clear=True):
+                stop_requested = {"value": False}
+
+                def report_training_progress(progress):
+                    if progress.get("phase") == "training" and int(progress.get("step", 0)) >= 1:
+                        stop_requested["value"] = True
+
                 first = transformer.train_model(
                     corpus_path,
                     checkpoint_path,
-                    steps=1,
+                    steps=2,
                     batch_size=1,
                     block_size=32,
                     target_vocab_size=512,
                     seed=91,
                     schedule_steps=2,
+                    progress_callback=report_training_progress,
+                    stop_callback=lambda: stop_requested["value"],
+                    checkpoint_interval_steps=1,
                 )
                 self.assertEqual(first["training_steps"], 1)
                 self.assertEqual(first["steps_this_run"], 1)
+                self.assertTrue(first["cancelled"])
+                interrupted = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                self.assertEqual(interrupted["resume_state"]["completed_steps"], 1)
+                self.assertEqual(interrupted["metrics"]["training_steps"], 1)
 
                 continued = transformer.train_model(
                     corpus_path,
