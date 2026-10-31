@@ -190,7 +190,15 @@ def _bootstrap_latest_github_checkpoint(destination: str | Path) -> str | None:
         print("FROSS startup: downloaded and verified GitHub model asset; SHA-256 " + digest.hexdigest(), flush=True)
         return model_source
     except Exception as exc:
-        print("FROSS startup: GitHub model bootstrap unavailable (" + type(exc).__name__ + "); upload a checkpoint from Settings.", flush=True)
+        # Expose the validation/download reason in Hostless logs instead of
+        # reducing every bootstrap failure to the generic exception class.
+        detail = str(exc).replace("\\n", " ")[:260]
+        print(
+            "FROSS startup: GitHub model bootstrap unavailable ("
+            + type(exc).__name__ + ": " + detail
+            + "); upload a compatible Brain 1.6 checkpoint from Settings.",
+            flush=True,
+        )
         return None
     finally:
         partial.unlink(missing_ok=True)
@@ -357,19 +365,22 @@ def _load_startup_model_background() -> None:
             else:
                 TRANSFORMER_MODEL = None
                 TRANSFORMER_TOKENIZER = None
+                detail = str(exc).replace("\\n", " ")[:260]
                 TRANSFORMER_STATUS = {
                     "loaded": False,
                     "reason": "startup-load-failed",
                     "error": type(exc).__name__,
+                    "detail": detail,
                     "path": str(TRANSFORMER_MODEL_PATH),
                 }
                 MODEL_LOAD_STATE = "failed"
-                MODEL_LOAD_ERROR = type(exc).__name__
+                MODEL_LOAD_ERROR = type(exc).__name__ + ": " + detail
                 if CPP_RUNTIME_STATUS == "pending":
                     CPP_RUNTIME_STATUS = "unavailable"
         print(
             "FROSS startup: model is not ready ("
-            + type(exc).__name__ + "). The HTTP service remains available.",
+            + type(exc).__name__ + ": " + str(exc).replace("\\n", " ")[:260]
+            + "). The HTTP service remains available.",
             flush=True,
         )
 
