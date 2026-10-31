@@ -787,10 +787,20 @@ def respond(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) 
 
 
 
-# Training runs independently of the browser request. Status is held in the service
-# process so closing the dashboard does not cancel an active run.
+# Training is served by a separate Hostless app. The inference app must never
+# execute a 64M-parameter training job in the process that handles chat requests.
+TRAINING_SERVICE_MODE = os.environ.get("FROSS_TRAINING_SERVICE_MODE", "0").strip().lower() in {"1", "true", "yes"}
+TRAINING_STORAGE_CONFIRMED = os.environ.get("FROSS_TRAINING_STORAGE_CONFIRMED", "0").strip().lower() in {"1", "true", "yes"}
+_default_training_dir = Path(os.environ.get(
+    "FROSS_TRAINING_DATA_DIR",
+    "/data/fross-training" if TRAINING_SERVICE_MODE else str(Path(tempfile.gettempdir()) / "fross-training"),
+))
+TRAINING_DATA_DIR = _default_training_dir
 TRAINING_OUTPUT_PATH = Path(os.environ.get(
-    "FROSS_TRAINING_OUTPUT_PATH", str(Path(tempfile.gettempdir()) / "fross-training-output-8k-64m.pt")
+    "FROSS_TRAINING_OUTPUT_PATH", str(TRAINING_DATA_DIR / "fross-training-output-8k-64m.pt")
+))
+TRAINING_STATE_PATH = Path(os.environ.get(
+    "FROSS_TRAINING_STATE_PATH", str(TRAINING_DATA_DIR / "training-status.json")
 ))
 INFERENCE_PACKAGE_PATH = TRAINING_OUTPUT_PATH.with_name("fross-transformer-1.6-64m-int8.pt")
 TRAINING_LOCK = threading.Lock()
@@ -801,19 +811,112 @@ TRAINING_STATUS: dict[str, Any] = {
     "trainLoss": None, "validationLoss": None, "logs": [],
     "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
 }
+
+
+def _training_storage_issue() -> str | None:
+    if not TRAINING_SERVICE_MODE:
+        return "Обучение отключено в сервисе чата. Используй отдельный FROSS training service."
+    if not TRAINING_STORAGE_CONFIRMED:
+        return "Не подтверждено постоянное хранилище Hostless. Подключи Volume к /data и установи FROSS_TRAINING_STORAGE_CONFIRMED=1."
+    try:
+        root = TRAINING_DATA_DIR.resolve()
+        output = TRAINING_OUTPUT_PATH.resolve()
+        if os.path.commonpath((str(root), str(output))) != str(root):
+            return "FROSS_TRAINING_OUTPUT_PATH должен находиться внутри FROSS_TRAINING_DATA_DIR."
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / ".fross-storage-check"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+    except (OSError, ValueError) as exc:
+        return "Постоянное хранилище обучения недоступно: " + type(exc).__name__ + "."
+    return None
+
+
+def _persist_training_status() -> None:
+    if not TRAINING_SERVICE_MODE:
+        return
+    try:
+        with TRAINING_LOCK:
+            payload = dict(TRAINING_STATUS)
+            payload["logs"] = list(TRAINING_STATUS.get("logs", []))
+        TRAINING_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary = TRAINING_STATE_PATH.with_name(TRAINING_STATE_PATH.name + ".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(temporary, TRAINING_STATE_PATH)
+    except OSError as exc:
+        print("FROSS training: status persistence failed (" + type(exc).__name__ + ").", flush=True)
+
+
+def _restore_training_status() -> None:
+    if not TRAINING_SERVICE_MODE:
+        return
+    try:
+        if TRAINING_STATE_PATH.is_file():
+            saved = json.loads(TRAINING_STATE_PATH.read_text(encoding="utf-8"))
+            if isinstance(saved, dict):
+                with TRAINING_LOCK:
+                    for key in (
+                        "state", "phase", "step", "targetSteps", "preparationStep",
+                        "preparationTotal", "vocabSize", "trainLoss", "validationLoss",
+                        "metrics", "error", "cancelRequested", "startedAt", "finishedAt",
+                        "phaseStartedAt", "logs",
+                    ):
+                        if key in saved:
+                            TRAINING_STATUS[key] = saved[key]
+        if TRAINING_OUTPUT_PATH.is_file():
+            import torch
+            checkpoint = torch.load(TRAINING_OUTPUT_PATH, map_location="cpu", weights_only=True)
+            metrics = checkpoint.get("metrics", {}) if isinstance(checkpoint, dict) else {}
+            if isinstance(metrics, dict):
+                saved_steps = int(metrics.get("training_steps", 0))
+                TRAINING_STATUS.update({
+                    "step": saved_steps,
+                    "targetSteps": max(25000, int(TRAINING_STATUS.get("targetSteps", 25000))),
+                    "trainLoss": metrics.get("train_loss"),
+                    "validationLoss": metrics.get("validation_loss"),
+                    "metrics": metrics,
+                    "checkpointAvailable": True,
+                })
+        active = TRAINING_STATUS.get("state") in {"starting", "running", "cancelling"}
+        if active:
+            TRAINING_STATUS.update({
+                "state": "failed",
+                "phase": "failed",
+                "error": "Сервис был перезапущен. Продолжи с последней автоматически сохранённой контрольной точки.",
+                "cancelRequested": False,
+                "finishedAt": datetime.now(timezone.utc).isoformat(),
+            })
+            TRAINING_STATUS.setdefault("logs", []).append(
+                "[startup] Обнаружен перезапуск сервиса; checkpoint сохранён, обучение можно продолжить."
+            )
+        elif TRAINING_OUTPUT_PATH.is_file() and TRAINING_STATUS.get("state") == "idle":
+            TRAINING_STATUS.update({
+                "state": "failed",
+                "phase": "failed",
+                "error": "Найдена сохранённая контрольная точка. Выбери цель больше текущего числа шагов, чтобы продолжить.",
+            })
+        TRAINING_STATUS["checkpointAvailable"] = TRAINING_OUTPUT_PATH.is_file()
+    except Exception as exc:
+        print("FROSS training: previous status could not be restored (" + type(exc).__name__ + ").", flush=True)
+    _persist_training_status()
+
+
 def _training_log(message: str) -> None:
     stamp = datetime.now(timezone.utc).astimezone().strftime("%H:%M:%S")
     with TRAINING_LOCK:
         logs = TRAINING_STATUS.setdefault("logs", [])
         logs.append("[" + stamp + "] " + str(message)[:300])
         del logs[:-120]
+    _persist_training_status()
 def _training_progress(progress: dict[str, Any]) -> None:
     """Update training status without acquiring the log lock recursively."""
     phase = str(progress.get("phase", "training"))
     log_message: str | None = None
     now = datetime.now(timezone.utc).isoformat()
+    should_persist = False
     with TRAINING_LOCK:
         previous_phase = str(TRAINING_STATUS.get("phase", ""))
+        should_persist = previous_phase != phase
         TRAINING_STATUS["phase"] = phase
         if previous_phase != phase:
             TRAINING_STATUS["phaseStartedAt"] = now
@@ -844,6 +947,8 @@ def _training_progress(progress: dict[str, Any]) -> None:
             TRAINING_STATUS["vocabSize"] = vocab_size
         else:
             TRAINING_STATUS["step"] = step
+            if phase == "training" and step > 0 and step % 100 == 0:
+                should_persist = True
             TRAINING_STATUS["trainLoss"] = progress.get("train_loss")
             TRAINING_STATUS["validationLoss"] = progress.get("validation_loss")
             TRAINING_STATUS["bestCheckpointStep"] = int(progress.get("best_checkpoint_step", 0))
@@ -877,6 +982,8 @@ def _training_progress(progress: dict[str, Any]) -> None:
                 "Подготовка BPE-словаря (совместимость): " + str(preparation_step) + "/" + str(preparation_total)
                 + " объединений · размер словаря " + str(vocab_size) + "."
             )
+    elif should_persist:
+        _persist_training_status()
 
 
 def _prepare_website_training_corpus() -> Path:
@@ -1053,7 +1160,7 @@ def _run_training(target_steps: int, schedule_steps: int, fresh_run: bool = Fals
             schedule_steps=schedule_steps,
             progress_callback=_training_progress,
             stop_callback=TRAINING_CANCEL.is_set,
-            force_cpu=False,
+            force_cpu=os.environ.get("FROSS_DEVICE", "cpu").strip().lower() == "cpu",
         )
         cancelled = bool(result.get("cancelled"))
         with TRAINING_LOCK:
@@ -1125,6 +1232,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
         if path == "/admin/training/status":
+            if not TRAINING_SERVICE_MODE:
+                respond(self, 503, {"ok": False, "error": "Training routes are disabled on the inference service. Configure a separate training-only Hostless app."})
+                return
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -1137,6 +1247,9 @@ class Handler(BaseHTTPRequestHandler):
             _send_html(self, MODEL_UPLOAD_HTML)
             return
         if path == "/admin/training/model":
+            if not TRAINING_SERVICE_MODE:
+                respond(self, 503, {"ok": False, "error": "Model export is available only from the separate training service."})
+                return
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -1211,6 +1324,8 @@ class Handler(BaseHTTPRequestHandler):
             "inferenceBackend": "cpp-onnx" if NATIVE_RUNTIME is not None else "python-torch",
             "cppRuntimeLoaded": NATIVE_RUNTIME is not None,
             "cppRuntimeStatus": CPP_RUNTIME_STATUS,
+            "trainingServiceMode": TRAINING_SERVICE_MODE,
+            "trainingStorageReady": _training_storage_issue() is None if TRAINING_SERVICE_MODE else False,
         }
         if path == "/chat":
             health_data["requestInfo"] = {
@@ -1238,6 +1353,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
         if path == "/admin/training/cancel":
+            if not TRAINING_SERVICE_MODE:
+                respond(self, 503, {"ok": False, "error": "Training is disabled on the inference service."})
+                return
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -1255,6 +1373,13 @@ class Handler(BaseHTTPRequestHandler):
             respond(self, 202, {"ok": True, "state": "cancelling"})
             return
         if path == "/admin/training/start":
+            if not TRAINING_SERVICE_MODE:
+                respond(self, 503, {"ok": False, "error": "Training is disabled on the inference service. Configure a separate training-only Hostless app."})
+                return
+            storage_issue = _training_storage_issue()
+            if storage_issue:
+                respond(self, 503, {"ok": False, "error": storage_issue})
+                return
             if not SERVICE_TOKEN:
                 respond(self, 503, {"ok": False, "error": "Service token is not configured."})
                 return
@@ -1502,9 +1627,21 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
     http_server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print("FROSS Python Brain: HTTP listener is bound; model will load in background.", flush=True)
-    threading.Thread(
-        target=_load_startup_model_background,
-        name="fross-model-bootstrap",
-        daemon=True,
-    ).start()
+    if TRAINING_SERVICE_MODE:
+        storage_issue = _training_storage_issue()
+        if storage_issue:
+            print("FROSS training startup: " + storage_issue, flush=True)
+        else:
+            _restore_training_status()
+        print(
+            "FROSS training-only service: inference model loading is disabled; checkpoint path="
+            + str(TRAINING_OUTPUT_PATH) + ".",
+            flush=True,
+        )
+    else:
+        threading.Thread(
+            target=_load_startup_model_background,
+            name="fross-model-bootstrap",
+            daemon=True,
+        ).start()
     http_server.serve_forever()
