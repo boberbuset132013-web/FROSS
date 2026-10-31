@@ -30,7 +30,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
 </section>
 <main id="dashboard" class="grid hidden">
   <section class="card">
-    <h2>Состояние обучения</h2><p class="sub">Процесс выполняется на Python-сервере, а не в браузере.</p>
+    <h2>Состояние обучения</h2><p class="sub">Обучение выполняется в отдельном Python-сервисе и не занимает ресурсы сервера чата.</p>
     <div class="status-row"><span id="state" class="status"><i class="dot"></i><span>Проверка сервера</span></span><span id="percent" class="percent">0%</span></div>
     <div class="progress"><div id="bar" class="bar"></div></div>
     <div id="phaseDetail" class="notice" aria-live="polite">Шаги Transformer начнутся после подготовки корпуса, словаря и модели.</div>
@@ -56,7 +56,7 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;curs
   <section class="card">
     <h2>Журнал обучения</h2><p class="sub">Последние события и измерения функции потерь.</p>
     <div id="logs" class="log"><span class="empty">Ожидание данных с сервера…</span></div>
-    <div class="notice">Не закрывай сервер и не перезапускай Hostless во время обучения. Закрыть эту страницу можно — запущенный поток останется на сервере, пока сам сервис работает.</div>
+    <div class="notice">Эту страницу можно закрыть. Training Service сохраняет возобновляемую контрольную точку каждые 500 шагов в постоянный Hostless Volume. Если сервис перезапустится, продолжи со следующей целью — прогресс после последнего сохранения восстановится.</div>
   </section>
 </main>
 <section class="card" style="margin-top:17px">
