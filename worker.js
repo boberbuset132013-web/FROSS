@@ -49,6 +49,7 @@ export default {
     // 3. FROSS API: JSON-ошибки вместо HTML-страниц Cloudflare.
     if (path === "/api/health") return frossApiGuard(path, request, async () => {
       const pythonBrainHealth = await frossProbePythonHealth(frossPythonBrainUrl(env), frossBrainServiceToken(env));
+      const trainingServiceHealth = await frossProbeTrainingService(frossTrainingServiceUrl(env));
       return frossJson({
         ok: true,
         worker: "FROSS",
@@ -58,6 +59,7 @@ export default {
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
         trainingServiceConfigured: frossTrainingServiceUrl(env).length > 0,
+        trainingServiceHealth,
         pythonBrainHealth,
         autoStudyConfigured: frossGithubToken(env).length >= 20,
         maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
@@ -1730,6 +1732,67 @@ async function frossFetchWithTimeout(url, init, timeoutMs) {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function frossProbeTrainingService(endpoint, timeoutMs = 6000) {
+  if (typeof endpoint !== "string" || !endpoint.trim()) {
+    return { configured: false, reachable: false, ready: false, error: "FROSS_TRAINING_SERVICE_URL is not configured." };
+  }
+  let healthUrl;
+  try {
+    healthUrl = new URL(endpoint);
+    if (healthUrl.protocol !== "https:" || healthUrl.username || healthUrl.password || healthUrl.hash) {
+      return { configured: true, reachable: false, ready: false, error: "Training service URL must be HTTPS without credentials." };
+    }
+    const basePath = healthUrl.pathname.replace(/\\/+$/, "").replace(/\\/chat$/, "");
+    healthUrl.pathname = (basePath || "") + "/health";
+    healthUrl.search = "";
+  } catch {
+    return { configured: true, reachable: false, ready: false, error: "Invalid training service URL." };
+  }
+  try {
+    const response = await frossFetchWithTimeout(healthUrl.toString(), {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    }, timeoutMs);
+    const contentType = response.headers.get("content-type") || "not provided";
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return {
+        configured: true, reachable: false, ready: false,
+        httpStatus: response.status, contentType,
+        error: response.status === 404
+          ? "Training service returned 404. Check FROSS_TRAINING_SERVICE_URL: it must be the base URL of the Python Hostless app, not the website or Worker URL."
+          : "Training service health check returned HTTP " + response.status + "."
+      };
+    }
+    if (!contentType.toLowerCase().includes("application/json")) {
+      await response.body?.cancel().catch(() => {});
+      return {
+        configured: true, reachable: false, ready: false,
+        httpStatus: response.status, contentType,
+        error: "Training service /health returned non-JSON. The configured URL may point to a web page instead of the Python app."
+      };
+    }
+    const data = await response.json();
+    const trainingServiceMode = data?.trainingServiceMode === true;
+    const trainingStorageReady = data?.trainingStorageReady === true;
+    const ready = data?.ok === true && trainingServiceMode && trainingStorageReady;
+    return {
+      configured: true, reachable: true, ready,
+      httpStatus: response.status, contentType,
+      trainingServiceMode, trainingStorageReady,
+      error: ready ? null : !trainingServiceMode
+        ? "The URL responds, but this app is not running in training-service mode."
+        : "Training service is online, but its persistent storage is not ready."
+    };
+  } catch (error) {
+    return {
+      configured: true, reachable: false, ready: false,
+      error: error?.name === "AbortError" ? "Training service health check timed out." : "Training service is unreachable."
+    };
   }
 }
 
