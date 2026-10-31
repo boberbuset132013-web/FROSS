@@ -1745,7 +1745,7 @@ async function frossProbeTrainingService(endpoint, timeoutMs = 6000) {
     if (healthUrl.protocol !== "https:" || healthUrl.username || healthUrl.password || healthUrl.hash) {
       return { configured: true, reachable: false, ready: false, error: "Training service URL must be HTTPS without credentials." };
     }
-    const basePath = healthUrl.pathname.replace(/\\/+$/, "").replace(/\\/chat$/, "");
+    const basePath = healthUrl.pathname.replace(/\/+$/, "").replace(/\/chat$/, "");
     healthUrl.pathname = (basePath || "") + "/health";
     healthUrl.search = "";
   } catch {
