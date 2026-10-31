@@ -335,11 +335,11 @@ class TransformerTests(unittest.TestCase):
                 "dropout": 0.0,
             }
             with patch.dict(transformer.DEFAULT_CONFIG, tiny_config, clear=True):
-                stop_checks = {"count": 0}
+                stop_requested = {"value": False}
 
-                def stop_after_one_step():
-                    stop_checks["count"] += 1
-                    return stop_checks["count"] > 1
+                def report_training_progress(progress):
+                    if progress.get("phase") == "training" and int(progress.get("step", 0)) >= 1:
+                        stop_requested["value"] = True
 
                 first = transformer.train_model(
                     corpus_path,
@@ -350,7 +350,8 @@ class TransformerTests(unittest.TestCase):
                     target_vocab_size=512,
                     seed=91,
                     schedule_steps=2,
-                    stop_callback=stop_after_one_step,
+                    progress_callback=report_training_progress,
+                    stop_callback=lambda: stop_requested["value"],
                     checkpoint_interval_steps=1,
                 )
                 self.assertEqual(first["training_steps"], 1)
