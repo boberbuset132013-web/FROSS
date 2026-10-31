@@ -821,8 +821,11 @@ def _training_storage_issue() -> str | None:
     try:
         root = TRAINING_DATA_DIR.resolve()
         output = TRAINING_OUTPUT_PATH.resolve()
+        status_path = TRAINING_STATE_PATH.resolve()
         if os.path.commonpath((str(root), str(output))) != str(root):
             return "FROSS_TRAINING_OUTPUT_PATH должен находиться внутри FROSS_TRAINING_DATA_DIR."
+        if os.path.commonpath((str(root), str(status_path))) != str(root):
+            return "FROSS_TRAINING_STATE_PATH должен находиться внутри FROSS_TRAINING_DATA_DIR."
         root.mkdir(parents=True, exist_ok=True)
         probe = root / ".fross-storage-check"
         probe.write_text("ok", encoding="utf-8")
@@ -897,6 +900,21 @@ def _restore_training_status() -> None:
             })
         TRAINING_STATUS["checkpointAvailable"] = TRAINING_OUTPUT_PATH.is_file()
     except Exception as exc:
+        message = (
+            "Не удалось восстановить состояние обучения или прочитать checkpoint: "
+            + type(exc).__name__ + ". Проверь файл checkpoint и постоянный диск."
+        )
+        with TRAINING_LOCK:
+            TRAINING_STATUS.update({
+                "state": "failed",
+                "phase": "failed",
+                "error": message,
+                "checkpointAvailable": TRAINING_OUTPUT_PATH.is_file(),
+                "finishedAt": datetime.now(timezone.utc).isoformat(),
+            })
+            logs = TRAINING_STATUS.setdefault("logs", [])
+            logs.append("[startup] " + message)
+            del logs[:-120]
         print("FROSS training: previous status could not be restored (" + type(exc).__name__ + ").", flush=True)
     _persist_training_status()
 
