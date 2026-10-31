@@ -5,7 +5,7 @@
   "slug": "javascript-osnovy-i-tipy-dannykh",
   "topic": "JavaScript: основы и типы данных",
   "createdAt": "2026-10-25T14:40:07.787Z",
-  "updatedAt": "2026-10-30T03:00:20.034Z",
+  "updatedAt": "2026-10-31T03:00:23.480Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. Tutorials References Exercises Certificates Menu Search field &times; See More NEW W3Schools app iOS & Android Start the adventure Sign In Sign Up --> user-anonymous --> --> --> ★ +1 --> My W3Schools --> user-authenticated --> Spaces Upgrade Paid Courses Academy Practice --> user-anonymous - action- W3SCHOOLS TUTORIALS: &times; &larr; All Topics &times; References W3SCHOOLS REFERENCES: &times; HTML Tag reference CSS Reference JavaScript Reference SQL Keyword reference Python Reference Java Reference C Reference C++ Reference Colors Color names PHP Reference HTML DOM Reference MySQL Reference W3 &times; Get Certified W3SCHOOLS CERTIFICATES: &times; HTML CSS JavaScript SQL Python Java C C++ C# PHP React MySQL Excel DSA W3.CSS Bootstrap 3 Bootstrap 4 Bootstrap 5 Node.js TypeScript Django PostgreSQL jQuery Vue NumPy Pandas XML Cyber Security Accessibility AngularJS Git MongoDB R Go Kotlin SA Our easy to follow JavaScript tutorials for beginners will have you coding the basics in no time.",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "sign",
     "css"
   ],
-  "sourceCount": 17,
+  "sourceCount": 19,
   "items": [
     {
       "schemaVersion": 2,
@@ -658,10 +658,10 @@
       "topic": "JavaScript: основы и типы данных",
       "title": "Variables and Datatypes in JavaScript - GeeksforGeeks",
       "url": "https://www.geeksforgeeks.org/javascript/variables-datatypes-javascript/",
-      "snippet": "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. They define how information is declared, stored, and manipulated during execution. Variables: Declared using var, let, and const to store data values. Primitive Data Types: Includes Number, String, Boolean, Null, Undefined, BigInt, and Symbol. Non-Primitive Data Types: Includes Object, Array, and Function used to store complex data. Variables A variable is like a container that holds data that can be reused or updated later in the program. In JavaScript, variables are declared using the keywords var , let , or const . 1. var Keyword The var keyword is used to declare a variable. It has a function-scoped or globally-scoped behaviour. JavaScript var n = 5 ; console . log ( n ); var n = 20 ; // reassigning is allowed console . log ( n ); 2. let Keyword The let keyword is introduced in ES6, has block scope and cannot be re-declared in the same scope. JavaScript let n = 10 ; n = 20 ; // Value can be updated // let n = 15; //can not redeclare console . log ( n ) 3. const Keyword The const keyword declares variables that cannot be reassigned. It's block-scoped as well. JavaScript const n = 100 ; // n = 200; This will throw an error console . log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. Primitive Datatypes Primitive datatypes represent single values and are immutable. 1. Number : Represents numeric values (integers and decimals). let n = 42; let pi = 3.14; 2. String : Represents text enclosed in single or double quotes. let s = \"Hello, World!\"; 3. Boolean : Represents a logical value (true or false). let bool= true; 4. Undefined : A variable that has been declared but not assigned a value. let notAssigned; console.log(notAssigned); 5. Null : Represents an intentional absence of any value. let empty = null; 6. Symbol : Represents unique and immutable values, often used as object keys. let sym = Symbol('unique'); 7. BigInt : Represents integers larger than Number.MAX_SAFE_INTEGER. let bigNumber = 123456789012345678901234567890n; Non-Primitive Datatypes Non-primitive types are objects and can store collections of data or more complex entities. 1. Object : Represents key-value pairs. let obj = { name: \"Amit\", age: 25 }; 2. Array : Represents an ordered list of values. let a = [\"red\", \"green\", \"blue\"]; 3. Function: Represents reusable blocks of code. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console . log ( null === undefined ) Expression : null === undefined Result : false In JavaScript, both null and undefined represent \"empty\" values but are distinct types. null is a special object representing the intentional absence of a value, while undefined signifies that a variable has been declared but not assigned a value. Despite their similar purpose, they",
-      "summary": "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
+      "snippet": "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. They define how information is declared, stored, and manipulated during execution. Variables: Declared using var, let, and const to store data values. Primitive Data Types: Includes Number, String, Boolean, Null, Undefined, BigInt, and Symbol. Non-Primitive Data Types: Includes Object, Array, and Function used to store complex data. Variables A variable is like a container that holds data that can be reused or updated later in the program. In JavaScript, variables are declared using the keywords var , let , or const . 1. var Keyword The var keyword is used to declare a variable. It has a function-scoped or globally-scoped behaviour. JavaScript var n = 5 ; console . log ( n ); var n = 20 ; // reassigning is allowed console . log ( n ); 2. let Keyword The let keyword is introduced in ES6, has block scope and cannot be re-declared in the same scope. JavaScript let n = 10 ; n = 20 ; // Value can be updated // let n = 15; //can not redeclare console . log ( n ) 3. const Keyword The const keyword declares variables that cannot be reassigned. It's block-scoped as well. JavaScript const n = 100 ; // n = 200; This will throw an error console . log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. Primitive Datatypes Primitive datatypes represent single values and are immutable. 1. Number : Represents numeric values (integers and decimals). let n = 42; let pi = 3.14; 2. String : Represents text enclosed in single or double quotes. let s = \"Hello, World!\"; 3. Boolean : Represents a logical value (true or false). let bool= true; 4. Undefined : A variable that has been declared but not assigned a value. let notAssigned; console.log(notAssigned); 5. Null : Represents an intentional absence of any value. let empty = null; 6. Symbol : Represents unique and immutable values, often used as object keys. let sym = Symbol('unique'); 7. BigInt : Represents integers larger than Number.MAX_SAFE_INTEGER. let bigNumber = 123456789012345678901234567890n; Non-Primitive Datatypes Non-primitive types are objects and can store collections of data or more complex entities. 1. Object : Represents key-value pairs. let obj = { name: \"Amit\", age: 25 }; 2. Array : Represents an ordered list of values. let a = [\"red\", \"green\", \"blue\"]; 3. Function: Represents reusable blocks of code. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console . log ( null === undefined ) Expression : null === undefined Result : false In JavaScript, both null and undefined represent \"empty\" values but are distinct types. null is a special object representing the intentional absence of a value, while undefined signifies that a variable has been declared but not assigned a value. Despite their similar purpose,",
+      "summary": "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a progra log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
       "keyPoints": [
-        "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program.",
+        "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a progra",
         "In JavaScript, variables are declared using the keywords var , let , or const .",
         "log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types.",
         "function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
@@ -783,6 +783,88 @@
       ],
       "source": "article text",
       "score": 0.5
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Is this an insider scam? : r/UPS - Reddit",
+      "url": "https://www.reddit.com/r/UPS/comments/14mlvii/is_this_an_insider_scam/",
+      "snippet": "The tracking number on the fake letter is correct so they must have had that somehow. The CVS store manager admitted that they should never have given the package to someone with only that letter but here’s my question: is this a scam being perpetuated by someone inside UPS to divert high value packages?",
+      "summary": "The tracking number on the fake letter is correct so they must have had that somehow. The CVS store manager admitted that they should never have given the package to someone with only that letter but here’s my question: is this a scam being perpetuated by someone inside UPS to divert high value packages?",
+      "keyPoints": [
+        "The tracking number on the fake letter is correct so they must have had that somehow.",
+        "The CVS store manager admitted that they should never have given the package to someone with only that letter but here’s my question: is this a scam being perpetuated by someone inside UPS to divert high value packages?"
+      ],
+      "keywords": [
+        "javascript",
+        "типы",
+        "данных",
+        "is",
+        "this",
+        "scam",
+        "ups",
+        "an",
+        "insider",
+        "reddit",
+        "that",
+        "letter",
+        "they",
+        "have",
+        "to",
+        "someone",
+        "tracking",
+        "number",
+        "on",
+        "fake",
+        "correct",
+        "so",
+        "must",
+        "had"
+      ],
+      "source": "Bing",
+      "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "UPS website no longer shows tracking history : r/UPS - Reddit",
+      "url": "https://www.reddit.com/r/UPS/comments/mw4xve/ups_website_no_longer_shows_tracking_history/",
+      "snippet": "UPS website no longer shows tracking history ORIGINAL POST: It only shows a timeline with four milestones: Label Created, Shipped, On the Way, Delivery; and a ticker on the current milestone. You can use other tracking sites instead to see the traditional city by city package traveling journey.",
+      "summary": "UPS website no longer shows tracking history ORIGINAL POST: It only shows a timeline with four milestones: Label Created, Shipped, On the Way, Delivery; and a ticker on the current milestone. You can use other tracking sites instead to see the traditional city by city package traveling journey.",
+      "keyPoints": [
+        "UPS website no longer shows tracking history ORIGINAL POST: It only shows a timeline with four milestones: Label Created, Shipped, On the Way, Delivery; and a ticker on the current milestone.",
+        "You can use other tracking sites instead to see the traditional city by city package traveling journey."
+      ],
+      "keywords": [
+        "ups",
+        "javascript",
+        "типы",
+        "данных",
+        "shows",
+        "tracking",
+        "website",
+        "no",
+        "longer",
+        "history",
+        "reddit",
+        "on",
+        "city",
+        "original",
+        "post",
+        "it",
+        "only",
+        "timeline",
+        "four",
+        "milestones",
+        "label",
+        "created",
+        "shipped",
+        "way"
+      ],
+      "source": "Bing",
+      "score": 0
     }
   ]
 }
