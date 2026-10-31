@@ -26,6 +26,23 @@ _spec.loader.exec_module(brain)
 
 
 class PythonBrainRouteTests(unittest.TestCase):
+    def test_inference_service_refuses_training_routes(self) -> None:
+        token = "route-test-token"
+        with patch.object(brain, "SERVICE_TOKEN", token), patch.object(brain, "TRAINING_SERVICE_MODE", False):
+            request = urllib.request.Request(
+                self.base_url + "/admin/training/start",
+                data=b'{"steps":25000,"scheduleSteps":100000}',
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
+                method="POST",
+            )
+            try:
+                urllib.request.urlopen(request, timeout=3)
+                status, body = 200, b""
+            except urllib.error.HTTPError as error:
+                status, body = error.code, error.read()
+            self.assertEqual(status, 503)
+            self.assertIn(b"disabled on the inference service", body)
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), brain.Handler)
@@ -72,7 +89,13 @@ class PythonBrainRouteTests(unittest.TestCase):
             headers={"Content-Type": "application/json", "Authorization": "Bearer unused"},
             method="POST",
         )
-        with patch.object(brain, "SERVICE_TOKEN", ""):
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(brain, "TRAINING_SERVICE_MODE", True), \
+             patch.object(brain, "TRAINING_STORAGE_CONFIRMED", True), \
+             patch.object(brain, "TRAINING_DATA_DIR", Path(folder)), \
+             patch.object(brain, "TRAINING_OUTPUT_PATH", Path(folder) / "checkpoint.pt"), \
+             patch.object(brain, "TRAINING_STATE_PATH", Path(folder) / "status.json"), \
+             patch.object(brain, "SERVICE_TOKEN", ""):
             try:
                 urllib.request.urlopen(request, timeout=3)
                 status = 200
@@ -101,7 +124,11 @@ class PythonBrainRouteTests(unittest.TestCase):
 
             try:
                 with patch.object(brain, "SERVICE_TOKEN", "route-test-token"), \
+                     patch.object(brain, "TRAINING_SERVICE_MODE", True), \
+                     patch.object(brain, "TRAINING_STORAGE_CONFIRMED", True), \
+                     patch.object(brain, "TRAINING_DATA_DIR", Path(folder)), \
                      patch.object(brain, "TRAINING_OUTPUT_PATH", legacy_checkpoint), \
+                     patch.object(brain, "TRAINING_STATE_PATH", Path(folder) / "status.json"), \
                      patch("torch.load", return_value={"format_version": 1, "metrics": {}}), \
                      patch.object(brain.transformer, "train_model", side_effect=fake_train_model):
                     request = urllib.request.Request(
