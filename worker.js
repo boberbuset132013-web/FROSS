@@ -57,6 +57,7 @@ export default {
         build: "fross-hybrid-cpp-2026-10-26",
         githubKnowledgeConfigured: frossGithubToken(env).length >= 20,
         pythonBrainConfigured: frossBrainServiceConfigured(env),
+        trainingServiceConfigured: frossTrainingServiceUrl(env).length > 0,
         pythonBrainHealth,
         autoStudyConfigured: frossGithubToken(env).length >= 20,
         maxUserMessageChars: FROSS_MAX_MESSAGE_LENGTH,
@@ -1644,6 +1645,12 @@ function frossPythonBrainUrl(env) {
   return configured || FROSS_DEFAULT_PYTHON_BRAIN_URL;
 }
 
+function frossTrainingServiceUrl(env) {
+  return typeof env?.FROSS_TRAINING_SERVICE_URL === "string"
+    ? env.FROSS_TRAINING_SERVICE_URL.trim()
+    : "";
+}
+
 function frossBrainServiceToken(env) {
   return typeof env?.FROSS_BRAIN_SERVICE_TOKEN === "string" ? env.FROSS_BRAIN_SERVICE_TOKEN.trim() : "";
 }
@@ -1842,9 +1849,16 @@ async function handleFrossTransformerTraining(request, env, action) {
   if (serviceToken.length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
     return frossJson({ ok: false, error: "Секрет FROSS_BRAIN_SERVICE_TOKEN не настроен." }, 503, request);
   }
+  const trainingEndpoint = frossTrainingServiceUrl(env);
+  if (!trainingEndpoint) {
+    return frossJson({
+      ok: false,
+      error: "Не настроен FROSS_TRAINING_SERVICE_URL. Обучение перенесено в отдельный Hostless-сервис; настрой его адрес и постоянный диск перед запуском."
+    }, 503, request);
+  }
   let target;
   try {
-    const configured = new URL(frossPythonBrainUrl(env));
+    const configured = new URL(trainingEndpoint);
     if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
       return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
     }
@@ -1917,10 +1931,17 @@ async function handleFrossTransformerModelDownload(request, env) {
   if (serviceToken.length < FROSS_MIN_BRAIN_TOKEN_LENGTH) {
     return frossJson({ ok: false, error: "Секрет FROSS_BRAIN_SERVICE_TOKEN не настроен." }, 503, request);
   }
+  const trainingEndpoint = frossTrainingServiceUrl(env);
+  if (!trainingEndpoint) {
+    return frossJson({
+      ok: false,
+      error: "Не настроен FROSS_TRAINING_SERVICE_URL. Скачивание checkpoint доступно после подключения отдельного training-сервиса."
+    }, 503, request);
+  }
 
   let target;
   try {
-    const configured = new URL(frossPythonBrainUrl(env));
+    const configured = new URL(trainingEndpoint);
     if (configured.protocol !== "https:" || configured.username || configured.password || configured.hash) {
       return frossJson({ ok: false, error: "Адрес Python brain должен использовать HTTPS." }, 503, request);
     }
