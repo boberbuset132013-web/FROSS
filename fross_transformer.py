@@ -1126,7 +1126,7 @@ def train_model(
                 f"best validation loss {shown_val}",
                 flush=True,
             )
-        if completed_steps % checkpoint_interval == 0:
+        if completed_steps % checkpoint_interval == 0 and completed_steps < steps:
             current_val = best_validation_loss if math.isfinite(best_validation_loss) else None
             current_train = best_train_loss if math.isfinite(best_train_loss) else last_loss
             _save_checkpoint(False, current_val, current_train)
