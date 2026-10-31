@@ -60,7 +60,7 @@ class PythonBrainRouteTests(unittest.TestCase):
             except urllib.error.HTTPError as error:
                 status, body = error.code, error.read()
             self.assertEqual(status, 503)
-            self.assertIn(b"persistent", body.lower())
+            self.assertIn(b"FROSS_TRAINING_STORAGE_CONFIRMED", body)
 
     @classmethod
     def setUpClass(cls) -> None:
