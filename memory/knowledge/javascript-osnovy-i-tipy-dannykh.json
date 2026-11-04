@@ -5,7 +5,7 @@
   "slug": "javascript-osnovy-i-tipy-dannykh",
   "topic": "JavaScript: основы и типы данных",
   "createdAt": "2026-10-25T14:40:07.787Z",
-  "updatedAt": "2026-11-03T03:00:22.368Z",
+  "updatedAt": "2026-11-04T03:00:22.737Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. Tutorials References Exercises Certificates Menu Search field &times; See More NEW W3Schools app iOS & Android Start the adventure Sign In Sign Up --> user-anonymous --> --> --> ★ +1 --> My W3Schools --> user-authenticated --> Spaces Upgrade Paid Courses Academy Practice --> user-anonymous - action- W3SCHOOLS TUTORIALS: &times; &larr; All Topics &times; References W3SCHOOLS REFERENCES: &times; HTML Tag reference CSS Reference JavaScript Reference SQL Keyword reference Python Reference Java Reference C Reference C++ Reference Colors Color names PHP Reference HTML DOM Reference MySQL Reference W3 &times; Get Certified W3SCHOOLS CERTIFICATES: &times; HTML CSS JavaScript SQL Python Java C C++ C# PHP React MySQL Excel DSA W3.CSS Bootstrap 3 Bootstrap 4 Bootstrap 5 Node.js TypeScript Django PostgreSQL jQuery Vue NumPy Pandas XML Cyber Security Accessibility AngularJS Git MongoDB R Go Kotlin SA Our easy to follow JavaScript tutorials for beginners will have you coding the basics in no time.",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "sign",
     "css"
   ],
-  "sourceCount": 23,
+  "sourceCount": 25,
   "items": [
     {
       "schemaVersion": 2,
@@ -658,10 +658,10 @@
       "topic": "JavaScript: основы и типы данных",
       "title": "Variables and Datatypes in JavaScript - GeeksforGeeks",
       "url": "https://www.geeksforgeeks.org/javascript/variables-datatypes-javascript/",
-      "snippet": "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. They define how information is declared, stored, and manipulated during execution. Variables: Declared using var, let, and const to store data values. Primitive Data Types: Includes Number, String, Boolean, Null, Undefined, BigInt, and Symbol. Non-Primitive Data Types: Includes Object, Array, and Function used to store complex data. Variables A variable is like a container that holds data that can be reused or updated later in the program. In JavaScript, variables are declared using the keywords var , let , or const . 1. var Keyword The var keyword is used to declare a variable. It has a function-scoped or globally-scoped behaviour. JavaScript var n = 5 ; console . log ( n ); var n = 20 ; // reassigning is allowed console . log ( n ); 2. let Keyword The let keyword is introduced in ES6, has block scope and cannot be re-declared in the same scope. JavaScript let n = 10 ; n = 20 ; // Value can be updated // let n = 15; //can not redeclare console . log ( n ) 3. const Keyword The const keyword declares variables that cannot be reassigned. It's block-scoped as well. JavaScript const n = 100 ; // n = 200; This will throw an error console . log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. Primitive Datatypes Primitive datatypes represent single values and are immutable. 1. Number : Represents numeric values (integers and decimals). let n = 42; let pi = 3.14; 2. String : Represents text enclosed in single or double quotes. let s = \"Hello, World!\"; 3. Boolean : Represents a logical value (true or false). let bool= true; 4. Undefined : A variable that has been declared but not assigned a value. let notAssigned; console.log(notAssigned); 5. Null : Represents an intentional absence of any value. let empty = null; 6. Symbol : Represents unique and immutable values, often used as object keys. let sym = Symbol('unique'); 7. BigInt : Represents integers larger than Number.MAX_SAFE_INTEGER. let bigNumber = 123456789012345678901234567890n; Non-Primitive Datatypes Non-primitive types are objects and can store collections of data or more complex entities. 1. Object : Represents key-value pairs. let obj = { name: \"Amit\", age: 25 }; 2. Array : Represents an ordered list of values. let a = [\"red\", \"green\", \"blue\"]; 3. Function: Represents reusable blocks of code. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console . log ( null === undefined ) Expression : null === undefined Result : false In JavaScript, both null and undefined represent \"empty\" values but are distinct types. null is a special object representing the intentional absence of a value, while undefined signifies that a variable has been declared but not assigned a value. Despite their similar purpose,",
-      "summary": "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a progra log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
+      "snippet": "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. They define how information is declared, stored, and manipulated during execution. Variables: Declared using var, let, and const to store data values. Primitive Data Types: Includes Number, String, Boolean, Null, Undefined, BigInt, and Symbol. Non-Primitive Data Types: Includes Object, Array, and Function used to store complex data. Variables A variable is like a container that holds data that can be reused or updated later in the program. In JavaScript, variables are declared using the keywords var , let , or const . 1. var Keyword The var keyword is used to declare a variable. It has a function-scoped or globally-scoped behaviour. JavaScript var n = 5 ; console . log ( n ); var n = 20 ; // reassigning is allowed console . log ( n ); 2. let Keyword The let keyword is introduced in ES6, has block scope and cannot be re-declared in the same scope. JavaScript let n = 10 ; n = 20 ; // Value can be updated // let n = 15; //can not redeclare console . log ( n ) 3. const Keyword The const keyword declares variables that cannot be reassigned. It's block-scoped as well. JavaScript const n = 100 ; // n = 200; This will throw an error console . log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. Primitive Datatypes Primitive datatypes represent single values and are immutable. 1. Number : Represents numeric values (integers and decimals). let n = 42; let pi = 3.14; 2. String : Represents text enclosed in single or double quotes. let s = \"Hello, World!\"; 3. Boolean : Represents a logical value (true or false). let bool= true; 4. Undefined : A variable that has been declared but not assigned a value. let notAssigned; console.log(notAssigned); 5. Null : Represents an intentional absence of any value. let empty = null; 6. Symbol : Represents unique and immutable values, often used as object keys. let sym = Symbol('unique'); 7. BigInt : Represents integers larger than Number.MAX_SAFE_INTEGER. let bigNumber = 123456789012345678901234567890n; Non-Primitive Datatypes Non-primitive types are objects and can store collections of data or more complex entities. 1. Object : Represents key-value pairs. let obj = { name: \"Amit\", age: 25 }; 2. Array : Represents an ordered list of values. let a = [\"red\", \"green\", \"blue\"]; 3. Function: Represents reusable blocks of code. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console . log ( null === undefined ) Expression : null === undefined Result : false In JavaScript, both null and undefined represent \"empty\" values but are distinct types. null is a special object representing the intentional absence of a value, while undefined signifies that a variable has been declared but not assigned a value. Despite their similar purpose, they",
+      "summary": "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program. log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types. function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
       "keyPoints": [
-        "Courses Sale Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a progra",
+        "Courses Tutorials Interview Prep JS Tutorial Web Tutorial A to Z Guide Projects OOP DOM Set Map Math Number Boolean Exercise Variables and Datatypes in JavaScript Last Updated : 5 May, 2026 Variables and Data Types in JavaScript are fundamental concepts used to store and manage data in a program.",
         "In JavaScript, variables are declared using the keywords var , let , or const .",
         "log ( n ) For more details read the article - JavaScript Variables Data Types JavaScript supports various datatypes, which can be broadly categorized into primitive and non-primitive types.",
         "function fun() { console.log(\"GeeksforGeeks\"); } Working with Variables and Data Types in JavaScript JavaScript console .",
@@ -1017,6 +1017,84 @@
       ],
       "source": "Bing",
       "score": 0.125
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Microsoft - Official Home Page",
+      "url": "https://www.microsoft.com/en-us/",
+      "snippet": "Get extended free returns and price protection on gifts through Jan 31, 2027. Shop deals Hi there, welcome to Microsoft Personal Find what you need faster with AI-powered suggestions \" size=\"l\" alignment=\"center\" theme=\"day\"> Find what you need faster with AI-powered suggestions Ask a question Help me choose a PC Microsoft 365 tips Sign in to my account Surface Laptop, 13.8-inch (8th Edition) Turn holiday inspiration into finished work with raw power and portability, powered by Snapdragon X2® processors. Plus, get up to $500 cash back with a qualifying trade-in. * $ • • • • • • Read more Read less Shop now What will you do with all this power? Meet the most advanced Windows laptops ever. Read more Read less Learn more Surface Laptop Ultra The most powerful Surface Laptop ever, powered by all-new NVIDIA silicon. Plus, trade in your MacBook Pro and get up to $1,000 cash back. ** New Read more Read less Shop now Go further with Copilot With Microsoft 365, get productivity apps with Copilot, advanced AI features, and cloud storage all in one plan. Read more Read less Shop Microsoft 365 XBOX Wireless Controller Stay on target with textured triggers and bumpers, a hybrid D-pad, customizable button mapping, and more. Read more Read less Shop now XBOX Game Pass Play hundreds of games from every genre—on XBOX console, PC, and more. Read more Read less Join now XBOX Series S Next-gen performance in the smallest XBOX ever Read more Read less Shop now Your perfect companion Work smarter with Surface Mouse (2nd Edition)—precision feedback, seamless device switching, and a customizable action button. New Surface Mouse Read more Read less Shop now Secondary Nav Shop Surface Shop Microsoft 365 Shop XBOX Find your next PC Shop accessories Shop for your business on select Surface Pro, 13-inch (12th Edition)\" size=\"s\" slot=\"card-banner__content-body\"> $ • • • • • • on select Surface Pro, 13-inch (12th Edition) Make spirits bright with a Surface that delivers all the power of a laptop in a thin, light tablet powered by Snapdragon® X2 processors. Shop now Business Empower your business decisions with AI-driven guidance \" size=\"l\" alignment=\"center\" theme=\"day\"> Empower your business decisions with AI-driven guidance Ask a question Learn about Azure Find AI solutions Sign in to my account New Surface Laptop Ultra for Business Meet Surface Laptop Ultra for Business, powered by all-new NVIDIA silicon. Plus, trade in your MacBook Pro and get up to $1,000 cash back. * New Read more Read less Shop now Microsoft Ignite is almost here On 11/17, join us for four days of learning, networking, hands-on experiences, and valuable connections you won't get anywhere else. Read more Read less Register now Azure. Limitless innovation. Explore the latest AI-ready databases designed for modern workloads with flexibility, enterprise performance, and built-in scale. Read more Read less Get started with Azure Surface RTX Spark Dev Box Small enough to sit on your desktop. Powerful enough to meet the needs of frontier developers. New Read more Read less Learn more Windows 11 Pro Achieve more with less time and effort. Enhance every workstyle with business AI and features to get organize",
+      "summary": "Shop deals Hi there, welcome to Microsoft Personal Find what you need faster with AI-powered suggestions \" size=\"l\" alignment=\"center\" theme=\"day\"> Find what you need faster with AI-powered suggestions Ask a question Help me choose a PC Microsoft 365 tips Sign in to my account Surface Laptop, 13.8-i New Surface Mouse Read more Read less Shop now Secondary Nav Shop Surface Shop Microsoft 365 Shop XBOX Find your next PC Shop accessories Shop for your business on select Surface Pro, 13-inch (12th Edition)\" size=\"s\" slot=\"card-banner__content-body\"> $ New Read more Read less Shop now Microsoft Ignite is almost here On 11/17, join us for four days of learning, networking, hands-on experiences, and valuable connections you won't get anywhere else.",
+      "keyPoints": [
+        "Shop deals Hi there, welcome to Microsoft Personal Find what you need faster with AI-powered suggestions \" size=\"l\" alignment=\"center\" theme=\"day\"> Find what you need faster with AI-powered suggestions Ask a question Help me choose a PC Microsoft 365 tips Sign in to my account Surface Laptop, 13.8-i",
+        "New Read more Read less Shop now Go further with Copilot With Microsoft 365, get productivity apps with Copilot, advanced AI features, and cloud storage all in one plan.",
+        "Read more Read less Shop Microsoft 365 XBOX Wireless Controller Stay on target with textured triggers and bumpers, a hybrid D-pad, customizable button mapping, and more.",
+        "New Surface Mouse Read more Read less Shop now Secondary Nav Shop Surface Shop Microsoft 365 Shop XBOX Find your next PC Shop accessories Shop for your business on select Surface Pro, 13-inch (12th Edition)\" size=\"s\" slot=\"card-banner__content-body\"> $",
+        "New Read more Read less Shop now Microsoft Ignite is almost here On 11/17, join us for four days of learning, networking, hands-on experiences, and valuable connections you won't get anywhere else."
+      ],
+      "keywords": [
+        "read",
+        "more",
+        "shop",
+        "less",
+        "surface",
+        "microsoft",
+        "to",
+        "in",
+        "now",
+        "get",
+        "on",
+        "ai",
+        "your",
+        "new",
+        "business",
+        "powered",
+        "laptop",
+        "xbox",
+        "javascript",
+        "типы",
+        "данных",
+        "all",
+        "pro",
+        "find"
+      ],
+      "source": "article text",
+      "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Released: October 2026 Exchange Server Security Updates",
+      "url": "https://techcommunity.microsoft.com/blog/exchange/released-october-2026-exchange-server-security-updates/4563014",
+      "snippet": "We have released October 2026 Security Updates for Exchange Server SE. Exchange Server 2019 and 2016 ESU updates only.",
+      "summary": "We have released October 2026 Security Updates for Exchange Server SE. Exchange Server 2019 and 2016 ESU updates only.",
+      "keyPoints": [
+        "We have released October 2026 Security Updates for Exchange Server SE.",
+        "Exchange Server 2019 and 2016 ESU updates only."
+      ],
+      "keywords": [
+        "javascript",
+        "типы",
+        "данных",
+        "exchange",
+        "server",
+        "updates",
+        "released",
+        "october",
+        "2026",
+        "security",
+        "we",
+        "have",
+        "se",
+        "2019",
+        "2016",
+        "esu",
+        "only"
+      ],
+      "source": "Bing",
+      "score": 0
     }
   ]
 }
