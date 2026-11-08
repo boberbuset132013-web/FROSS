@@ -5,7 +5,7 @@
   "slug": "javascript-osnovy-i-tipy-dannykh",
   "topic": "JavaScript: основы и типы данных",
   "createdAt": "2026-10-25T14:40:07.787Z",
-  "updatedAt": "2026-11-07T03:00:18.411Z",
+  "updatedAt": "2026-11-08T03:00:19.715Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters. JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. Tutorials References Exercises Certificates Menu Search field &times; See More NEW W3Schools app iOS & Android Start the adventure Sign In Sign Up --> user-anonymous --> --> --> ★ +1 --> My W3Schools --> user-authenticated --> Spaces Upgrade Paid Courses Academy Practice --> user-anonymous - action- W3SCHOOLS TUTORIALS: &times; &larr; All Topics &times; References W3SCHOOLS REFERENCES: &times; HTML Tag reference CSS Reference JavaScript Reference SQL Keyword reference Python Reference Java Reference C Reference C++ Reference Colors Color names PHP Reference HTML DOM Reference MySQL Reference W3 &times; Get Certified W3SCHOOLS CERTIFICATES: &times; HTML CSS JavaScript SQL Python Java C C++ C# PHP React MySQL Excel DSA W3.CSS Bootstrap 3 Bootstrap 4 Bootstrap 5 Node.js TypeScript Django PostgreSQL jQuery Vue NumPy Pandas XML Cyber Security Accessibility AngularJS Git MongoDB R Go Kotlin SA Our easy to follow JavaScript tutorials for beginners will have you coding the basics in no time.",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "sign",
     "css"
   ],
-  "sourceCount": 30,
+  "sourceCount": 31,
   "items": [
     {
       "schemaVersion": 2,
@@ -372,7 +372,7 @@
       "topic": "JavaScript: основы и типы данных",
       "title": "MDN Web Docs - Wikipedia",
       "url": "https://en.wikipedia.org/wiki/MDN_Web_Docs",
-      "snippet": "Toggle the table of contents MDN Web Docs 19 languages العربية کوردی Čeština Deutsch Español فارسی Français עברית Bahasa Indonesia Italiano 日本語 한국어 Polski Português Română Türkçe Українська Tiếng Việt 中文 Edit links Article Talk English Read Edit View history Tools Tools move to sidebar hide Actions Read Edit View history General What links here Related changes Upload file Permanent link Page information Cite this page Get shortened URL Switch to legacy parser Print/export Download as PDF Printable version In other projects Wikimedia Commons Wikidata item Appearance move to sidebar hide From Wikipedia, the free encyclopedia Documentation center on web technologies \"},\"background\":{\"wt\":\" \"},\"screenshot_size\":{\"wt\":\"\"},\"screenshot_alt\":{\"wt\":\"A website screenshot started in: \\\"Resources for Developers, by Developers Documenting web technologies, including CSS, HTML, and JavaScript, since 2005.\\\"\"},\"caption\":{\"wt\":\"Screenshot of MDN Web Docs, screenshot in May 2025\"},\"website\":{\"wt\":\"{{URL|https://developer.mozilla.org/}}\"},\"areas\":{\"wt\":\"\"},\"offices\":{\"wt\":\"\"},\"commercial\":{\"wt\":\"No\"},\"website_type\":{\"wt\":\"[[Wiki]]\"},\"registration\":{\"wt\":\"Optional, required to edit content\"},\"language\":{\"wt\":\"{{plainlist|\\n*English\\n*Chinese\\n*French\\n*Japanese\\n*Korean\\n*Portuguese\\n*Russian\\n*Spanish}}\"},\"num_users\":{\"wt\":\"\"},\"content_license\":{\"wt\":\"[[CC BY-SA]] v2.5+ et al.\"},\"written_in\":{\"wt\":\"{{flatlist|\\n*[[React (web framework)|React]]\\n*[[Sass (stylesheet language)|SCSS]]\\n*[[React (web framework)#JSX|JSX]]\\n*[[JavaScript]]\\n*[[Python (programming language)|Python]]}}\"},\"owner\":{\"wt\":\"[[Mozilla]]\"},\"creator\":{\"wt\":\" \"},\"editor\":{\"wt\":\" \"},\"launched\":{\"wt\":\"{{Start date and age|df=yes|2005}}\"},\"revenue\":{\"wt\":\"\"},\"current_status\":{\"wt\":\"Online\"},\"native_name\":{\"wt\":\"Mozilla Developer Network\"},\"former_name\":{\"wt\":\"Mozilla Developer Center\"},\"industry\":{\"wt\":\"open-source software development\"}},\"i\":0}}]}'> MDN Web Docs Screenshot of MDN Web Docs, screenshot in May 2025 Native name Mozilla Developer Network Former name Mozilla Developer Center Website type Wiki Available in English Chinese French Japanese Korean Portuguese Russian Spanish Owner Mozilla Industry open-source software development Website developer .mozilla .org Commercial No Registration Optional, required to edit content Launched 2005 ; 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character encodings and language Character encodings Character entity references (named characters) Unicode Language code Document and browser technology Document Object Model Browser Object Model Style sheets CSS Font family Web colors Quirks mode Web storage Rendering engine Client-side scripting and APIs JavaScript WebCL HTMX Web3D technology Web3D WebGL WebGPU WebXR Standardizations W3C Validator WHATWG MDN Web Docs Web platform Comparisons Document markup languages Comparison of browser engi",
+      "snippet": "Toggle the table of contents MDN Web Docs 19 languages العربية کوردی Čeština Deutsch Español فارسی Français עברית Bahasa Indonesia Italiano 日本語 한국어 Polski Português Română Türkçe Українська Tiếng Việt 中文 Edit links Article Talk English Read Edit View history Save Tools Tools move to sidebar hide Actions Read Edit View history Save General What links here Related changes Upload file Permanent link Page information Cite this page Get shortened URL Switch to legacy parser Print/export Download as PDF Printable version In other projects Wikimedia Commons Wikidata item Appearance move to sidebar hide From Wikipedia, the free encyclopedia Documentation center on web technologies \"},\"background\":{\"wt\":\" \"},\"screenshot_size\":{\"wt\":\"\"},\"screenshot_alt\":{\"wt\":\"A website screenshot started in: \\\"Resources for Developers, by Developers Documenting web technologies, including CSS, HTML, and JavaScript, since 2005.\\\"\"},\"caption\":{\"wt\":\"Screenshot of MDN Web Docs, screenshot in May 2025\"},\"website\":{\"wt\":\"{{URL|https://developer.mozilla.org/}}\"},\"areas\":{\"wt\":\"\"},\"offices\":{\"wt\":\"\"},\"commercial\":{\"wt\":\"No\"},\"website_type\":{\"wt\":\"[[Wiki]]\"},\"registration\":{\"wt\":\"Optional, required to edit content\"},\"language\":{\"wt\":\"{{plainlist|\\n*English\\n*Chinese\\n*French\\n*Japanese\\n*Korean\\n*Portuguese\\n*Russian\\n*Spanish}}\"},\"num_users\":{\"wt\":\"\"},\"content_license\":{\"wt\":\"[[CC BY-SA]] v2.5+ et al.\"},\"written_in\":{\"wt\":\"{{flatlist|\\n*[[React (web framework)|React]]\\n*[[Sass (stylesheet language)|SCSS]]\\n*[[React (web framework)#JSX|JSX]]\\n*[[JavaScript]]\\n*[[Python (programming language)|Python]]}}\"},\"owner\":{\"wt\":\"[[Mozilla]]\"},\"creator\":{\"wt\":\" \"},\"editor\":{\"wt\":\" \"},\"launched\":{\"wt\":\"{{Start date and age|df=yes|2005}}\"},\"revenue\":{\"wt\":\"\"},\"current_status\":{\"wt\":\"Online\"},\"native_name\":{\"wt\":\"Mozilla Developer Network\"},\"former_name\":{\"wt\":\"Mozilla Developer Center\"},\"industry\":{\"wt\":\"open-source software development\"}},\"i\":0}}]}'> MDN Web Docs Screenshot of MDN Web Docs, screenshot in May 2025 Native name Mozilla Developer Network Former name Mozilla Developer Center Website type Wiki Available in English Chinese French Japanese Korean Portuguese Russian Spanish Owner Mozilla Industry open-source software development Website developer .mozilla .org Commercial No Registration Optional, required to edit content Launched 2005 ; 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character encodings and language Character encodings Character entity references (named characters) Unicode Language code Document and browser technology Document Object Model Browser Object Model Style sheets CSS Font family Web colors Quirks mode Web storage Rendering engine Client-side scripting and APIs JavaScript WebCL HTMX Web3D technology Web3D WebGL WebGPU WebXR Standardizations W3C Validator WHATWG MDN Web Docs Web platform Comparisons Document markup languages Comparison of br",
       "summary": "21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
       "keyPoints": [
         "21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al.",
@@ -1296,6 +1296,50 @@
       ],
       "source": "Bing",
       "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "GitHub - mdn/content: The official source for MDN Web Docs content ...",
+      "url": "https://github.com/mdn/content",
+      "snippet": "Welcome to MDN Web Docs MDN Web Docs is an open-source, collaborative project that documents web technologies including CSS, HTML, JavaScript, and Web APIs. Alongside detailed reference documentation, we provide extensive learning resources for students and beginners getting started with web development. MDN's mission MDN's mission is to provide a blueprint for a better internet and empower a new generation of developers and content creators to build it. The strength of MDN Web Docs lies in its vast community of active readers and contributors. Since 2005, approximately 45,000 contributors have created the documentation we know and love. Together, contributors have created over 45,000 documents that make up an up-to-date, comprehensive, and free resource for web developers worldwide. In addition to English-language articles, over 35 volunteers lead translation and localization efforts for Chinese, French, Japanese, Korean, Portuguese, Russian, and Spanish. Build the site To set up the site locally, you need to have Node.js installed, which comes bundled with npm . You can check if these are installed by running the following commands: node -v npm -v After you have installed Node.js, you can install the dependencies using npm install and start the local preview: npm i npm start Once started, a live preview is available at http://localhost:5042/ . Contribute to MDN Web Docs You can contribute to MDN Web Docs and be a part of our community through content contributions, engineering, or translation work. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. To find out how to get started, see the CONTRIBUTING.md document in this repository. By participating in and contributing to our projects and discussions, you acknowledge that you have read and agree to our Code of Conduct , which means adhering to Mozilla's Community Participation Guidelines . Get in touch You can communicate with the MDN Web Docs team and community using the communication channels .",
+      "summary": "Welcome to MDN Web Docs MDN Web Docs is an open-source, collaborative project that documents web technologies including CSS, HTML, JavaScript, and Web APIs. Contribute to MDN Web Docs You can contribute to MDN Web Docs and be a part of our community through content contributions, engineering, or translation work. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community.",
+      "keyPoints": [
+        "Welcome to MDN Web Docs MDN Web Docs is an open-source, collaborative project that documents web technologies including CSS, HTML, JavaScript, and Web APIs.",
+        "The strength of MDN Web Docs lies in its vast community of active readers and contributors.",
+        "Contribute to MDN Web Docs You can contribute to MDN Web Docs and be a part of our community through content contributions, engineering, or translation work.",
+        "The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community.",
+        "Get in touch You can communicate with the MDN Web Docs team and community using the communication channels ."
+      ],
+      "keywords": [
+        "mdn",
+        "to",
+        "web",
+        "docs",
+        "content",
+        "you",
+        "javascript",
+        "типы",
+        "данных",
+        "of",
+        "in",
+        "community",
+        "have",
+        "npm",
+        "our",
+        "source",
+        "can",
+        "github",
+        "official",
+        "is",
+        "that",
+        "started",
+        "contributors",
+        "up"
+      ],
+      "source": "article text",
+      "score": 0.225
     }
   ]
 }
