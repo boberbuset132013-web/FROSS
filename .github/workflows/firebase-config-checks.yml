@@ -1,0 +1,63 @@
+name: Firebase and Google auth checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "public/chat.html"
+      - "public/firebase-config.js"
+      - "firestore.rules"
+      - "firebase.json"
+      - ".firebaserc"
+      - "FIRESTORE_RULES.md"
+      - ".github/workflows/firebase-config-checks.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "public/chat.html"
+      - "public/firebase-config.js"
+      - "firestore.rules"
+      - "firebase.json"
+      - ".firebaserc"
+      - "FIRESTORE_RULES.md"
+      - ".github/workflows/firebase-config-checks.yml"
+
+jobs:
+  validate-firebase-chat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate Google-only login and owner-only chat rules
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          chat = Path("public/chat.html").read_text(encoding="utf-8")
+          firebase = Path("public/firebase-config.js").read_text(encoding="utf-8")
+          rules = Path("firestore.rules").read_text(encoding="utf-8")
+          cli = json.loads(Path("firebase.json").read_text(encoding="utf-8"))
+          project = json.loads(Path(".firebaserc").read_text(encoding="utf-8"))
+
+          assert "GoogleAuthProvider" in chat and "signInWithPopup" in chat
+          for removed in (
+              "createUserWithEmailAndPassword", "signInWithEmailAndPassword",
+              "sendPasswordResetEmail", "emailAuthForm", "authEmail",
+              "authPassword", "emailSubmitBtn", "authSwitchBtn",
+              "resetPasswordBtn",
+          ):
+              assert removed not in chat, f"Unexpected email/password auth reference: {removed}"
+
+          assert 'projectId: "fross-ca5d6"' in firebase
+          assert cli.get("firestore", {}).get("rules") == "firestore.rules"
+          assert project.get("projects", {}).get("default") == "fross-ca5d6"
+          assert re.search(r"match /users/\\{userId\\}/chats/\\{chatId\\}", rules)
+          assert "allow get, list: if signedInAs(userId);" in rules
+          assert "request.auth.uid == userId" in rules
+          assert "allow read, write: if true" not in rules
+          print("Google-only login, Firebase project mapping, and owner-only Firestore chat rules passed.")
+          PY
