@@ -76,6 +76,12 @@ export default {
     if (path === "/api/model-upload") return frossApiGuard(path, request, () => handleFrossModelUpload(request, env));
     if (path === "/api/chat") return frossApiGuard(path, request, () => handleFrossApi(request, env));
 
+    // The public product is chat-only. Keep the legacy training source for maintenance/tests,
+    // but never expose its dashboard as a public route.
+    if ((method === "GET" || method === "HEAD") && path === "/training.html") {
+      return Response.redirect(new URL("/chat.html", url).toString(), 302);
+    }
+
     // Статические страницы (включая / и /training.html) обслуживаем через binding ASSETS.
     // API-маршруты обработаны выше; этот fallback предотвращает FROSS route not found для HTML/CSS/JS.
     if ((method === "GET" || method === "HEAD") && env.ASSETS && !path.startsWith("/api/")) {
