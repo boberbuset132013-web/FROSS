@@ -55,7 +55,7 @@ jobs:
           assert 'projectId: "fross-ca5d6"' in firebase
           assert cli.get("firestore", {}).get("rules") == "firestore.rules"
           assert project.get("projects", {}).get("default") == "fross-ca5d6"
-          assert re.search(r"match /users/\\{userId\\}/chats/\\{chatId\\}", rules)
+          assert re.search(r"match /users/\{userId\}/chats/\{chatId\}", rules)
           assert "allow get, list: if signedInAs(userId);" in rules
           assert "request.auth.uid == userId" in rules
           assert "allow read, write: if true" not in rules
