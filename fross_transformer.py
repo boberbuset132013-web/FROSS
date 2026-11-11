@@ -787,6 +787,7 @@ def train_model(
     progress_callback: Any = None,
     stop_callback: Any = None,
     force_cpu: bool = False,
+    checkpoint_interval_steps: int | None = None,
 ) -> dict[str, Any]:
     """Train to a cumulative step target, optionally resuming a saved optimizer state.
 
@@ -987,8 +988,93 @@ def train_model(
 
     last_start = len(train_stream) - actual_block - 1
     evaluation_interval = max(50, min(300, schedule_total // 8))
+    if checkpoint_interval_steps is None:
+        try:
+            checkpoint_interval = max(1, int(os.environ.get("FROSS_CHECKPOINT_INTERVAL_STEPS", "500")))
+        except (TypeError, ValueError):
+            checkpoint_interval = 500
+    else:
+        checkpoint_interval = max(1, int(checkpoint_interval_steps))
     completed_steps = start_step
     was_cancelled = False
+
+    def _cpu_tree(value: Any) -> Any:
+        if torch.is_tensor(value):
+            return value.detach().cpu()
+        if isinstance(value, dict):
+            return {key: _cpu_tree(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_cpu_tree(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(_cpu_tree(item) for item in value)
+        return value
+
+    def _save_checkpoint(cancelled: bool, validation_loss: float | None = None,
+                         reported_train_loss: float | None = None) -> dict[str, Any]:
+        # Snapshot the last weights separately from the best-validation weights so
+        # a resumed run restores the exact optimizer trajectory.
+        last_state_dict = {
+            name: value.detach().cpu().clone()
+            for name, value in model.state_dict().items()
+        }
+        inference_state = best_state if best_state is not None else last_state_dict
+        saved_optimizer_state = _cpu_tree(optimizer.state_dict())
+        metrics = {
+            "train_loss": round(float(reported_train_loss if reported_train_loss is not None else last_loss), 5)
+                if math.isfinite(float(reported_train_loss if reported_train_loss is not None else last_loss)) else None,
+            "validation_loss": round(float(validation_loss), 5)
+                if validation_loss is not None and math.isfinite(float(validation_loss)) else None,
+            "training_device": str(device),
+            "training_examples": len(train_records),
+            "validation_examples": len(validation_records),
+            "training_steps": completed_steps,
+            "steps_this_run": completed_steps - start_step,
+            "cancelled": bool(cancelled),
+            "schedule_steps": schedule_total,
+            "best_checkpoint_step": best_checkpoint_step or completed_steps,
+            "vocab_size": tokenizer.vocab_size,
+            "context_size": int(config["block_size"]),
+            "requested_vocab_size": target_vocab_size if merge_count is None else None,
+            "vocab_target_reached": tokenizer.vocab_size == target_vocab_size if merge_count is None else None,
+            "tokenizer_type": "sentencepiece-unigram",
+            "parameters": sum(p.numel() for p in model.parameters()),
+            "initialization": initialization_metadata,
+            "trained_from_random_weights": initialization_metadata is None,
+        }
+        checkpoint = {
+            "format_version": 3,
+            "version": VERSION,
+            "config": config,
+            "tokenizer": tokenizer.to_dict(),
+            "state_dict": inference_state,
+            "resume_state": {
+                "last_state_dict": last_state_dict,
+                "optimizer_state_dict": saved_optimizer_state,
+                "python_rng_state": random.getstate(),
+                "torch_rng_state": torch.get_rng_state().clone(),
+                "completed_steps": completed_steps,
+                "corpus_sha256": corpus_sha256,
+                "seed": seed,
+                "schedule_steps": schedule_total,
+            },
+            "metrics": metrics,
+        }
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + ".tmp")
+        try:
+            torch.save(checkpoint, temporary)
+            with temporary.open("rb") as saved_file:
+                os.fsync(saved_file.fileno())
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+        print(
+            "checkpoint saved at step " + str(completed_steps) + "/" + str(steps)
+            + (" (cancelled)" if cancelled else ""),
+            flush=True,
+        )
+        return metrics
+
     for step in range(start_step, steps):
         if stop_callback is not None and stop_callback():
             was_cancelled = True
@@ -1040,6 +1126,10 @@ def train_model(
                 f"best validation loss {shown_val}",
                 flush=True,
             )
+        if completed_steps % checkpoint_interval == 0 and completed_steps < steps:
+            current_val = best_validation_loss if math.isfinite(best_validation_loss) else None
+            current_train = best_train_loss if math.isfinite(best_train_loss) else last_loss
+            _save_checkpoint(False, current_val, current_train)
 
     if was_cancelled and completed_steps == start_step == 0:
         prior_metrics_for_cancel = (
@@ -1053,84 +1143,17 @@ def train_model(
             "checkpoint_preserved": target.is_file(),
         }
 
-    # Keep the true last training state separately from the best-validation inference weights.
-    last_state_dict = {
-        name: value.detach().cpu().clone()
-        for name, value in model.state_dict().items()
-    }
-
-    def _cpu_tree(value: Any) -> Any:
-        if torch.is_tensor(value):
-            return value.detach().cpu()
-        if isinstance(value, dict):
-            return {key: _cpu_tree(item) for key, item in value.items()}
-        if isinstance(value, list):
-            return [_cpu_tree(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(_cpu_tree(item) for item in value)
-        return value
-
-    saved_optimizer_state = _cpu_tree(optimizer.state_dict())
-    saved_python_rng_state = random.getstate()
-    saved_torch_rng_state = torch.get_rng_state().clone()
-
     if best_state is not None:
-        model.load_state_dict(best_state, strict=True)
         validation_loss = best_validation_loss
         reported_train_loss = best_train_loss
     else:
         validation_loss = _evaluate(model, validation_stream, actual_block)
         reported_train_loss = last_loss
     model.eval()
-    checkpoint = {
-        "format_version": 3,
-        "version": VERSION,
-        "config": config,
-        "tokenizer": tokenizer.to_dict(),
-        "state_dict": _cpu_tree(model.state_dict()),
-        "resume_state": {
-            "last_state_dict": last_state_dict,
-            "optimizer_state_dict": saved_optimizer_state,
-            "python_rng_state": saved_python_rng_state,
-            "torch_rng_state": saved_torch_rng_state,
-            "completed_steps": completed_steps,
-            "corpus_sha256": corpus_sha256,
-            "seed": seed,
-            "schedule_steps": schedule_total,
-        },
-        "metrics": {
-            "train_loss": round(reported_train_loss, 5) if math.isfinite(reported_train_loss) else None,
-            "validation_loss": round(validation_loss, 5) if math.isfinite(validation_loss) else None,
-            "training_device": str(device),
-            "training_examples": len(train_records),
-            "validation_examples": len(validation_records),
-            "training_steps": completed_steps,
-            "steps_this_run": completed_steps - start_step,
-            "cancelled": was_cancelled,
-            "schedule_steps": schedule_total,
-            "best_checkpoint_step": best_checkpoint_step or steps,
-            "vocab_size": tokenizer.vocab_size,
-            "context_size": int(config["block_size"]),
-            "requested_vocab_size": target_vocab_size if merge_count is None else None,
-            "vocab_target_reached": (
-                tokenizer.vocab_size == target_vocab_size if merge_count is None else None
-            ),
-            "tokenizer_type": "sentencepiece-unigram",
-            "parameters": sum(p.numel() for p in model.parameters()),
-            "initialization": initialization_metadata,
-            "trained_from_random_weights": initialization_metadata is None,
-        },
-    }
-    target.parent.mkdir(parents=True, exist_ok=True)
-    backup = target.with_name(target.stem + ".pre-brain16-backup" + target.suffix)
-    if target.is_file() and not backup.exists():
-        shutil.copy2(target, backup)
-    temporary = target.with_name(target.name + ".brain16.tmp")
-    torch.save(checkpoint, temporary)
-    temporary.replace(target)
+    final_metrics = _save_checkpoint(was_cancelled, validation_loss, reported_train_loss)
     return {
         "ok": True, "version": VERSION, "output": str(target),
-        **checkpoint["metrics"]
+        **final_metrics
     }
 
 

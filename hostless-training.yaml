@@ -1,0 +1,27 @@
+build:
+  command: ""
+  system: docker
+  min_cpu: 2
+  max_cpu: 4
+  min_memory: 4096
+  max_memory: 8192
+dockerfile_path: "services/python-brain/Dockerfile"
+working_directory: "/"
+build_context_directory: "/"
+post_build_command: ""
+scaling:
+  min_cpu: 2
+  max_cpu: 4
+  min_memory: 8192
+  max_memory: 12288
+  min_replicas: 1
+  max_replicas: 1
+health_check:
+  type: http
+  interval_in_seconds: 15
+  http_path: /health
+cron_jobs: []
+workers: []
+review_apps:
+  enabled: false
+  ttl_days: 7
