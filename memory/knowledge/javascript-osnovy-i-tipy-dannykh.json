@@ -5,7 +5,7 @@
   "slug": "javascript-osnovy-i-tipy-dannykh",
   "topic": "JavaScript: основы и типы данных",
   "createdAt": "2026-10-25T14:40:07.787Z",
-  "updatedAt": "2026-11-12T03:00:18.815Z",
+  "updatedAt": "2026-11-13T03:00:21.700Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters. JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. Tutorials References Exercises Certificates Menu Search field &times; See More NEW W3Schools app iOS & Android Start the adventure Sign In Sign Up --> user-anonymous --> --> --> ★ +1 --> My W3Schools --> user-authenticated --> Spaces Upgrade Paid Courses Academy Practice --> user-anonymous - action- W3SCHOOLS TUTORIALS: &times; &larr; All Topics &times; References W3SCHOOLS REFERENCES: &times; HTML Tag reference CSS Reference JavaScript Reference SQL Keyword reference Python Reference Java Reference C Reference C++ Reference Colors Color names PHP Reference HTML DOM Reference MySQL Reference W3 &times; Get Certified W3SCHOOLS CERTIFICATES: &times; HTML CSS JavaScript SQL Python Java C C++ C# PHP React MySQL Excel DSA W3.CSS Bootstrap 3 Bootstrap 4 Bootstrap 5 Node.js TypeScript Django PostgreSQL jQuery Vue NumPy Pandas XML Cyber Security Accessibility AngularJS Git MongoDB R Go Kotlin SA Our easy to follow JavaScript tutorials for beginners will have you coding the basics in no time.",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "sign",
     "css"
   ],
-  "sourceCount": 36,
+  "sourceCount": 38,
   "items": [
     {
       "schemaVersion": 2,
@@ -693,7 +693,7 @@
         "const"
       ],
       "source": "article text",
-      "score": 0.35
+      "score": 0.25
     },
     {
       "schemaVersion": 2,
@@ -1549,6 +1549,90 @@
         "who"
       ],
       "source": "Bing",
+      "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/Main_Page",
+      "snippet": "Main Page Main Page Discussion English Read View source View history Tools Tools move to sidebar hide Actions Read View source View history General What links here Related changes Permanent link Page information Cite this page Get shortened URL Print/export Create a book Download as PDF Printable version In other projects Abstract Wikipedia Wikimedia Foundation MediaWiki Meta-Wiki Wikimedia Outreach Multilingual Wikisource Wikispecies Wikibooks Wikidata Wikifunctions Wikimania Wikinews Wikipedia Wikiquote Wikisource Wikiversity Wikivoyage Wiktionary Wikidata item Appearance move to sidebar hide From Wikimedia Commons, the free media repository Wikimedia Commons a collection of 150,440,217 freely usable media files to which anyone can contribute Images Videos Sounds 3D Models Upload Picture of the day Cursorius coromandelicus ( Indian courser ) in Bhigwan , Maharashtra, India RSS feed Subscribe Previous Pictures of the day Media of the day A Black Swan touring Newport Beach Harbor, created by Don Ramey Logan Problems playing the file? RSS feed Previous Media of the day Participating Log in Create account Browsing? Please use the search box at the top of this page or the links to the right the links further down . Feel free to subscribe to our syndicated feeds . Using? To fulfill the free license requirements, please read our Reuse guide. You can also request a file or request permission for a file already on the internet . Identifying? Have a browse through Category:Unidentified subjects . If you find something you can identify, adjust the file's categories and depicts statements in structured data . Creating? Check out all you need to know at our Contributing your own work guide. Seeking help? For Commons help see: Help:Contents and Category:Commons help . Discussion? See the list of discussion pages . and more! To explore more ways you can contribute to this project, check out the Community Portal . Monthly photo challenge Take some photos and upload them to meet our monthly thematic challenge, get inspiration and try new subjects! Learn more about the challenges! Check out this month's challenges Highlights If you are browsing Commons for the first time, you may want to start with Featured pictures , Quality images , Valued images or Featured media . You can also see some work created by our highly skilled contributors in Meet our photographers and Meet our illustrators . You may also be interested in Picture of the Year . Content By topic Nature Animals Fossils Landscapes Marine organisms Plants Weather Society Culture Art Belief Entertainment Events Flags Food History Language Literature Music Objects People Places Politics Sports Science Astronomy Biology Chemistry Earth sciences Mathematics Medicine Physics Technology Engineering Architecture Chemical Civil Electrical Environmental Geophysical Mechanical Process By location Earth Oceans Islands Archipelagoes Continents Countries Subdivisions Space Asteroids Natural satellites Comets Planets Stars Galaxies By type Images Animations Diagrams Drawings Maps ( Atlas ) Paintings Photos Symbols Sounds Music Pronunciation Speeches Spoken Wikipedia Videos 3D models By author Architects Composers",
+      "summary": "For Commons help see: Help:Contents and Category:Commons help . Check out this month's challenges Highlights If you are browsing Commons for the first time, you may want to start with Featured pictures , Quality images , Valued images or Featured media . Content By topic Nature Animals Fossils Landscapes Marine organisms Plants Weather Society Culture Art Belief Entertainment Events Flags Food History Language Literature Music Objects People Places Politics Sports Science Astronomy Biology Chemistry Earth sciences Mathematics Medicine Physics Techno",
+      "keyPoints": [
+        "For Commons help see: Help:Contents and Category:Commons help .",
+        "Monthly photo challenge Take some photos and upload them to meet our monthly thematic challenge, get inspiration and try new subjects!",
+        "Check out this month's challenges Highlights If you are browsing Commons for the first time, you may want to start with Featured pictures , Quality images , Valued images or Featured media .",
+        "You can also see some work created by our highly skilled contributors in Meet our photographers and Meet our illustrators .",
+        "Content By topic Nature Animals Fossils Landscapes Marine organisms Plants Weather Society Culture Art Belief Entertainment Events Flags Food History Language Literature Music Objects People Places Politics Sports Science Astronomy Biology Chemistry Earth sciences Mathematics Medicine Physics Techno"
+      ],
+      "keywords": [
+        "to",
+        "you",
+        "commons",
+        "of",
+        "wikimedia",
+        "our",
+        "in",
+        "by",
+        "javascript",
+        "типы",
+        "данных",
+        "page",
+        "media",
+        "can",
+        "view",
+        "this",
+        "images",
+        "day",
+        "file",
+        "help",
+        "discussion",
+        "read",
+        "history",
+        "links"
+      ],
+      "source": "article text",
+      "score": 0.1
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: основы и типы данных",
+      "title": "Wikipedia",
+      "url": "https://www.wikipedia.org/",
+      "snippet": "Wikipedia The Free Encyclopedia English 7,261,000+ articles 日本語 1,526,000+ 記事 Deutsch 3.164.000+ Artikel Русский 2 128 000+ статей Français 2 788 000+ articles Español 2.148.000+ artículos 中文 1,565,000+ 条目 / 條目 Italiano 1.994.000+ voci فارسی ۱٬۱۰۲٬۰۰۰+ مقاله Português 1.188.000+ artigos Search Wikipedia Afrikaans Shqip العربية Asturianu Azərbaycanca Български 閩南語 / Bân-lâm-gú বাংলা Беларуская Català Čeština Cymraeg Dansk Deutsch Eesti Ελληνικά English Español Esperanto Euskara فارسی Français Galego 한국어 Hausa Հայերեն हिन्दी Hrvatski Bahasa Indonesia Italiano עברית ქართული Ladin Latina Latviešu Lietuvių Magyar Македонски Malagasy मराठी مصرى Bahasa Melayu Bahaso Minangkabau မြန်မာဘာသာ Nederlands 日本語 Norsk (bokmål) Norsk (nynorsk) Нохчийн Oʻzbekcha / Ўзбекча Polski Português Қазақша / Qazaqşa / قازاقشا Română Simple English Sinugboanong Binisaya Slovenčina Slovenščina Српски / Srpski Srpskohrvatski / Српскохрватски Suomi Svenska Kiswahili தமிழ் Татарча / Tatarça తెలుగు ภาษาไทย Тоҷикӣ تۆرکجه Türkçe Українська اردو Tiếng Việt Winaray 中文 Русский 粵語 Search Read Wikipedia in your language 1,000,000+ articles العربية Deutsch English Español فارسی Français Italiano مصرى Nederlands 日本語 Polski Português Sinugboanong Binisaya Svenska Українська Tiếng Việt Winaray 中文 Русский 100,000+ articles Afrikaans Shqip Asturianu Azərbaycanca Български 閩南語 / Bân-lâm-gú বাংলা Беларуская Català Čeština Cymraeg Dansk Eesti Ελληνικά Esperanto Euskara Galego 한국어 Hausa Հայերեն हिन्दी Hrvatski Bahasa Indonesia עברית ქართული Ladin Latina Latviešu Lietuvių Magyar Македонски Malagasy मराठी Bahasa Melayu Bahaso Minangkabau မြန်မာဘာသာ Norsk bokmål nynorsk Нохчийн Oʻzbekcha / Ўзбекча Қазақша / Qazaqşa / قازاقشا Română Simple English Slovenčina Slovenščina Српски / Srpski Srpskohrvatski / Српскохрватски Suomi Kiswahili தமிழ் Татарча / Tatarça తెలుగు ภาษาไทย Тоҷикӣ تۆرکجه Türkçe اردو 粵語 10,000+ articles Bahsa Acèh Alemannisch አማርኛ Aragonés Արեւմտահայերէն Bahasa Hulontalo Basa Bali Bahasa Banjar Basa Banyumasan Башҡортса Беларуская (тарашкевіца) Bikol Central বিষ্ণুপ্রিয়া মণিপুরী Boarisch Bosanski Brezhoneg Чӑвашла Dagbanli الدارجة Diné Bizaad Emigliàn–Rumagnòl Fiji Hindi Føroyskt Frysk Fulfulde Gaeilge Gàidhlig گیلکی ગુજરાતી Hak-kâ-ngî / 客家語 Hornjoserbsce Ido Igbo Ikinyarwanda Ilokano Interlingua Interlingue Ирон Íslenska Jawa ಕನ್ನಡ Kapampangan ភាសាខ្មែរ كٲشُر Kotava Kreyòl Ayisyen Kurdî / كوردی کوردیی ناوەندی Кыргызча Кырык мары Lëtzebuergesch Lìgure Limburgs Lombard मैथिली മലയാളം მარგალური مازِرونی Mìng-dĕ̤ng-ngṳ̄ / 閩東語 Монгол Napulitano नेपाल भाषा Nordfriisk Occitan Олык марий ଓଡି଼ଆ অসমীযা় ਪੰਜਾਬੀ پنجابی (شاہ مکھی) پښتو Piemontèis Plattdüütsch Qaraqalpaqsha Qırımtatarca Runa Simi संस्कृतम् ᱥᱟᱱᱛᱟᱲᱤ سرائیکی Саха Тыла Scots ChiShona Sicilianu සිංහල سنڌي Ślůnski Soomaaliga Basa Sunda Taclḥit Tagalog ၽႃႇသႃႇတႆး ⵜⴰⵎⴰⵣⵉⵖⵜ ⵜⴰⵏⴰⵡⴰⵢⵜ tolışi chiTumbuka Basa Ugi Vèneto Volapük Walon 文言 吴语 ייִדיש Yorùbá Zazaki Žemaitėška isiZulu नेपाली ꯃꯤꯇꯩ ꯂꯣꯟ 1,000+ articles Dzhudezmo / לאדינו Адыгэбзэ Ænglisc Anarâškielâ अंगिका Аԥсшәа armãneashti Arpitan atikamekw ܐܬܘܪܝܐ Avañe’ẽ Авар Aymar Batak Toba Betawi भोजपुरी Bislama བོད་ཡིག Буряад Chavacano de Zamboanga Chichewa Corsu Vahcuengh / 話僮 Dagaare Davvisáme",
+      "summary": "Wikipedia The Free Encyclopedia English 7,261,000+ articles 日本語 1,526,000+ 記事 Deutsch 3.164.000+ Artikel Русский 2 128 000+ статей Français 2 788 000+ articles Español 2.148.000+ artículos 中文 1,565,000+ 条目 / 條目 Italiano 1.994.000+ voci فارسی ۱٬۱۰۲٬۰۰۰+ مقاله Português 1.188.000+",
+      "keyPoints": [
+        "Wikipedia The Free Encyclopedia English 7,261,000+ articles 日本語 1,526,000+ 記事 Deutsch 3.164.000+ Artikel Русский 2 128 000+ статей Français 2 788 000+ articles Español 2.148.000+ artículos 中文 1,565,000+ 条目 / 條目 Italiano 1.994.000+ voci فارسی ۱٬۱۰۲٬۰۰۰+ مقاله Português 1.188.000+"
+      ],
+      "keywords": [
+        "000+",
+        "wikipedia",
+        "articles",
+        "bahasa",
+        "ng",
+        "javascript",
+        "типы",
+        "данных",
+        "english",
+        "sloven",
+        "ina",
+        "basa",
+        "deutsch",
+        "русский",
+        "fran",
+        "ais",
+        "espa",
+        "ol",
+        "italiano",
+        "portugu",
+        "беларуская",
+        "norsk",
+        "search",
+        "afrikaans"
+      ],
+      "source": "article text",
       "score": 0
     }
   ]
