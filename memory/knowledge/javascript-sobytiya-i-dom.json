@@ -5,13 +5,13 @@
   "slug": "javascript-sobytiya-i-dom",
   "topic": "JavaScript: события и DOM",
   "createdAt": "2026-10-26T03:00:37.634Z",
-  "updatedAt": "2026-11-11T03:00:25.102Z",
-  "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters. JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. 👋 Welcome, Bienvenue, ようこそ, 환영합니다, Bienvenido, Bem-vindos, Добро пожаловать, 欢迎, 歡迎, أهلا MDN Web Docs is an open-source, collaborative project that documents web platform technologies, including CSS, HTML, JavaScript, and Web APIs. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. 🌎 Our community We're proud to have a global community of contributors and developers, who also want to say 👋 స్వాగతం സ്വാഗതം Merhaba خوش آمدید स्वागत है Selamat Datang வணக்கம் მოგესალმებით Ласкаво просимо مرحباً خوش آمدی স্বাগতম Dobro došli שלום Добре дошли 환영합니다 ✉️ Get in touch You can ask quest 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
+  "updatedAt": "2026-11-15T03:00:37.618Z",
+  "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. 👋 Welcome, Bienvenue, ようこそ, 환영합니다, Bienvenido, Bem-vindos, Добро пожаловать, 欢迎, 歡迎, أهلا MDN Web Docs is an open-source, collaborative project that documents web platform technologies, including CSS, HTML, JavaScript, and Web APIs. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. 🌎 Our community We're proud to have a global community of contributors and developers, who also want to say 👋 స్వాగతం സ്വാഗതം Merhaba خوش آمدید स्वागत है Selamat Datang வணக்கம் მოგესალმებით Ласкаво просимо مرحباً خوش آمدی স্বাগতম Dobro došli שלום Добре дошли 환영합니다 ✉️ Get in touch You can ask quest 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
     "If you need exhaustive information about a language feature, have a look at the JavaScript reference .",
     "This Guide is divided into the following chapters.",
-    "Language overview Data structures Enumerability",
+    "Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl",
     "JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language.",
     "As you write JavaScript code, you'll refer to these pages often (thus the title \"JavaScript reference\").",
     "For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment.",
@@ -29,6 +29,7 @@
     "error",
     "functions",
     "expressions",
+    "times",
     "collections",
     "using",
     "modules",
@@ -40,12 +41,11 @@
     "classes",
     "web",
     "you",
-    "language",
     "types",
     "numbers",
     "strings",
+    "dates",
     "iterators",
-    "generators",
     "intl",
     "function",
     "reference",
@@ -53,6 +53,7 @@
     "in",
     "to",
     "of",
+    "language",
     "async",
     "mdn",
     "docs",
@@ -68,10 +69,9 @@
     "have",
     "contributors",
     "is",
-    "project",
-    "that"
+    "project"
   ],
-  "sourceCount": 12,
+  "sourceCount": 14,
   "items": [
     {
       "schemaVersion": 2,
@@ -79,13 +79,13 @@
       "topic": "JavaScript: события и DOM",
       "title": "JavaScript Guide — MDN Web Docs",
       "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
-      "snippet": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters. In this article Introduction Grammar and types Control flow and error handling Loops and iteration Functions Expressions and operators Numbers and strings Representing dates & times Regular expressions Indexed collections Keyed collections Working with objects Using classes Promises Typed arrays Iterators and generators Resource management Internationalization JavaScript modules Advanced topics Introduction Overview: Introduction About this guide About JavaScript JavaScript and Java ECMAScript Tools What's next Grammar and types Overview: Grammar and types Basic syntax & comments Declarations Variable scope Variable hoisting Data structures and types Literals Control flow and error handling Overview: Control flow and error handling if...else switch try / catch / throw Error objects Loops and iteration Overview: Loops and iteration for while do...while continue break for...in for...of Functions Overview: Functions Defining functions Calling functions Function scopes and closures Arguments & parameters Arrow functions Expressions and operators Overview: Expressions and operators Assignment & Comparisons Arithmetic operators Bitwise & logical operators Conditional (ternary) operator Numbers and strings Overview: Numbers and strings Numbers Number object Math object Strings String object Template literals Representing dates & times Overview: Representing dates & times Date object Regular expressions Overview: Regular expressions Creating a regular expression Writing a regular expression pattern Assertions Character classes Groups and backreferences Quantifiers Indexed collections Overview: Indexed collections Keyed collections Overview: Keyed collections Map WeakMap Set WeakSet Working with objects Overview: Working with objects Objects and properties Creating objects Defining methods Getter and setter Using classes Overview: Using classes Declaring a class Various class features Extends and inheritance Why classes? Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using declarations The DisposableStack and AsyncDisposableStack objects Error handling Internationalization Overview: Internationalization Date and time formatting Number formatting Collation JavaScript modules Overview: JavaScript modules Exporting Importing Default exports and imports Avoiding naming conflicts Importing JSON modules Dynamic module loading Top-level await Module metadata Using modules on the web Understanding the module graph Modules across platforms Advanced topics After you have learned all fundamental features of JavaScript, you can explore some more niche features, or dive deeper into the language's mechanisms and concepts. Language overview Data structures Enumerability",
-      "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters.",
+      "snippet": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . This Guide is divided into the following chapters. In this article Introduction Grammar and types Control flow and error handling Loops and iteration Functions Expressions and operators Numbers and strings Representing dates & times Regular expressions Indexed collections Keyed collections Working with objects Using classes Promises Typed arrays Iterators and generators Resource management Internationalization JavaScript modules Advanced topics Introduction Overview: Introduction About this guide About JavaScript JavaScript and Java ECMAScript Tools What's next Grammar and types Overview: Grammar and types Basic syntax & comments Declarations Variable scope Variable hoisting Data structures and types Literals Control flow and error handling Overview: Control flow and error handling if...else switch try / catch / throw Error objects Loops and iteration Overview: Loops and iteration for while do...while continue break for...in for...of Functions Overview: Functions Defining functions Calling functions Function scopes and closures Arguments & parameters Arrow functions Expressions and operators Overview: Expressions and operators Assignment & Comparisons Arithmetic operators Bitwise & logical operators Conditional (ternary) operator Numbers and strings Overview: Numbers and strings Numbers Number object Math object Strings String object Template literals Representing dates & times Overview: Representing dates & times Instants Zoned date-times Plain date-times, dates, and times Plain year-months and month-days Cookbook Regular expressions Overview: Regular expressions Creating a regular expression Writing a regular expression pattern Assertions Character classes Groups and backreferences Quantifiers Indexed collections Overview: Indexed collections Keyed collections Overview: Keyed collections Map WeakMap Set WeakSet Working with objects Overview: Working with objects Objects and properties Creating objects Defining methods Getter and setter Using classes Overview: Using classes Declaring a class Various class features Extends and inheritance Why classes? Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using declarations The DisposableStack and AsyncDisposableStack objects Error handling Internationalization Overview: Internationalization Date and time formatting Number formatting Collation JavaScript modules Overview: JavaScript modules Exporting Importing Default exports and imports Avoiding naming conflicts Importing JSON modules Dynamic module loading Top-level await Module metadata Using modules on the web Understanding the module graph Modules across platforms Advanced topics After you have learned all fundamental features of JavaScript, you can explore some more niche features, or dive deeper i",
+      "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl",
       "keyPoints": [
         "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
         "If you need exhaustive information about a language feature, have a look at the JavaScript reference .",
         "This Guide is divided into the following chapters.",
-        "Language overview Data structures Enumerability"
+        "Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl"
       ],
       "keywords": [
         "overview",
@@ -95,6 +95,7 @@
         "error",
         "functions",
         "expressions",
+        "times",
         "collections",
         "using",
         "modules",
@@ -106,12 +107,11 @@
         "classes",
         "web",
         "you",
-        "language",
         "types",
         "numbers",
         "strings",
-        "iterators",
-        "generators"
+        "dates",
+        "iterators"
       ],
       "source": "article text",
       "score": 1
@@ -575,6 +575,88 @@
       ],
       "source": "article text",
       "score": 0.2813
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: события и DOM",
+      "title": "Midland Daily News: Midland MI News, Sports and Opinion",
+      "url": "https://www.ourmidland.com/",
+      "snippet": "JavaScript is disabled in your browser. Please enable JavaScript to proceed. A required part of this site couldn’t load. This may be due to a browser extension, network issues, or browser settings. Please check your connection, disable any ad blockers, or try using a different browser.",
+      "summary": "This may be due to a browser extension, network issues, or browser settings. Please check your connection, disable any ad blockers, or try using a different browser.",
+      "keyPoints": [
+        "This may be due to a browser extension, network issues, or browser settings.",
+        "Please check your connection, disable any ad blockers, or try using a different browser."
+      ],
+      "keywords": [
+        "javascript",
+        "midland",
+        "news",
+        "события",
+        "dom",
+        "browser",
+        "daily",
+        "mi",
+        "sports",
+        "opinion",
+        "your",
+        "please",
+        "to",
+        "this",
+        "or",
+        "is",
+        "disabled",
+        "in",
+        "enable",
+        "proceed",
+        "required",
+        "part",
+        "of",
+        "site"
+      ],
+      "source": "article text",
+      "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: события и DOM",
+      "title": "MDNtv - YouTube",
+      "url": "https://www.youtube.com/channel/UClWk6DQBYHf6rLP8VtMn0Xw",
+      "snippet": "Welcome to MDNtv, South Africa’s award-winning independent nonprofit news channel. We deliver people-driven news, live coverage, breaking news, courts, politics, investigations, community ...",
+      "summary": "Welcome to MDNtv, South Africa’s award-winning independent nonprofit news channel. We deliver people-driven news, live coverage, breaking news, courts, politics, investigations, community ...",
+      "keyPoints": [
+        "Welcome to MDNtv, South Africa’s award-winning independent nonprofit news channel.",
+        "We deliver people-driven news, live coverage, breaking news, courts, politics, investigations, community ..."
+      ],
+      "keywords": [
+        "javascript",
+        "события",
+        "dom",
+        "mdntv",
+        "youtube",
+        "news",
+        "welcome",
+        "to",
+        "south",
+        "africa",
+        "award",
+        "winning",
+        "independent",
+        "nonprofit",
+        "channel",
+        "we",
+        "deliver",
+        "people",
+        "driven",
+        "live",
+        "coverage",
+        "breaking",
+        "courts",
+        "politics"
+      ],
+      "source": "Bing",
+      "score": 0
     }
   ]
 }
