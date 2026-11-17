@@ -5,7 +5,7 @@
   "slug": "javascript-sobytiya-i-dom",
   "topic": "JavaScript: события и DOM",
   "createdAt": "2026-10-26T03:00:37.634Z",
-  "updatedAt": "2026-11-15T03:00:37.618Z",
+  "updatedAt": "2026-11-17T03:00:30.099Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. 👋 Welcome, Bienvenue, ようこそ, 환영합니다, Bienvenido, Bem-vindos, Добро пожаловать, 欢迎, 歡迎, أهلا MDN Web Docs is an open-source, collaborative project that documents web platform technologies, including CSS, HTML, JavaScript, and Web APIs. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. 🌎 Our community We're proud to have a global community of contributors and developers, who also want to say 👋 స్వాగతం സ്വാഗതം Merhaba خوش آمدید स्वागत है Selamat Datang வணக்கம் მოგესალმებით Ласкаво просимо مرحباً خوش آمدی স্বাগতম Dobro došli שלום Добре дошли 환영합니다 ✉️ Get in touch You can ask quest 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "is",
     "project"
   ],
-  "sourceCount": 14,
+  "sourceCount": 15,
   "items": [
     {
       "schemaVersion": 2,
@@ -656,6 +656,50 @@
         "politics"
       ],
       "source": "Bing",
+      "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: события и DOM",
+      "title": "Obituaries and area death notices | Duluth News Tribune",
+      "url": "https://www.duluthnewstribune.com/obituaries",
+      "snippet": "Just $2 for 6 months SUBSCRIBE NOW Read Today's Paper Monday, November 16 🗞️Advertise with us 🗳️2026 Election 🔍Explore DNT archives 📸 Photo galleries 🌎Travel with us Advertise With Us Sponsored Content News Local Minnesota Wisconsin National World The Vault Agweek Forum News Network Weather Sports Prep College Bulldogs Hockey Pro Northland Outdoors Obituaries Health Business Business Announcements Opinion Editorials Columns Letters Cartoons Lifestyle Arts / Entertainment Home / Garden Astro Bob Free Games Community Best of the Best Milestones Calendar Announcements From The Archives Bygones Archives FAQ Podcasts Listings Classifieds Public Notices JobsHQ Local Interest Best of the Best The Woman Today 20 Under 40 Account FCC Network Profile Newsletters Help Subscriber Benefits Sections Just $2 for 6 months SUBSCRIBE NOW Log in Account Just $2 for 6 months SUBSCRIBE NOW ADVERTISEMENT ADVERTISEMENT Obituaries Place an Obituary Obituary Guidelines Place an Obituary Obituary Guidelines Paul Lloyd Almirall Paul Lloyd Almirall, 78, of Duluth, passed away peacefully on Monday, November 9, 2026, after a 27-year battle with Parkinson’s disease. He was born in New York City on June 30, 1948 and spent his childhood in South Salem, NY. He attended The Taft School in Connecticut. He joined the Air Force during the Vietnam Era and was stationed in Denver, Colorado where he graduated from the University of Denver with a degree in Business Administration. He proceeded to obtain a CPA and Internal Fraud examiner designations. Paul moved with his family to Duluth, Minnesota where he attended the University of Minnesota (Duluth) and obtained his MBA. He fell in love with Lake Superior and would spend the remainder of his life in Duluth. Nov. 16, 2026 Laroyia Ann Berka Laroyia (Gustafson) Berka, age 73, longtime area resident, died Monday November 9, 2026, in her residence surrounded by her family. She was born June 25, 1953, the daughter of Roy and Ruth (Lane) Gustafson in Barstow, CA. Laroyia was a 1972 graduate of Denfeld High School and after high school she worked as a Certified Nursing Assistant until her retirement from Inter-Faith Care, Carlton, MN, in 2015. She married Steve Berka on January 14, 2014, and they celebrated two weeks of marriage and over thirteen years together as a couple before his passing in 2014. Laroyia was a member of Christ Lutheran Church in Superior. She loved to spend time reading, roller skating and doing crafts. Nov. 16, 2026 Marilyn A. Paulson Jul. 11, 1933 - Nov. 11, 2026 Nov. 16, 2026 Walter \"Thomas\" Carpenter Feb. 25, 1942 - Nov. 12, 2026 Nov. 16, 2026 ADVERTISEMENT Gina Temple-Rhodes Gina Temple-Rhodes passed away unexpectedly on November 5th, 2026 in the Duluth area. She was 54. Nov. 13, 2026 David Gary Spears David Gary Spears, age 86, of Duluth, MN, passed away peacefully during the early morning of November 6, 2026, under the care of Viewcrest Health Center. A Celebration of Life will be held on Saturday, December 12, 2026, from 2 PM – 5 PM at the Cremation Society of Minnesota. Nov. 12, 2026 Ronald Smith Feb. 21, 1942 - Oct. 25, 2026 Nov. 12, 2026 Dr. Robert William Hollenhorst, Jr. Dr. Robert William Hollenhorst",
+      "summary": "16, 2026 Laroyia Ann Berka Laroyia (Gustafson) Berka, age 73, longtime area resident, died Monday November 9, 2026, in her residence surrounded by her family. 16, 2026 ADVERTISEMENT Gina Temple-Rhodes Gina Temple-Rhodes passed away unexpectedly on November 5th, 2026 in the Duluth area. 13, 2026 David Gary Spears David Gary Spears, age 86, of Duluth, MN, passed away peacefully during the early morning of November 6, 2026, under the care of Viewcrest Health Center.",
+      "keyPoints": [
+        "Paul moved with his family to Duluth, Minnesota where he attended the University of Minnesota (Duluth) and obtained his MBA.",
+        "He fell in love with Lake Superior and would spend the remainder of his life in Duluth.",
+        "16, 2026 Laroyia Ann Berka Laroyia (Gustafson) Berka, age 73, longtime area resident, died Monday November 9, 2026, in her residence surrounded by her family.",
+        "16, 2026 ADVERTISEMENT Gina Temple-Rhodes Gina Temple-Rhodes passed away unexpectedly on November 5th, 2026 in the Duluth area.",
+        "13, 2026 David Gary Spears David Gary Spears, age 86, of Duluth, MN, passed away peacefully during the early morning of November 6, 2026, under the care of Viewcrest Health Center."
+      ],
+      "keywords": [
+        "2026",
+        "of",
+        "in",
+        "duluth",
+        "nov",
+        "he",
+        "javascript",
+        "события",
+        "dom",
+        "obituaries",
+        "area",
+        "news",
+        "november",
+        "16",
+        "on",
+        "his",
+        "she",
+        "notices",
+        "minnesota",
+        "best",
+        "obituary",
+        "laroyia",
+        "12",
+        "death"
+      ],
+      "source": "article text",
       "score": 0
     }
   ]
