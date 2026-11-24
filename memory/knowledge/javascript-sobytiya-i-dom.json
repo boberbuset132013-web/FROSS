@@ -5,7 +5,7 @@
   "slug": "javascript-sobytiya-i-dom",
   "topic": "JavaScript: события и DOM",
   "createdAt": "2026-10-26T03:00:37.634Z",
-  "updatedAt": "2026-11-22T03:00:23.993Z",
+  "updatedAt": "2026-11-24T03:00:29.058Z",
   "summary": "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference . Promises Overview: Promises Guarantees Chaining Error handling Composition Timing Typed arrays Overview: Typed arrays Iterators and generators Overview: Iterators and generators Iterators Iterables Generators Resource management Overview: JavaScript resource management The using and await using decl JavaScript reference The JavaScript reference serves as a repository of facts about the JavaScript language. For the most part, this reference attempts to be environment-agnostic and does not target a web browser environment. In this article Built-ins Statements Expressions and operators Functions Classes Regular expressions Additional reference pages Built-ins JavaScript standard built-in objects , along with their methods and properties. 👋 Welcome, Bienvenue, ようこそ, 환영합니다, Bienvenido, Bem-vindos, Добро пожаловать, 欢迎, 歡迎, أهلا MDN Web Docs is an open-source, collaborative project that documents web platform technologies, including CSS, HTML, JavaScript, and Web APIs. The MDN Web Docs project welcomes contributions from everyone who shares our goals and wants to contribute constructively and respectfully within our community. 🌎 Our community We're proud to have a global community of contributors and developers, who also want to say 👋 స్వాగతం സ്വാഗതം Merhaba خوش آمدید स्वागत है Selamat Datang வணக்கம் მოგესალმებით Ласкаво просимо مرحباً خوش آمدی স্বাগতম Dobro došli שלום Добре дошли 환영합니다 ✉️ Get in touch You can ask quest 21 years ago ( 2005 ) Current status Online Content license CC BY-SA v2.5+ et al. Written in React SCSS JSX JavaScript Python HTML HTML and variants Dynamic HTML HTML5 XHTML Basic Mobile Profile HTML elements and attributes HTML element article audio blink canvas div and span marquee meta video HTML attribute alt attribute HTML frame Editing HTML editor Text editor Character enco",
   "keyPoints": [
     "JavaScript Guide The JavaScript Guide shows you how to use JavaScript and gives an overview of the language.",
@@ -71,7 +71,7 @@
     "is",
     "project"
   ],
-  "sourceCount": 17,
+  "sourceCount": 18,
   "items": [
     {
       "schemaVersion": 2,
@@ -770,6 +770,50 @@
       ],
       "source": "Bing",
       "score": 0
+    },
+    {
+      "schemaVersion": 2,
+      "kind": "source-note",
+      "topic": "JavaScript: события и DOM",
+      "title": "MDN Cabinets, Inc. — Premium Commercial Millwork | Garner, NC",
+      "url": "https://www.mdncabinets.com/",
+      "snippet": "(919) 662-1090 3411 Integrity Drive, Garner, NC LinkedIn About Services Portfolio Process Careers Request a Quote Home About Services Portfolio Process Careers Request a Quote Commercial Millwork &bull; Est. 1995 Precision Millwork. Elevated Spaces. The one source for the finest turn key interior architectural millwork. We strive to give every customer the dream space they are looking for &mdash; from healthcare facilities to corporate headquarters. Request a Quote &rarr; View Our Work &rarr; Visit Us &darr; Exciting News &mdash; We're building a brand new state-of-the-art manufacturing facility. Learn More &rarr; Commercial Restaurants & Offices Healthcare Medical & Institutional Education Schools & Universities Hospitality Hotels & Restaurants Featured Projects Our latest work View All Projects &rarr; Corporate &bull; Office TrueBridge Capital Custom reception desk, wood-wrapped boardroom, staircase cladding, and millwork throughout this modern corporate headquarters. Hospitality &bull; Restaurant Village Tavern Full bar build-out with walnut paneling, brass shelving, and custom millwork throughout this upscale restaurant. Community &bull; Amenity Preston Ridge Grand clubhouse with dark ribbed wood ceilings, marble accent walls, custom bar, and lounge millwork for this luxury community. Corporate &bull; Campus Bandwidth Inc. HQ Floor-to-ceiling wood paneling, curved built-in bookshelves, and custom cabinetry for this 40-acre corporate campus. 0 Years in Business 0 Projects Completed 0 Active Projects 0 Custom Fabricated What We Do Our services All Services &rarr; 01 Custom Architectural Millwork &rarr; 02 Casework & Cabinetry &rarr; 03 Countertops & Solid Surfaces &rarr; 04 Professional Installation &rarr; Ready to Begin? Let's build something remarkable From initial consultation to final installation, we partner with you to create millwork that elevates every space it touches. Competitive custom pricing on every project. Request a Quote &rarr; Visit Us Come see our facility Our Shop 3411 Integrity Drive Garner, NC 27529 Phone (919) 662-1090 Fax: (919) 662-1027 Hours Monday &ndash; Friday: 8:00 AM &ndash; 5:00 PM Saturday &ndash; Sunday: Closed Areas Served Central & Eastern NC Get Directions &rarr; The one source for the finest turn key interior architectural millwork. Serving the greater Triangle area for over 30 years. LinkedIn Pages Home About Services Portfolio Process Careers Contact Quick Links Request a Quote (919) 662-1090 info@mdncabinets.com Location 3411 Integrity Drive Garner, NC 27529 &copy; 2026 MDN Cabinets, Inc. All rights reserved. &bull; Garner, NC Website by LuminArch",
+      "summary": "(919) 662-1090 3411 Integrity Drive, Garner, NC LinkedIn About Services Portfolio Process Careers Request a Quote Home About Services Portfolio Process Careers Request a Quote Commercial Millwork &bull; Est. Request a Quote &rarr; Visit Us Come see our facility Our Shop 3411 Integrity Drive Garner, NC 27529 Phone (919) 662-1090 Fax: (919) 662-1027 Hours Monday &ndash; Friday: 8:00 AM &ndash; 5:00 PM Saturday &ndash; Sunday: Closed Areas Served Central & Eastern NC Get Directions &rarr; The one source fo LinkedIn Pages Home About Services Portfolio Process Careers Contact Quick Links Request a Quote (919) 662-1090 info@mdncabinets.com Location 3411 Integrity Drive Garner, NC 27529 &copy; 2026 MDN Cabinets, Inc.",
+      "keyPoints": [
+        "(919) 662-1090 3411 Integrity Drive, Garner, NC LinkedIn About Services Portfolio Process Careers Request a Quote Home About Services Portfolio Process Careers Request a Quote Commercial Millwork &bull; Est.",
+        "Learn More &rarr; Commercial Restaurants & Offices Healthcare Medical & Institutional Education Schools & Universities Hospitality Hotels & Restaurants Featured Projects Our latest work View All Projects &rarr; Corporate &bull; Office TrueBridge Capital Custom reception desk, wood-wrapped boardroom,",
+        "0 Years in Business 0 Projects Completed 0 Active Projects 0 Custom Fabricated What We Do Our services All Services &rarr; 01 Custom Architectural Millwork &rarr; 02 Casework & Cabinetry &rarr; 03 Countertops & Solid Surfaces &rarr; 04 Professional Installation &rarr; Ready to Begin?",
+        "Request a Quote &rarr; Visit Us Come see our facility Our Shop 3411 Integrity Drive Garner, NC 27529 Phone (919) 662-1090 Fax: (919) 662-1027 Hours Monday &ndash; Friday: 8:00 AM &ndash; 5:00 PM Saturday &ndash; Sunday: Closed Areas Served Central & Eastern NC Get Directions &rarr; The one source fo",
+        "LinkedIn Pages Home About Services Portfolio Process Careers Contact Quick Links Request a Quote (919) 662-1090 info@mdncabinets.com Location 3411 Integrity Drive Garner, NC 27529 &copy; 2026 MDN Cabinets, Inc."
+      ],
+      "keywords": [
+        "millwork",
+        "rarr",
+        "nc",
+        "garner",
+        "custom",
+        "bull",
+        "to",
+        "javascript",
+        "события",
+        "dom",
+        "inc",
+        "commercial",
+        "services",
+        "request",
+        "quote",
+        "corporate",
+        "our",
+        "mdn",
+        "cabinets",
+        "919",
+        "662",
+        "we",
+        "projects",
+        "this"
+      ],
+      "source": "article text",
+      "score": 0.1563
     }
   ]
 }
